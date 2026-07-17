@@ -50,8 +50,14 @@ Rectangle {
 
     ListView {
         id: consoleList
-        anchors.fill: parent
-        anchors.margins: 1
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: progressPanel.visible ? progressPanel.top : parent.bottom
+        anchors.topMargin: 1
+        anchors.leftMargin: 1
+        anchors.rightMargin: 1
+        anchors.bottomMargin: progressPanel.visible ? Theme.spacingSm : 1
         model: root.appContext.runtime.logModel
         reuseItems: true
         clip: true
@@ -148,5 +154,18 @@ Rectangle {
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
         }
+    }
+
+    ConsoleProgressPanel {
+        id: progressPanel
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: Theme.spacingSm
+        progressModel: root.appContext.runtime.logModel
+        consoleFontFamily: root.consoleFontFamily
+        consoleFontSize: root.consoleFontSize
+        darkConsole: root.darkConsole
     }
 }
