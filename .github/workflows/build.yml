@@ -1,0 +1,66 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  debug-and-test:
+    runs-on: windows-2022
+    steps:
+      - name: Preserve LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf input
+
+      - uses: actions/checkout@v4
+
+      - name: Install MSYS2 UCRT64 dependencies
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-declarative
+            mingw-w64-ucrt-x86_64-qt6-tools
+
+      - name: Configure, build, lint, and test
+        shell: pwsh
+        env:
+          MINIFOX_MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: .\scripts\build.ps1 -Preset ucrt64-debug -RunTests
+
+  static-release:
+    runs-on: windows-2022
+    steps:
+      - name: Preserve LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf input
+
+      - uses: actions/checkout@v4
+
+      - name: Install MSYS2 UCRT64 static Qt
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-declarative
+            mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-qt6-static
+
+      - name: Build single-file release
+        shell: pwsh
+        env:
+          MINIFOX_MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: .\scripts\build.ps1 -Preset ucrt64-static-release

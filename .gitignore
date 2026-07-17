@@ -1,0 +1,38 @@
+# Out-of-tree and IDE builds
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+
+# Portable runtime data (created next to the executable)
+/.minifox/
+
+# CMake / Qt Creator user state
+CMakeUserPresets.json
+CMakeLists.txt.user*
+*.pro.user*
+.qmlls.ini
+/.vs/
+/.idea/
+
+# Native build products
+*.a
+*.dll
+*.exe
+*.o
+*.obj
+*.pdb
+
+# Test and coverage output
+/Testing/
+test-results*.txt
+*.gcda
+*.gcno
+*.profraw
+
+# Editor and operating-system files
+*.autosave
+*.swp
+*~
+.DS_Store
+Thumbs.db

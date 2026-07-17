@@ -1,0 +1,68 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ucrt64-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "ucrt64-debug",
+      "displayName": "MSYS2 UCRT64 Debug + Tests",
+      "inherits": "ucrt64-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MINIFOX_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "ucrt64-release",
+      "displayName": "MSYS2 UCRT64 Dynamic Release",
+      "inherits": "ucrt64-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MINIFOX_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "ucrt64-static-release",
+      "displayName": "MSYS2 UCRT64 Single-file Static Release",
+      "inherits": "ucrt64-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/Release",
+        "MINIFOX_BUILD_TESTS": "OFF",
+        "MINIFOX_STATIC_RUNTIME": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ucrt64-debug",
+      "configurePreset": "ucrt64-debug"
+    },
+    {
+      "name": "ucrt64-release",
+      "configurePreset": "ucrt64-release"
+    },
+    {
+      "name": "ucrt64-static-release",
+      "configurePreset": "ucrt64-static-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "ucrt64-debug",
+      "configurePreset": "ucrt64-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
