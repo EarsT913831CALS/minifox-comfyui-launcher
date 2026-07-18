@@ -63,6 +63,8 @@ qt_add_translations(minifox_launcher
         ../../translations/qml_en_US.ts
     LUPDATE_OPTIONS
         -no-obsolete
+        -tr-function-alias
+        QT_TR_NOOP+=catalogText
     RESOURCE_PREFIX "/i18n"
 )
 

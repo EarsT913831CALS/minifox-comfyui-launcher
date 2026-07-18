@@ -161,6 +161,7 @@ QString ConfigurationManager::lastError() const
 void ConfigurationManager::retranslate()
 {
     validate();
+    emit catalogChanged();
     emit currentProfileChanged();
     emit parameterRevisionChanged();
 }
