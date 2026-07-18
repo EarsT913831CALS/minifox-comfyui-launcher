@@ -274,6 +274,25 @@
     </message>
 </context>
 <context>
+    <name>ConsoleProgressPanel</name>
+    <message>
+        <location filename="../qml/Minifox/App/components/ConsoleProgressPanel.qml" line="18"/>
+        <source>%1 / %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <location filename="../qml/Minifox/App/components/ConsoleProgressPanel.qml" line="27"/>
+        <source>剩余 %1</source>
+        <translation>%1 remaining</translation>
+    </message>
+    <message>
+        <location filename="../qml/Minifox/App/components/ConsoleProgressPanel.qml" line="65"/>
+        <location filename="../qml/Minifox/App/components/ConsoleProgressPanel.qml" line="88"/>
+        <source>ComfyUI 处理进度</source>
+        <translation>ComfyUI progress</translation>
+    </message>
+</context>
+<context>
     <name>ConsoleView</name>
     <message>
         <location filename="../qml/Minifox/App/components/ConsoleView.qml" line="107"/>
@@ -607,8 +626,8 @@
     </message>
     <message>
         <location filename="../qml/Minifox/App/pages/RuntimePage.qml" line="25"/>
-        <source>启动、停止并监控当前 ComfyUI 实例；控制台保留完整 stdout 与 stderr。</source>
-        <translation>Start, stop, and monitor the current ComfyUI instance. The console retains complete stdout and stderr output.</translation>
+        <source>启动、停止并监控当前 ComfyUI 实例；进度在控制台底部单独显示。</source>
+        <translation>Start, stop, and monitor the current ComfyUI instance. Progress appears separately at the bottom of the console.</translation>
     </message>
     <message>
         <location filename="../qml/Minifox/App/pages/RuntimePage.qml" line="31"/>

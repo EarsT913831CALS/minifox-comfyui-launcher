@@ -22,7 +22,7 @@ Pane {
 
             PageHeader {
                 title: qsTr("运行与控制台")
-                description: qsTr("启动、停止并监控当前 ComfyUI 实例；控制台保留完整 stdout 与 stderr。")
+                description: qsTr("启动、停止并监控当前 ComfyUI 实例；进度在控制台底部单独显示。")
                 icon: "\uE756"
                 Layout.fillWidth: true
             }

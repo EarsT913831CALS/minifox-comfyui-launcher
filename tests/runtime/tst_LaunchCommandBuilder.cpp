@@ -1,6 +1,7 @@
 #include "LaunchCommandBuilder.h"
 #include "ApplicationSettings.h"
 #include "ConfigurationManager.h"
+#include "LogModel.h"
 
 #include <QFontDatabase>
 #include <QGuiApplication>
@@ -9,6 +10,7 @@
 #include <QQmlEngine>
 #include <QQuickStyle>
 #include <QScopedPointer>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -34,6 +36,8 @@ private slots:
     void directControlPaletteBindingsOverrideStyleDefaults();
     void applicationSettingsPersistAcrossInstances();
     void profilesPersistWithoutLeavingTheTestDirectory();
+    void tqdmProgressIsSeparatedFromConsoleLog();
+    void carriageReturnLineEndingsRemainNormalLogLines();
 };
 
 void LaunchCommandBuilderTest::defaultsStayImplicit()
@@ -405,6 +409,65 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
     QVERIFY(restored.removeCurrentProfile());
     QCOMPARE(restored.profileNames().size(), 1);
     QVERIFY(!restored.removeCurrentProfile());
+}
+
+void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()
+{
+    LogModel model;
+    QSignalSpy progressSpy(&model, &LogModel::progressChanged);
+
+    model.appendStandardError(
+        QByteArrayLiteral("\r  0%|          | 0/8 [00:00<?, ?it/s, Model Initializing ...]"));
+    QCOMPARE(model.rowCount(), 0);
+    QVERIFY(model.progressActive());
+    QCOMPARE(model.progressPercent(), 0);
+    QCOMPARE(model.progressCurrent(), 0);
+    QCOMPARE(model.progressTotal(), 8);
+    QCOMPARE(model.progressLabel(), QStringLiteral("Model Initializing ..."));
+
+    QByteArray damagedProgressFrame = QByteArrayLiteral("\r 25%|");
+    damagedProgressFrame.append(char(0xff));
+    damagedProgressFrame.append(
+        QByteArrayLiteral("         | 2/8 [00:00<00:02, 2.42it/s]"));
+    model.appendStandardError(damagedProgressFrame);
+    QCOMPARE(model.rowCount(), 0);
+    QCOMPARE(model.progressPercent(), 25);
+    QCOMPARE(model.progressCurrent(), 2);
+
+    model.appendStandardError(
+        QByteArrayLiteral("\r 50%|#####     | 4/8 [00:01<00:01, 2.47it/s]"));
+    QCOMPARE(model.rowCount(), 0);
+    QCOMPARE(model.progressPercent(), 50);
+    QCOMPARE(model.progressCurrent(), 4);
+    QCOMPARE(model.progressRemaining(), QStringLiteral("00:01"));
+    QCOMPARE(model.progressRate(), QStringLiteral("2.47it/s"));
+    QCOMPARE(model.progressLabel(), QStringLiteral("Model Initializing ..."));
+
+    model.appendStandardError(
+        QByteArrayLiteral("\r100%|##########| 8/8 [00:03<00:00, 2.41it/s]\n"));
+    QCOMPARE(model.rowCount(), 0);
+    QCOMPARE(model.progressPercent(), 100);
+    QCOMPARE(model.progressCurrent(), 8);
+    QVERIFY(progressSpy.count() >= 3);
+    QTRY_VERIFY_WITH_TIMEOUT(!model.progressActive(), 2000);
+}
+
+void LaunchCommandBuilderTest::carriageReturnLineEndingsRemainNormalLogLines()
+{
+    LogModel model;
+
+    model.appendStandardOutput(QByteArrayLiteral("first line\r"));
+    QCOMPARE(model.rowCount(), 1);
+    model.appendStandardOutput(QByteArrayLiteral("\nsecond line\r\n"));
+    QCOMPARE(model.rowCount(), 2);
+    QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(),
+             QStringLiteral("first line"));
+    QCOMPARE(model.data(model.index(1, 0), LogModel::TextRole).toString(),
+             QStringLiteral("second line"));
+
+    model.appendStandardOutput(QByteArrayLiteral("Memory 50% (1/2)\n"));
+    QCOMPARE(model.rowCount(), 3);
+    QVERIFY(!model.progressActive());
 }
 
 QTEST_MAIN(LaunchCommandBuilderTest)

@@ -11,6 +11,7 @@ Minifox 是面向 Windows 10/11 的便携式 ComfyUI 启动器，使用 Qt 6、Q
 - 使用 `QProcess` 管理 ComfyUI，显示 PID、运行时间、服务地址和就绪状态
 - 使用 Windows Job Object 管理子进程树
 - 实时显示 stdout/stderr，支持 UTF-8、ANSI 前景色、时间戳、自动换行和日志导出
+- 自动识别 tqdm 风格动态输出，在控制台底部显示独立的 Windows 11 风格进度条
 - Fluent/Windows 11 风格界面，支持系统、浅色、深色主题及系统/自定义强调色
 - 支持界面字体、字号、控制台字体、代理、语言和减少动态效果设置
 - 所有用户数据仅保存在 EXE 旁的隐藏目录 `.minifox`

@@ -15,6 +15,7 @@ qt_add_qml_module(minifox_launcher
         Theme.qml
         AppShell.qml
         components/ConsoleView.qml
+        components/ConsoleProgressPanel.qml
         components/ConsoleSettingsPreview.qml
         components/AccentColorDialog.qml
         components/AppButton.qml
