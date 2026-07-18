@@ -1,45 +1,21 @@
-set_source_files_properties(Theme.qml PROPERTIES
-    QT_QML_SINGLETON_TYPE TRUE
-)
-
 qt_add_executable(minifox_launcher WIN32
-    ../../../AppContext.cpp
-    ../../../AppContext.h
-    ../../../main.cpp
+    ../../../backend/AppContext.cpp
+    ../../../backend/AppContext.h
+    ../../../backend/main.cpp
 )
 
 qt_add_qml_module(minifox_launcher
     URI Minifox.App
+    IMPORTS
+        TARGET minifox_settings_ui
+        TARGET minifox_configuration_ui
+        TARGET minifox_runtime_ui
+        TARGET minifox_shared_ui
     QML_FILES
         Main.qml
-        Theme.qml
         AppShell.qml
-        components/ConsoleView.qml
-        components/ConsoleProgressPanel.qml
-        components/ConsoleSettingsPreview.qml
-        components/AccentColorDialog.qml
-        components/AppButton.qml
-        components/AppComboBox.qml
-        components/AppDialog.qml
-        components/AppItemDelegate.qml
-        components/AppLabel.qml
-        components/AppSpinBox.qml
-        components/AppSwitch.qml
-        components/AppTextArea.qml
-        components/AppTextField.qml
-        components/AppToolButton.qml
-        components/ButtonSurface.qml
-        components/EnvironmentEditor.qml
-        components/IconLabel.qml
-        components/NavigationRail.qml
-        components/PageHeader.qml
-        components/ParameterEditor.qml
-        components/PathField.qml
-        components/StatusBadge.qml
-        pages/ConfigurationPage.qml
-        pages/DashboardPage.qml
-        pages/RuntimePage.qml
-        pages/SettingsPage.qml
+        DashboardPage.qml
+        NavigationRail.qml
 )
 
 target_link_libraries(minifox_launcher
@@ -49,10 +25,14 @@ target_link_libraries(minifox_launcher
         Qt6::Qml
         Qt6::Quick
         Qt6::QuickControls2
-        minifox_application_settings
-        minifox_configuration
-        minifox_runtime
-        minifox_shared
+        minifox_application_settings_backend
+        minifox_settings_ui
+        minifox_configuration_backend
+        minifox_configuration_ui
+        minifox_runtime_backend
+        minifox_runtime_ui
+        minifox_shared_backend
+        minifox_shared_ui
 )
 
 if(MINGW)
@@ -80,7 +60,9 @@ set_target_properties(minifox_launcher PROPERTIES
 
 qt_add_translations(minifox_launcher
     TS_FILES
-        ../../../translations/qml_en_US.ts
+        ../../translations/qml_en_US.ts
+    LUPDATE_OPTIONS
+        -no-obsolete
     RESOURCE_PREFIX "/i18n"
 )
 

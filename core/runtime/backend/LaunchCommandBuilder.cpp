@@ -51,6 +51,7 @@ LaunchCommandBuilder::Result LaunchCommandBuilder::build(const QVariantMap &prof
 
     result.environment = QProcessEnvironment::systemEnvironment();
     QStringList environmentPreview;
+    static const QRegularExpression environmentName(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
     for (const auto &value : profile.value(QStringLiteral("environment")).toList()) {
         const QVariantMap entry = value.toMap();
         if (!entry.value(QStringLiteral("enabled"), true).toBool()) {
@@ -58,7 +59,7 @@ LaunchCommandBuilder::Result LaunchCommandBuilder::build(const QVariantMap &prof
         }
         const QString name = entry.value(QStringLiteral("name")).toString().trimmed();
         const QString environmentValue = entry.value(QStringLiteral("value")).toString();
-        if (name.isEmpty()) {
+        if (!environmentName.match(name).hasMatch()) {
             continue;
         }
         result.environment.insert(name, environmentValue);

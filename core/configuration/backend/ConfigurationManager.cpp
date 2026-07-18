@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -116,13 +117,17 @@ void ConfigurationManager::setCustomArguments(const QString &arguments)
 
 QVariantList ConfigurationManager::environmentEntries() const
 {
+    const auto &environment = currentProfile().environment;
+    const QStringList errors = environmentEntryErrors(currentProfile());
     QVariantList entries;
-    entries.reserve(currentProfile().environment.size());
-    for (const auto &entry : currentProfile().environment) {
+    entries.reserve(environment.size());
+    for (qsizetype index = 0; index < environment.size(); ++index) {
+        const auto &entry = environment.at(index);
         entries.append(QVariantMap{
             {QStringLiteral("name"), entry.name},
             {QStringLiteral("value"), entry.value},
-            {QStringLiteral("enabled"), entry.enabled}
+            {QStringLiteral("enabled"), entry.enabled},
+            {QStringLiteral("error"), errors.at(index)}
         });
     }
     return entries;
@@ -243,10 +248,12 @@ bool ConfigurationManager::removeCurrentProfile()
     return true;
 }
 
-void ConfigurationManager::addEnvironmentEntry()
+int ConfigurationManager::addEnvironmentEntry()
 {
+    const int index = currentProfile().environment.size();
     currentProfile().environment.append({QString(), QString(), true});
     updateAfterEdit();
+    return index;
 }
 
 void ConfigurationManager::updateEnvironmentEntry(
@@ -311,10 +318,7 @@ ConfigurationManager::Profile ConfigurationManager::makeDefaultProfile(const QSt
         comfyRoot,
         QString(),
         QVariantMap(),
-        {
-            {QStringLiteral("PYTHONUTF8"), QStringLiteral("1"), true},
-            {QStringLiteral("PYTHONUNBUFFERED"), QStringLiteral("1"), true}
-        }
+        {}
     };
 }
 
@@ -332,8 +336,11 @@ void ConfigurationManager::load()
         return;
     }
 
+    const QByteArray sourceData = file.readAll();
+    file.close();
+
     QJsonParseError parseError;
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    const QJsonDocument document = QJsonDocument::fromJson(sourceData, &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
         setLastError(tr("启动配置文件格式无效：%1").arg(parseError.errorString()));
         m_profiles.append(makeDefaultProfile(tr("默认配置")));
@@ -341,6 +348,8 @@ void ConfigurationManager::load()
     }
 
     const QJsonObject root = document.object();
+    const int schemaVersion = root.value(QStringLiteral("schemaVersion")).toInt(1);
+    const bool migrationRequired = schemaVersion < 2;
     const QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
     const QString currentId = root.value(QStringLiteral("currentProfileId")).toString();
     for (const auto &value : profiles) {
@@ -355,7 +364,7 @@ void ConfigurationManager::load()
         for (const auto &environmentValue : object.value(QStringLiteral("environment")).toArray()) {
             const auto environmentObject = environmentValue.toObject();
             profile.environment.append({
-                environmentObject.value(QStringLiteral("name")).toString(),
+                environmentObject.value(QStringLiteral("name")).toString().trimmed(),
                 environmentObject.value(QStringLiteral("value")).toString(),
                 environmentObject.value(QStringLiteral("enabled")).toBool(true)
             });
@@ -366,11 +375,12 @@ void ConfigurationManager::load()
         if (profile.name.isEmpty()) {
             profile.name = tr("未命名配置");
         }
-        if (profile.environment.isEmpty()) {
-            profile.environment = {
-                {QStringLiteral("PYTHONUTF8"), QStringLiteral("1"), true},
-                {QStringLiteral("PYTHONUNBUFFERED"), QStringLiteral("1"), true}
-            };
+        if (migrationRequired) {
+            profile.environment.removeIf([](const EnvironmentEntry &entry) {
+                return entry.value == QStringLiteral("1")
+                    && (entry.name == QStringLiteral("PYTHONUTF8")
+                        || entry.name == QStringLiteral("PYTHONUNBUFFERED"));
+            });
         }
         if (profile.id == currentId) {
             m_currentProfileIndex = m_profiles.size();
@@ -383,6 +393,10 @@ void ConfigurationManager::load()
         m_currentProfileIndex = 0;
     } else if (m_currentProfileIndex >= m_profiles.size()) {
         m_currentProfileIndex = 0;
+    }
+
+    if (migrationRequired) {
+        save();
     }
 }
 
@@ -422,7 +436,7 @@ bool ConfigurationManager::save()
     }
 
     const QJsonObject root {
-        {QStringLiteral("schemaVersion"), 1},
+        {QStringLiteral("schemaVersion"), 2},
         {QStringLiteral("currentProfileId"), currentProfile().id},
         {QStringLiteral("profiles"), profiles}
     };
@@ -454,6 +468,34 @@ void ConfigurationManager::updateAfterEdit(bool parametersChanged)
     }
 }
 
+QStringList ConfigurationManager::environmentEntryErrors(const Profile &profile) const
+{
+    static const QRegularExpression environmentName(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
+    QHash<QString, int> enabledNameCounts;
+    for (const auto &entry : profile.environment) {
+        const QString name = entry.name.trimmed();
+        if (entry.enabled && environmentName.match(name).hasMatch()) {
+            ++enabledNameCounts[name.toCaseFolded()];
+        }
+    }
+
+    QStringList errors;
+    errors.reserve(profile.environment.size());
+    for (const auto &entry : profile.environment) {
+        const QString name = entry.name.trimmed();
+        QString error;
+        if (entry.enabled && name.isEmpty()) {
+            error = tr("请输入环境变量名称。");
+        } else if (entry.enabled && !environmentName.match(name).hasMatch()) {
+            error = tr("环境变量名称只能包含英文字母、数字和下划线，且不能以数字开头。");
+        } else if (entry.enabled && enabledNameCounts.value(name.toCaseFolded()) > 1) {
+            error = tr("环境变量名称重复：%1").arg(name);
+        }
+        errors.append(error);
+    }
+    return errors;
+}
+
 void ConfigurationManager::validate()
 {
     QStringList errors;
@@ -483,10 +525,9 @@ void ConfigurationManager::validate()
         errors.append(tr("TLS 私钥与证书必须同时设置。"));
     }
 
-    const QRegularExpression environmentName(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
-    for (const auto &entry : profile.environment) {
-        if (entry.enabled && !entry.name.isEmpty() && !environmentName.match(entry.name).hasMatch()) {
-            errors.append(tr("环境变量名称无效：%1").arg(entry.name));
+    for (const QString &error : environmentEntryErrors(profile)) {
+        if (!error.isEmpty() && !errors.contains(error)) {
+            errors.append(error);
         }
     }
 

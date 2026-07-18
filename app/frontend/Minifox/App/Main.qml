@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Minifox.Shared
 
 ApplicationWindow {
     id: window

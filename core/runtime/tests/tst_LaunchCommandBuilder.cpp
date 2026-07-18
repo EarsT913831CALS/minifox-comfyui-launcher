@@ -4,7 +4,11 @@
 #include "LogModel.h"
 
 #include <QFontDatabase>
+#include <QFile>
 #include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPalette>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -35,6 +39,7 @@ private slots:
     void quickControlsUseTheApplicationPaletteWhenCreated();
     void directControlPaletteBindingsOverrideStyleDefaults();
     void applicationSettingsPersistAcrossInstances();
+    void environmentEntriesAreValidatedAndLegacyDefaultsMigrated();
     void profilesPersistWithoutLeavingTheTestDirectory();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
@@ -83,11 +88,17 @@ void LaunchCommandBuilderTest::explicitModesAndCustomArguments()
 void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
 {
     const QVariantList environment {
-        QVariantMap{{QStringLiteral("name"), QStringLiteral("PYTHONUTF8")},
-                    {QStringLiteral("value"), QStringLiteral("1")},
+        QVariantMap{{QStringLiteral("name"), QStringLiteral("CUSTOM_ENV")},
+                    {QStringLiteral("value"), QStringLiteral("value with spaces")},
                     {QStringLiteral("enabled"), true}},
         QVariantMap{{QStringLiteral("name"), QStringLiteral("SERVICE_API_KEY")},
                     {QStringLiteral("value"), QStringLiteral("top-secret")},
+                    {QStringLiteral("enabled"), true}},
+        QVariantMap{{QStringLiteral("name"), QStringLiteral("DISABLED_ENV")},
+                    {QStringLiteral("value"), QStringLiteral("ignored")},
+                    {QStringLiteral("enabled"), false}},
+        QVariantMap{{QStringLiteral("name"), QStringLiteral("INVALID-NAME")},
+                    {QStringLiteral("value"), QStringLiteral("ignored")},
                     {QStringLiteral("enabled"), true}}
     };
     const QVariantMap profile {
@@ -98,7 +109,10 @@ void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
     };
 
     const auto result = LaunchCommandBuilder::build(profile);
-    QCOMPARE(result.environment.value(QStringLiteral("PYTHONUTF8")), QStringLiteral("1"));
+    QCOMPARE(result.environment.value(QStringLiteral("CUSTOM_ENV")), QStringLiteral("value with spaces"));
+    QVERIFY(!result.environment.contains(QStringLiteral("DISABLED_ENV")));
+    QVERIFY(!result.environment.contains(QStringLiteral("INVALID-NAME")));
+    QVERIFY(result.preview.contains(QStringLiteral("set \"CUSTOM_ENV=value with spaces\"")));
     QVERIFY(result.preview.contains(QStringLiteral("SERVICE_API_KEY=••••••••")));
     QVERIFY(!result.preview.contains(QStringLiteral("top-secret")));
 }
@@ -392,10 +406,12 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
     {
         ConfigurationManager manager(storagePath);
         QCOMPARE(manager.profileNames().size(), 1);
+        QVERIFY(manager.environmentEntries().isEmpty());
         manager.addProfile(QStringLiteral("GPU profile"));
         manager.setCustomArguments(QStringLiteral("--custom value"));
-        manager.addEnvironmentEntry();
-        manager.updateEnvironmentEntry(2, QStringLiteral("CUSTOM_ENV"), QStringLiteral("enabled"), true);
+        const int environmentIndex = manager.addEnvironmentEntry();
+        QCOMPARE(environmentIndex, 0);
+        manager.updateEnvironmentEntry(environmentIndex, QStringLiteral("CUSTOM_ENV"), QStringLiteral("enabled"), true);
         QCOMPARE(manager.profileNames().size(), 2);
         QCOMPARE(manager.currentProfileName(), QStringLiteral("GPU profile"));
     }
@@ -404,11 +420,76 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
     QCOMPARE(restored.profileNames().size(), 2);
     QCOMPARE(restored.currentProfileName(), QStringLiteral("GPU profile"));
     QCOMPARE(restored.customArguments(), QStringLiteral("--custom value"));
-    QCOMPARE(restored.environmentEntries().at(2).toMap().value(QStringLiteral("name")).toString(),
+    QCOMPARE(restored.environmentEntries().at(0).toMap().value(QStringLiteral("name")).toString(),
              QStringLiteral("CUSTOM_ENV"));
     QVERIFY(restored.removeCurrentProfile());
     QCOMPARE(restored.profileNames().size(), 1);
     QVERIFY(!restored.removeCurrentProfile());
+}
+
+void LaunchCommandBuilderTest::environmentEntriesAreValidatedAndLegacyDefaultsMigrated()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString storagePath = temporaryDirectory.filePath(QStringLiteral("profiles.json"));
+
+    const QJsonArray environment {
+        QJsonObject{{QStringLiteral("name"), QStringLiteral("PYTHONUTF8")},
+                    {QStringLiteral("value"), QStringLiteral("1")},
+                    {QStringLiteral("enabled"), true}},
+        QJsonObject{{QStringLiteral("name"), QStringLiteral("PYTHONUNBUFFERED")},
+                    {QStringLiteral("value"), QStringLiteral("1")},
+                    {QStringLiteral("enabled"), false}},
+        QJsonObject{{QStringLiteral("name"), QStringLiteral("CUSTOM_KEEP")},
+                    {QStringLiteral("value"), QStringLiteral("kept")},
+                    {QStringLiteral("enabled"), true}}
+    };
+    const QJsonObject profile {
+        {QStringLiteral("id"), QStringLiteral("legacy-profile")},
+        {QStringLiteral("name"), QStringLiteral("Legacy")},
+        {QStringLiteral("parameters"), QJsonObject{}},
+        {QStringLiteral("environment"), environment}
+    };
+    const QJsonObject root {
+        {QStringLiteral("schemaVersion"), 1},
+        {QStringLiteral("currentProfileId"), QStringLiteral("legacy-profile")},
+        {QStringLiteral("profiles"), QJsonArray{profile}}
+    };
+
+    QFile sourceFile(storagePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    const QByteArray sourceData = QJsonDocument(root).toJson();
+    QCOMPARE(sourceFile.write(sourceData), static_cast<qint64>(sourceData.size()));
+    sourceFile.close();
+
+    ConfigurationManager manager(storagePath);
+    QCOMPARE(manager.environmentEntries().size(), 1);
+    QCOMPARE(manager.environmentEntries().constFirst().toMap().value(QStringLiteral("name")).toString(),
+             QStringLiteral("CUSTOM_KEEP"));
+
+    {
+        QFile migratedFile(storagePath);
+        QVERIFY(migratedFile.open(QIODevice::ReadOnly));
+        const QJsonObject migratedRoot = QJsonDocument::fromJson(migratedFile.readAll()).object();
+        QCOMPARE(migratedRoot.value(QStringLiteral("schemaVersion")).toInt(), 2);
+        QCOMPARE(migratedRoot.value(QStringLiteral("profiles")).toArray().at(0).toObject()
+                     .value(QStringLiteral("environment")).toArray().size(),
+                 1);
+    }
+
+    const int invalidIndex = manager.addEnvironmentEntry();
+    QVERIFY(!manager.environmentEntries().at(invalidIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
+    manager.updateEnvironmentEntry(invalidIndex, QStringLiteral("1INVALID"), QStringLiteral("value"), true);
+    QVERIFY(!manager.environmentEntries().at(invalidIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
+    manager.updateEnvironmentEntry(invalidIndex, QStringLiteral("CUSTOM_ENV"), QStringLiteral("value"), true);
+    QVERIFY(manager.environmentEntries().at(invalidIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
+
+    const int duplicateIndex = manager.addEnvironmentEntry();
+    manager.updateEnvironmentEntry(duplicateIndex, QStringLiteral("custom_env"), QStringLiteral("other"), true);
+    QVERIFY(!manager.environmentEntries().at(invalidIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
+    QVERIFY(!manager.environmentEntries().at(duplicateIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
+    manager.updateEnvironmentEntry(duplicateIndex, QStringLiteral("custom_env"), QStringLiteral("other"), false);
+    QVERIFY(manager.environmentEntries().at(invalidIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
 }
 
 void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()

@@ -51,7 +51,7 @@ public:
     Q_INVOKABLE void duplicateCurrentProfile();
     Q_INVOKABLE bool removeCurrentProfile();
 
-    Q_INVOKABLE void addEnvironmentEntry();
+    Q_INVOKABLE int addEnvironmentEntry();
     Q_INVOKABLE void updateEnvironmentEntry(int index, const QString &name, const QString &value, bool enabled);
     Q_INVOKABLE void removeEnvironmentEntry(int index);
 
@@ -89,6 +89,7 @@ private:
     bool save();
     void updateAfterEdit(bool parametersChanged = false);
     void validate();
+    QStringList environmentEntryErrors(const Profile &profile) const;
     void setLastError(const QString &message);
 
     static QString normalizePath(const QString &path);

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import Minifox.Shared
 
 Rectangle {
     id: root

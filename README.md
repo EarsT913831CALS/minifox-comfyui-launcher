@@ -127,8 +127,8 @@ cmake --build --preset ucrt64-static-release
 
 | 预设 | 用途 | 测试 | 输出 |
 |---|---|---:|---|
-| `ucrt64-debug` | 开发、调试和检查 | 开启 | `build/ucrt64-debug/` |
-| `ucrt64-release` | 动态链接正式构建 | 关闭 | `build/ucrt64-release/` |
+| `ucrt64-debug` | 开发、调试和检查 | 开启 | `build/debug/` |
+| `ucrt64-release` | 动态链接正式构建 | 关闭 | `build/release/` |
 | `ucrt64-static-release` | 可发布的单文件构建 | 关闭 | `build/Release/` |
 
 所有构建目录、运行数据和测试结果均被 Git 忽略，可以安全删除并重新生成。
@@ -136,20 +136,42 @@ cmake --build --preset ucrt64-static-release
 ## 项目结构
 
 ```text
-app/                         程序入口、依赖注入、翻译和 QML
-core/application-settings/   启动器设置与系统外观
-core/configuration/          启动配置与 ComfyUI 参数目录
-core/runtime/                命令构建、进程、就绪监控和日志
-platform/windows/            Windows Job Object 进程树管理
-shared/                      便携路径等通用能力
-extension-api/               扩展 API 边界说明
-extensions/                  扩展目录说明
-tests/                       C++ 单元测试
-scripts/                     可复现构建入口
-.github/workflows/           GitHub Actions 编译验证
+app/
+├── backend/                         程序入口、依赖注入和模块装配
+└── frontend/
+    ├── Minifox/App/                 主窗口、导航和应用级页面
+    └── translations/                界面翻译
+core/
+├── application-settings/
+│   ├── backend/                     启动器设置、外观和代理
+│   └── frontend/Minifox/ApplicationSettings/
+├── configuration/
+│   ├── backend/                     启动配置和参数目录
+│   └── frontend/Minifox/Configuration/
+└── runtime/
+    ├── backend/                     命令、进程、就绪监控和日志
+    ├── frontend/Minifox/Runtime/
+    └── tests/                       Runtime 单元测试
+shared/
+├── backend/                         无业务语义的通用 C++ 能力
+└── frontend/Minifox/Shared/         主题和通用 QML 控件
+platform/windows/                    Windows 平台实现
+extension-api/                       扩展 API 边界说明
+extensions/                          扩展目录说明
+scripts/                             可复现构建入口
+.github/workflows/                   GitHub Actions 编译验证
 ```
 
-QML 不直接读写配置文件或操作进程，业务逻辑由注入的 C++ 后端负责。
+项目保持垂直业务模块：每个模块在内部拆分 `backend` 与 `frontend`，测试也随模块放置。后端目标不依赖 QML；前端通过独立的 Qt QML 模块公开页面，通用控件统一来自 `Minifox.Shared`。`Minifox.App` 只负责组合页面和注入后端对象，不承载具体业务逻辑。
+
+依赖方向固定为：
+
+```text
+Minifox.App UI -> Configuration / Runtime / ApplicationSettings UI -> Minifox.Shared UI
+app backend    -> core backends                                  -> shared / platform
+```
+
+QML 不直接读写配置文件或操作进程，所有业务行为都通过 `appContext` 注入的 C++ 后端完成。
 
 ## 用户数据
 
