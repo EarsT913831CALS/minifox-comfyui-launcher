@@ -1,6 +1,12 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Minifox.ApplicationSettings
+import Minifox.Configuration
+import Minifox.Runtime
+import Minifox.Shared
 
 Control {
     id: root
@@ -34,27 +40,52 @@ Control {
     palette.link: Theme.info
     palette.linkVisited: Theme.info
 
-    function pageSource(index) {
+    function pageComponent(index) {
         switch (index) {
         case 0:
-            return "pages/DashboardPage.qml";
+            return dashboardPageComponent;
         case 1:
-            return "pages/ConfigurationPage.qml";
+            return configurationPageComponent;
         case 2:
-            return "pages/RuntimePage.qml";
+            return runtimePageComponent;
         case 3:
-            return "pages/SettingsPage.qml";
+            return settingsPageComponent;
         default:
-            return "pages/DashboardPage.qml";
+            return dashboardPageComponent;
         }
     }
 
-    onCurrentPageChanged: pageLoader.setSource(pageSource(currentPage), {
-        "appContext": appContext
-    })
-    Component.onCompleted: pageLoader.setSource(pageSource(currentPage), {
-        "appContext": appContext
-    })
+    Component {
+        id: dashboardPageComponent
+
+        DashboardPage {
+            appContext: root.appContext
+        }
+    }
+
+    Component {
+        id: configurationPageComponent
+
+        ConfigurationPage {
+            appContext: root.appContext
+        }
+    }
+
+    Component {
+        id: runtimePageComponent
+
+        RuntimePage {
+            appContext: root.appContext
+        }
+    }
+
+    Component {
+        id: settingsPageComponent
+
+        SettingsPage {
+            appContext: root.appContext
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -155,6 +186,7 @@ Control {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 asynchronous: true
+                sourceComponent: root.pageComponent(root.currentPage)
 
                 onLoaded: {
                     pageFade.stop();

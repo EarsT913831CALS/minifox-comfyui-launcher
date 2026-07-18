@@ -16,6 +16,7 @@
       "name": "ucrt64-debug",
       "displayName": "MSYS2 UCRT64 Debug + Tests",
       "inherits": "ucrt64-base",
+      "binaryDir": "${sourceDir}/build/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "MINIFOX_BUILD_TESTS": "ON"
@@ -25,6 +26,7 @@
       "name": "ucrt64-release",
       "displayName": "MSYS2 UCRT64 Dynamic Release",
       "inherits": "ucrt64-base",
+      "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "MINIFOX_BUILD_TESTS": "OFF"
@@ -34,6 +36,7 @@
       "name": "ucrt64-static-release",
       "displayName": "MSYS2 UCRT64 Single-file Static Release",
       "inherits": "ucrt64-base",
+      "binaryDir": "${sourceDir}/build/static",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/build/Release",

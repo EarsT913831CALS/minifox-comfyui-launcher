@@ -1,1 +1,1 @@
-add_subdirectory(qml/Minifox/App)
+add_subdirectory(frontend/Minifox/App)

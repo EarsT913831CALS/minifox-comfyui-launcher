@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Minifox.Shared
 
 Rectangle {
     id: root

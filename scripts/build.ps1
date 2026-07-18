@@ -26,6 +26,11 @@ $qtCmake = if ($Preset -eq "ucrt64-static-release") {
 } else {
     Join-Path $ucrt64Bin "qt-cmake.bat"
 }
+$buildDirectory = switch ($Preset) {
+    "ucrt64-debug" { Join-Path $projectRoot "build\debug" }
+    "ucrt64-release" { Join-Path $projectRoot "build\release" }
+    "ucrt64-static-release" { Join-Path $projectRoot "build\static" }
+}
 
 $requirements = [ordered]@{
     "CMake" = $cmake
@@ -78,5 +83,5 @@ try {
 if ($Preset -eq "ucrt64-static-release") {
     Write-Host "Static executable: $projectRoot\build\Release\Minifox ComfyUI Launcher.exe"
 } else {
-    Write-Host "Build directory: $projectRoot\build\$Preset"
+    Write-Host "Build directory: $buildDirectory"
 }

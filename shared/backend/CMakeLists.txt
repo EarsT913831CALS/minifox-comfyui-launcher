@@ -1,14 +1,14 @@
-qt_add_library(minifox_shared STATIC
+qt_add_library(minifox_shared_backend STATIC
     PortablePaths.cpp
     PortablePaths.h
 )
 
-target_include_directories(minifox_shared
+target_include_directories(minifox_shared_backend
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(minifox_shared
+target_link_libraries(minifox_shared_backend
     PUBLIC
         Qt6::Core
 )
