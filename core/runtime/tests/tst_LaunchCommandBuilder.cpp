@@ -17,8 +17,36 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTranslator>
 
 #include <algorithm>
+
+class CatalogTranslator final : public QTranslator
+{
+public:
+    QString translate(
+        const char *context,
+        const char *sourceText,
+        const char *disambiguation = nullptr,
+        int n = -1) const override
+    {
+        Q_UNUSED(disambiguation)
+        Q_UNUSED(n)
+        if (qstrcmp(context, "LaunchParameterCatalog") != 0) {
+            return {};
+        }
+        if (qstrcmp(sourceText, "常规") == 0) {
+            return QStringLiteral("Translated General");
+        }
+        if (qstrcmp(sourceText, "浏览器启动策略") == 0) {
+            return QStringLiteral("Translated Browser Policy");
+        }
+        if (qstrcmp(sourceText, "默认") == 0) {
+            return QStringLiteral("Translated Default");
+        }
+        return {};
+    }
+};
 
 class LaunchCommandBuilderTest final : public QObject
 {
@@ -40,6 +68,7 @@ private slots:
     void directControlPaletteBindingsOverrideStyleDefaults();
     void applicationSettingsPersistAcrossInstances();
     void environmentEntriesAreValidatedAndLegacyDefaultsMigrated();
+    void launchParameterCatalogRetranslates();
     void profilesPersistWithoutLeavingTheTestDirectory();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
@@ -115,6 +144,30 @@ void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
     QVERIFY(result.preview.contains(QStringLiteral("set \"CUSTOM_ENV=value with spaces\"")));
     QVERIFY(result.preview.contains(QStringLiteral("SERVICE_API_KEY=••••••••")));
     QVERIFY(!result.preview.contains(QStringLiteral("top-secret")));
+}
+
+void LaunchCommandBuilderTest::launchParameterCatalogRetranslates()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    ConfigurationManager manager(temporaryDirectory.filePath(QStringLiteral("profiles.json")));
+
+    QSignalSpy catalogSpy(&manager, &ConfigurationManager::catalogChanged);
+    CatalogTranslator translator;
+    QVERIFY(QCoreApplication::installTranslator(&translator));
+    manager.retranslate();
+
+    QCOMPARE(catalogSpy.count(), 1);
+    QCOMPARE(manager.categories().constFirst().toMap().value(QStringLiteral("title")).toString(),
+             QStringLiteral("Translated General"));
+    const QVariantMap browser = manager.parametersForCategory(QStringLiteral("basic")).constFirst().toMap();
+    QCOMPARE(browser.value(QStringLiteral("title")).toString(),
+             QStringLiteral("Translated Browser Policy"));
+    QCOMPARE(browser.value(QStringLiteral("options")).toList().constFirst().toMap()
+                 .value(QStringLiteral("label")).toString(),
+             QStringLiteral("Translated Default"));
+
+    QVERIFY(QCoreApplication::removeTranslator(&translator));
 }
 
 void LaunchCommandBuilderTest::proxySettingsAreAppliedToChildEnvironment()

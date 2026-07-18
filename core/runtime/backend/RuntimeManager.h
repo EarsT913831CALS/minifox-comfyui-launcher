@@ -80,6 +80,7 @@ private:
     void updateCommandPreview();
     void updateUptime();
     void checkReadiness();
+    void cancelReadinessReply();
     void handleReadinessReply();
     void handleProcessStarted();
     void handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);

@@ -18,4 +18,5 @@ public:
 
 private:
     void *m_jobHandle = nullptr;
+    qint64 m_processId = 0;
 };

@@ -58,6 +58,7 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
 
 RuntimeManager::~RuntimeManager()
 {
+    cancelReadinessReply();
     if (m_process.state() != QProcess::NotRunning) {
         m_processJob.terminate();
         m_process.kill();
@@ -169,7 +170,11 @@ void RuntimeManager::forceStop()
     }
     m_stopRequested = true;
     m_logModel->appendSystemMessage(tr("正在强制终止 ComfyUI 进程树…"), QStringLiteral("#c42b1c"));
-    m_processJob.terminate();
+    if (!m_processJob.terminate()) {
+        m_logModel->appendSystemMessage(
+            tr("无法完整终止 ComfyUI 进程树，正在终止主进程。"),
+            QStringLiteral("#c42b1c"));
+    }
     m_process.kill();
 }
 
@@ -300,16 +305,29 @@ void RuntimeManager::checkReadiness()
     connect(m_readinessReply, &QNetworkReply::finished, this, &RuntimeManager::handleReadinessReply);
 }
 
-void RuntimeManager::handleReadinessReply()
+void RuntimeManager::cancelReadinessReply()
 {
-    if (!m_readinessReply) {
+    QNetworkReply *reply = m_readinessReply.data();
+    if (!reply) {
         return;
     }
-    const int statusCode = m_readinessReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    const bool ready = m_readinessReply->error() == QNetworkReply::NoError
-        && statusCode >= 200 && statusCode < 500;
-    m_readinessReply->deleteLater();
     m_readinessReply = nullptr;
+    disconnect(reply, nullptr, this, nullptr);
+    reply->abort();
+    reply->deleteLater();
+}
+
+void RuntimeManager::handleReadinessReply()
+{
+    QNetworkReply *reply = m_readinessReply.data();
+    if (!reply) {
+        return;
+    }
+    m_readinessReply = nullptr;
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool ready = reply->error() == QNetworkReply::NoError
+        && statusCode >= 200 && statusCode < 500;
+    reply->deleteLater();
     if (ready) {
         setServiceReady(true);
         setStatus(Running);
@@ -325,7 +343,11 @@ void RuntimeManager::handleProcessStarted()
     m_elapsed.start();
     m_uptimeTimer.start();
     m_readinessTimer.start();
-    m_processJob.attach(m_processId);
+    if (!m_processJob.attach(m_processId)) {
+        m_logModel->appendSystemMessage(
+            tr("无法关联 Windows Job Object；强制停止时将使用进程树终止回退。"),
+            QStringLiteral("#9d5d00"));
+    }
     m_logModel->appendSystemMessage(tr("进程已启动，PID %1。").arg(m_processId),
                                     QStringLiteral("#0067c0"));
     emit runtimeInfoChanged();
@@ -336,11 +358,7 @@ void RuntimeManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
 {
     m_forceStopTimer.stop();
     m_readinessTimer.stop();
-    if (m_readinessReply) {
-        m_readinessReply->abort();
-        m_readinessReply->deleteLater();
-        m_readinessReply = nullptr;
-    }
+    cancelReadinessReply();
     m_logModel->flush();
     m_lastExitCode = exitCode;
     m_processId = 0;
