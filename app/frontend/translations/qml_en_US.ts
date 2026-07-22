@@ -36,35 +36,6 @@
     </message>
 </context>
 <context>
-    <name>AppShell</name>
-    <message>
-        <location filename="../Minifox/App/AppShell.qml" line="121"/>
-        <source>Minifox</source>
-        <translation>Minifox</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/AppShell.qml" line="133"/>
-        <source>当前启动配置</source>
-        <translation>Current launch profile</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/AppShell.qml" line="148"/>
-        <source>启动</source>
-        <translation>Start</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/AppShell.qml" line="156"/>
-        <source>停止</source>
-        <translation>Stop</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/AppShell.qml" line="168"/>
-        <location filename="../Minifox/App/AppShell.qml" line="170"/>
-        <source>打开 WebUI</source>
-        <translation>Open WebUI</translation>
-    </message>
-</context>
-<context>
     <name>ApplicationSettings</name>
     <message>
         <location filename="../../../core/application-settings/backend/ApplicationSettings.cpp" line="433"/>
@@ -196,100 +167,135 @@
 <context>
     <name>ConfigurationPage</name>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="30"/>
-        <source>启动配置</source>
-        <translation>Launch Profiles</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="31"/>
-        <source>保存多套 ComfyUI 启动方式；所有可视化选项都直接映射到当前 ComfyUI 命令行参数。</source>
-        <translation>Save multiple ComfyUI launch setups. Every visual option maps directly to a current ComfyUI command-line argument.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="37"/>
-        <source>启动命令提示符</source>
-        <translation>Open Command Prompt</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="54"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="100"/>
         <source>配置</source>
         <translation>Profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="67"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="113"/>
         <source>配置名称</source>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="72"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="127"/>
         <source>新建</source>
         <translation>New</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="78"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="133"/>
         <source>复制</source>
         <translation>Duplicate</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="86"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="88"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="141"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="143"/>
         <source>删除当前配置</source>
         <translation>Delete current profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="105"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="161"/>
         <source>Python 可执行文件</source>
         <translation>Python executable</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="116"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="172"/>
         <source>ComfyUI 根目录</source>
         <translation>ComfyUI root directory</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="143"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="199"/>
         <source>请先修正以下配置</source>
         <translation>Fix the following settings first</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="303"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="378"/>
         <source>自定义参数会追加在可视化参数之后，可用于尚未被启动器覆盖的新参数。</source>
         <translation>Custom arguments are appended after visual options and can be used for new options not yet covered by the launcher.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="313"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="388"/>
         <source>例如：--some-new-option value</source>
         <translation>Example: --some-new-option value</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="341"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="416"/>
         <source>无法启动命令提示符</source>
         <translation>Unable to Start Command Prompt</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="343"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="418"/>
         <source>确定</source>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="361"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="426"/>
+        <source>命令提示符未能启动。</source>
+        <translation>The command prompt could not be started.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="439"/>
         <source>删除启动配置</source>
         <translation>Delete Launch Profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="364"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="442"/>
         <source>删除</source>
         <translation>Delete</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="365"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="443"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="371"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="449"/>
         <source>确定删除“%1”吗？此操作无法撤销。</source>
         <translation>Delete “%1”? This action cannot be undone.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="56"/>
+        <source>高级选项</source>
+        <translation>Advanced Options</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="57"/>
+        <source>管理启动配置，并按需调整 ComfyUI 命令行参数。</source>
+        <translation>Manage launch profiles and adjust ComfyUI command-line options when needed.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="63"/>
+        <source>启动命令提示符</source>
+        <translation>Open Command Prompt</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="71"/>
+        <source>一键启动</source>
+        <translation>Launch</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="81"/>
+        <source>搜索参数、分类或命令行标志</source>
+        <translation>Search options, categories, or command-line flags</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="83"/>
+        <source>搜索高级选项</source>
+        <translation>Search advanced options</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="291"/>
+        <source>搜索结果</source>
+        <translation>Search Results</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="293"/>
+        <source>显示所有分类中与“%1”匹配的选项。</source>
+        <translation>Showing options matching “%1” across all categories.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="339"/>
+        <source>没有找到匹配的高级选项。</source>
+        <translation>No matching advanced options were found.</translation>
     </message>
 </context>
 <context>
@@ -327,7 +333,7 @@
 <context>
     <name>ConsoleView</name>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/ConsoleView.qml" line="164"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/ConsoleView.qml" line="153"/>
         <source>启动 ComfyUI 后，完整输出会显示在这里。</source>
         <translation>Complete output will appear here after ComfyUI starts.</translation>
     </message>
@@ -335,107 +341,223 @@
 <context>
     <name>CudaDevicePanel</name>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="26"/>
-        <source>CUDA 设备检测</source>
-        <translation>CUDA Device Detection</translation>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="36"/>
+        <source>CUDA 设备自动检测</source>
+        <translation>Automatic CUDA Device Detection</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="40"/>
-        <source>检测中…</source>
-        <translation>Detecting…</translation>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="51"/>
+        <source>检测中</source>
+        <translation>Detecting</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="40"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="53"/>
+        <source>已检测</source>
+        <translation>Detected</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="54"/>
+        <source>未发现</source>
+        <translation>Not found</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="119"/>
+        <source>计算能力 %1</source>
+        <translation>Compute capability %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="128"/>
+        <source>使用此设备</source>
+        <translation>Use this device</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="143"/>
+        <source>来源：%1</source>
+        <translation>Source: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="145"/>
+        <source>PyTorch %1</source>
+        <translation>PyTorch %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="147"/>
+        <source>CUDA %1</source>
+        <translation>CUDA %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="149"/>
+        <source>驱动 %1</source>
+        <translation>Driver %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="159"/>
         <source>重新检测</source>
         <translation>Detect again</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="46"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="166"/>
         <source>使用全部设备</source>
         <translation>Use all devices</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="67"/>
-        <source>设备 %1</source>
-        <translation>Device %1</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="78"/>
-        <source>使用此设备</source>
-        <translation>Use this device</translation>
     </message>
 </context>
 <context>
     <name>DashboardPage</name>
     <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="17"/>
-        <source>主页</source>
-        <translation>Home</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="18"/>
-        <source>检查当前配置、启动 ComfyUI，并随时查看服务状态。</source>
-        <translation>Review the current profile, start ComfyUI, and monitor service status.</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="43"/>
-        <source>服务已就绪</source>
-        <translation>Service ready</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="43"/>
-        <source>服务未就绪</source>
-        <translation>Service not ready</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="60"/>
-        <source>进程 ID</source>
-        <translation>Process ID</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="73"/>
-        <source>运行时间</source>
-        <translation>Uptime</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="84"/>
-        <source>启动 ComfyUI</source>
-        <translation>Start ComfyUI</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="84"/>
-        <source>停止 ComfyUI</source>
-        <translation>Stop ComfyUI</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="97"/>
+        <location filename="../Minifox/App/DashboardPage.qml" line="66"/>
         <source>打开 WebUI</source>
         <translation>Open WebUI</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="136"/>
-        <source>命令预览</source>
-        <translation>Command Preview</translation>
+        <location filename="../Minifox/App/DashboardPage.qml" line="21"/>
+        <source>配置需要完善</source>
+        <translation>Configuration needs attention</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="144"/>
-        <source>敏感环境变量会自动隐藏</source>
-        <translation>Sensitive environment variables are masked automatically</translation>
+        <location filename="../Minifox/App/DashboardPage.qml" line="23"/>
+        <source>ComfyUI 已就绪</source>
+        <translation>ComfyUI is ready</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="159"/>
-        <source>ComfyUI 启动命令预览</source>
-        <translation>ComfyUI launch command preview</translation>
+        <location filename="../Minifox/App/DashboardPage.qml" line="26"/>
+        <source>正在启动 ComfyUI</source>
+        <translation>Starting ComfyUI</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="171"/>
-        <source>最近输出</source>
-        <translation>Recent Output</translation>
+        <location filename="../Minifox/App/DashboardPage.qml" line="28"/>
+        <source>正在等待服务</source>
+        <translation>Waiting for service</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/DashboardPage.qml" line="179"/>
-        <source>完整内容保留至下一次启动</source>
-        <translation>Complete output is retained until the next launch</translation>
+        <location filename="../Minifox/App/DashboardPage.qml" line="30"/>
+        <source>正在停止 ComfyUI</source>
+        <translation>Stopping ComfyUI</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="32"/>
+        <source>启动失败</source>
+        <translation>Launch failed</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="34"/>
+        <source>准备就绪</source>
+        <translation>Ready to launch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="39"/>
+        <source>修正启动配置后即可一键启动。</source>
+        <translation>Fix the launch profile to enable one-click launch.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="41"/>
+        <source>服务运行正常，可以打开 WebUI 开始创作。</source>
+        <translation>The service is ready. Open WebUI to start creating.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="44"/>
+        <source>进程已经创建，正在读取启动输出。</source>
+        <translation>The process has started and Minifox is reading its output.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="46"/>
+        <source>ComfyUI 进程正在运行，等待网页服务响应。</source>
+        <translation>ComfyUI is running while Minifox waits for the web service.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="48"/>
+        <source>正在安全结束进程及其子进程。</source>
+        <translation>Safely stopping the process and its children.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="52"/>
+        <source>查看控制台了解详细原因，然后重新启动。</source>
+        <translation>Check the console for details, then try again.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="54"/>
+        <source>当前配置已通过检查，随时可以启动。</source>
+        <translation>The current profile passed validation and is ready.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="68"/>
+        <source>重新启动</source>
+        <translation>Restart</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="70"/>
+        <source>正在启动</source>
+        <translation>Starting</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="72"/>
+        <source>等待 WebUI</source>
+        <translation>Waiting for WebUI</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="74"/>
+        <source>正在停止</source>
+        <translation>Stopping</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="75"/>
+        <location filename="../Minifox/App/DashboardPage.qml" line="89"/>
+        <source>一键启动</source>
+        <translation>One-click Launch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="90"/>
+        <source>确认当前配置，然后启动 ComfyUI。</source>
+        <translation>Review the current profile, then launch ComfyUI.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="154"/>
+        <source>当前配置</source>
+        <translation>Current Profile</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="162"/>
+        <source>当前启动配置</source>
+        <translation>Current launch profile</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="167"/>
+        <source>高级选项</source>
+        <translation>Advanced Options</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="178"/>
+        <source>ComfyUI</source>
+        <translation>ComfyUI</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="184"/>
+        <source>Python</source>
+        <translation>Python</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="190"/>
+        <source>服务地址</source>
+        <translation>Service URL</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="196"/>
+        <source>CUDA 设备</source>
+        <translation>CUDA devices</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="230"/>
+        <source>停止</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="237"/>
+        <source>查看控制台</source>
+        <translation>View Console</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/DashboardPage.qml" line="243"/>
+        <source>完善配置</source>
+        <translation>Complete setup</translation>
     </message>
 </context>
 <context>
@@ -551,50 +673,50 @@
     <name>NavigationRail</name>
     <message>
         <location filename="../Minifox/App/NavigationRail.qml" line="16"/>
-        <source>主页</source>
-        <translation>Home</translation>
+        <source>一键启动</source>
+        <translation>Launch</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="20"/>
-        <source>启动配置</source>
-        <translation>Launch Profiles</translation>
+        <location filename="../Minifox/App/NavigationRail.qml" line="17"/>
+        <source>高级选项</source>
+        <translation>Advanced</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="24"/>
-        <source>运行与控制台</source>
-        <translation>Runtime &amp; Console</translation>
+        <location filename="../Minifox/App/NavigationRail.qml" line="18"/>
+        <source>控制台</source>
+        <translation>Console</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="28"/>
+        <location filename="../Minifox/App/NavigationRail.qml" line="19"/>
         <source>版本管理</source>
         <translation>Version Management</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="32"/>
-        <source>应用设置</source>
-        <translation>Application Settings</translation>
+        <location filename="../Minifox/App/NavigationRail.qml" line="55"/>
+        <source>设置</source>
+        <translation>Settings</translation>
     </message>
 </context>
 <context>
     <name>ParameterEditor</name>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="113"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="125"/>
         <source>已启用</source>
         <translation>Enabled</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="113"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="125"/>
         <source>未启用</source>
         <translation>Disabled</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="162"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="195"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="174"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="207"/>
         <source>留空使用默认值</source>
         <translation>Leave blank to use the default</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="235"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="247"/>
         <source>每行一项</source>
         <translation>One item per line</translation>
     </message>
@@ -681,6 +803,36 @@
         <translation>Starting profile “%1”…</translation>
     </message>
     <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="570"/>
+        <source>手动代理未启用：代理主机为空或无效。</source>
+        <translation>Manual proxy is disabled because the proxy host is empty or invalid.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="571"/>
+        <source>已为 ComfyUI 子进程设置代理：%1</source>
+        <translation>Proxy configured for the ComfyUI child process: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="575"/>
+        <source>已移除 ComfyUI 子进程的代理环境变量。</source>
+        <translation>Proxy environment variables were removed from the ComfyUI child process.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="228"/>
+        <source>正在停止 ComfyUI…</source>
+        <translation>Stopping ComfyUI…</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="113"/>
+        <source>无法启动 Python 依赖检查：%1</source>
+        <translation>Could not start the Python dependency check: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="252"/>
+        <source>正在强制终止 ComfyUI 进程树…</source>
+        <translation>Force terminating the ComfyUI process tree…</translation>
+    </message>
+    <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="281"/>
         <source>ComfyUI 工作目录不存在。</source>
         <translation>The ComfyUI working directory does not exist.</translation>
@@ -699,6 +851,26 @@
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="301"/>
         <source>无法打开启动命令提示符：%1</source>
         <translation>Unable to open the command prompt: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="312"/>
+        <source>服务地址无效。</source>
+        <translation>The service address is invalid.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="317"/>
+        <source>无法打开 WebUI。</source>
+        <translation>Unable to open WebUI.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="333"/>
+        <source>无法导出日志：%1</source>
+        <translation>Unable to export the log: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="336"/>
+        <source>日志已导出到 %1</source>
+        <translation>Log exported to %1</translation>
     </message>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="348"/>
@@ -736,64 +908,14 @@
         <translation>Dependency check passed (%1 items checked). Preparing to start ComfyUI.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="570"/>
-        <source>手动代理未启用：代理主机为空或无效。</source>
-        <translation>Manual proxy is disabled because the proxy host is empty or invalid.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="571"/>
-        <source>已为 ComfyUI 子进程设置代理：%1</source>
-        <translation>Proxy configured for the ComfyUI child process: %1</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="575"/>
-        <source>已移除 ComfyUI 子进程的代理环境变量。</source>
-        <translation>Proxy environment variables were removed from the ComfyUI child process.</translation>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="735"/>
+        <source>ComfyUI 服务已就绪：%1</source>
+        <translation>ComfyUI service is ready: %1</translation>
     </message>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="745"/>
         <source>无法将 ComfyUI 加入安全作业，已中止启动以避免残留 Python 进程。</source>
         <translation>Could not add ComfyUI to the protected job. Launch was aborted to avoid leaving Python processes behind.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="228"/>
-        <source>正在停止 ComfyUI…</source>
-        <translation>Stopping ComfyUI…</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="113"/>
-        <source>无法启动 Python 依赖检查：%1</source>
-        <translation>Could not start the Python dependency check: %1</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="252"/>
-        <source>正在强制终止 ComfyUI 进程树…</source>
-        <translation>Force terminating the ComfyUI process tree…</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="312"/>
-        <source>服务地址无效。</source>
-        <translation>The service address is invalid.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="317"/>
-        <source>无法打开 WebUI。</source>
-        <translation>Unable to open WebUI.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="333"/>
-        <source>无法导出日志：%1</source>
-        <translation>Unable to export the log: %1</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="336"/>
-        <source>日志已导出到 %1</source>
-        <translation>Log exported to %1</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="735"/>
-        <source>ComfyUI 服务已就绪：%1</source>
-        <translation>ComfyUI service is ready: %1</translation>
     </message>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="756"/>
@@ -819,70 +941,90 @@
 <context>
     <name>RuntimePage</name>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="25"/>
-        <source>运行与控制台</source>
-        <translation>Runtime &amp; Console</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="26"/>
-        <source>启动、停止并监控当前 ComfyUI 实例；进度在控制台底部单独显示。</source>
-        <translation>Start, stop, and monitor the current ComfyUI instance. Progress appears separately at the bottom of the console.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="32"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="33"/>
         <source>导出日志</source>
         <translation>Export Log</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="38"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="39"/>
         <source>打开 WebUI</source>
         <translation>Open WebUI</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="44"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="45"/>
         <source>启动</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="44"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="45"/>
         <source>停止</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="61"/>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="63"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="62"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="64"/>
         <source>强制终止进程树</source>
         <translation>Force terminate process tree</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="83"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="84"/>
         <source>PID %1</source>
         <translation>PID %1</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="90"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="91"/>
         <source>运行 %1</source>
         <translation>Uptime %1</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="108"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="109"/>
         <source>%1 行</source>
         <translation>%1 lines</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="150"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="194"/>
         <source>导出控制台日志</source>
         <translation>Export Console Log</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="153"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="197"/>
         <source>日志文件 (*.log)</source>
         <translation>Log files (*.log)</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="153"/>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="197"/>
         <source>文本文件 (*.txt)</source>
         <translation>Text files (*.txt)</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="26"/>
+        <source>控制台</source>
+        <translation>Console</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="27"/>
+        <source>查看 ComfyUI 输出、进度和运行状态。</source>
+        <translation>View ComfyUI output, progress, and runtime status.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="147"/>
+        <source>启动详情</source>
+        <translation>Launch Details</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="158"/>
+        <source>收起启动详情</source>
+        <translation>Collapse launch details</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="158"/>
+        <source>展开启动详情</source>
+        <translation>Expand launch details</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/RuntimePage.qml" line="173"/>
+        <source>ComfyUI 启动命令</source>
+        <translation>ComfyUI launch command</translation>
     </message>
 </context>
 <context>
@@ -1168,16 +1310,6 @@
         <translation>Local version detected. Install Git for Windows to check for and install updates.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="234"/>
-        <source>ComfyUI 稳定版已更新到最新版本。</source>
-        <translation>ComfyUI Stable was updated to the latest version.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="235"/>
-        <source>ComfyUI 开发版已更新到最新版本。</source>
-        <translation>ComfyUI Development was updated to the latest version.</translation>
-    </message>
-    <message>
         <location filename="../../backend/VersionManager.cpp" line="238"/>
         <source>存在未提交更改。为避免覆盖文件，请先处理这些更改。</source>
         <translation>Uncommitted changes were found. Resolve them first to avoid overwriting files.</translation>
@@ -1203,18 +1335,6 @@
         <translation>Core version switched.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="282"/>
-        <location filename="../../backend/VersionManager.cpp" line="696"/>
-        <source>扩展更新完成。</source>
-        <translation>Extension updated.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="292"/>
-        <location filename="../../backend/VersionManager.cpp" line="695"/>
-        <source>全部扩展更新完成。</source>
-        <translation>All extensions updated.</translation>
-    </message>
-    <message>
         <location filename="../../backend/VersionManager.cpp" line="294"/>
         <source>未找到 Git for Windows，无法更新扩展。</source>
         <translation>Git for Windows was not found, so extensions cannot be updated.</translation>
@@ -1223,18 +1343,6 @@
         <location filename="../../backend/VersionManager.cpp" line="308"/>
         <source>没有可更新的扩展。</source>
         <translation>No extensions can be updated.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="330"/>
-        <location filename="../../backend/VersionManager.cpp" line="692"/>
-        <source>扩展版本已切换。</source>
-        <translation>Extension version switched.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="342"/>
-        <location filename="../../backend/VersionManager.cpp" line="691"/>
-        <source>扩展安装完成。</source>
-        <translation>Extension installed.</translation>
     </message>
     <message>
         <location filename="../../backend/VersionManager.cpp" line="344"/>
@@ -1342,11 +1450,6 @@
         <translation>The remote Git repository could not be reached.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="480"/>
-        <source>Git 操作失败。</source>
-        <translation>The Git operation failed.</translation>
-    </message>
-    <message>
         <location filename="../../backend/VersionManager.cpp" line="496"/>
         <source>检测到未提交更改，为避免覆盖文件，已取消版本切换。</source>
         <translation>Uncommitted changes were found. Version switching was cancelled to avoid overwriting files.</translation>
@@ -1355,21 +1458,6 @@
         <location filename="../../backend/VersionManager.cpp" line="529"/>
         <source>无法确定 ComfyUI 开发主线，版本列表未更新。</source>
         <translation>The ComfyUI development mainline could not be determined, so the version list was not updated.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="553"/>
-        <source>核心版本列表刷新失败：%1</source>
-        <translation>Could not refresh the core version list: %1</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="555"/>
-        <source>核心版本列表刷新成功。</source>
-        <translation>Core version list refreshed successfully.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="558"/>
-        <source>已读取本地版本信息。</source>
-        <translation>Local version information loaded.</translation>
     </message>
     <message>
         <location filename="../../backend/VersionManager.cpp" line="596"/>
@@ -1407,14 +1495,29 @@
         <translation>Extension %1 has uncommitted changes. Version switching was cancelled.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="873"/>
-        <source>ComfyUI 自定义节点扩展</source>
-        <translation>ComfyUI custom node extension</translation>
+        <location filename="../../backend/VersionManager.cpp" line="1071"/>
+        <source>无法确定对应的远端分支。</source>
+        <translation>No matching remote branch could be determined.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1077"/>
+        <source>%1：%2</source>
+        <translation>%1: %2</translation>
     </message>
     <message>
         <location filename="../../backend/VersionManager.cpp" line="1002"/>
         <source>已安装扩展列表刷新成功。</source>
         <translation>Installed extensions refreshed successfully.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="234"/>
+        <source>ComfyUI 稳定版已更新到最新版本。</source>
+        <translation>ComfyUI Stable was updated to the latest version.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="235"/>
+        <source>ComfyUI 开发版已更新到最新版本。</source>
+        <translation>ComfyUI Development was updated to the latest version.</translation>
     </message>
     <message>
         <location filename="../../backend/VersionManager.cpp" line="1006"/>
@@ -1432,16 +1535,6 @@
         <translation>The check timed out.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1071"/>
-        <source>无法确定对应的远端分支。</source>
-        <translation>No matching remote branch could be determined.</translation>
-    </message>
-    <message>
-        <location filename="../../backend/VersionManager.cpp" line="1077"/>
-        <source>%1：%2</source>
-        <translation>%1: %2</translation>
-    </message>
-    <message>
         <location filename="../../backend/VersionManager.cpp" line="1142"/>
         <source>服务器返回了无法识别的扩展索引。</source>
         <translation>The server returned an unrecognized extension index.</translation>
@@ -1456,170 +1549,264 @@
         <source>可安装扩展列表刷新成功，共 %1 条。</source>
         <translation>Available extensions refreshed successfully. %1 entries loaded.</translation>
     </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="480"/>
+        <source>Git 操作失败。</source>
+        <translation>The Git operation failed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="553"/>
+        <source>核心版本列表刷新失败：%1</source>
+        <translation>Could not refresh the core version list: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="555"/>
+        <source>核心版本列表刷新成功。</source>
+        <translation>Core version list refreshed successfully.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="558"/>
+        <source>已读取本地版本信息。</source>
+        <translation>Local version information loaded.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="342"/>
+        <location filename="../../backend/VersionManager.cpp" line="691"/>
+        <source>扩展安装完成。</source>
+        <translation>Extension installed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="330"/>
+        <location filename="../../backend/VersionManager.cpp" line="692"/>
+        <source>扩展版本已切换。</source>
+        <translation>Extension version switched.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="292"/>
+        <location filename="../../backend/VersionManager.cpp" line="695"/>
+        <source>全部扩展更新完成。</source>
+        <translation>All extensions updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="282"/>
+        <location filename="../../backend/VersionManager.cpp" line="696"/>
+        <source>扩展更新完成。</source>
+        <translation>Extension updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="873"/>
+        <source>ComfyUI 自定义节点扩展</source>
+        <translation>ComfyUI custom node extension</translation>
+    </message>
 </context>
 <context>
     <name>VersionPage</name>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="45"/>
-        <source>版本管理</source>
-        <translation>Version Management</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="183"/>
+        <source>内核</source>
+        <translation>Core</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="46"/>
-        <source>管理 ComfyUI 内核版本、已安装扩展和可安装扩展。</source>
-        <translation>Manage ComfyUI core versions, installed extensions, and available extensions.</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="184"/>
+        <source>扩展</source>
+        <translation>Extensions</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="52"/>
-        <source>刷新中…</source>
-        <translation>Refreshing…</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="52"/>
-        <source>刷新当前页</source>
-        <translation>Refresh Current Page</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="59"/>
-        <source>更新中…</source>
-        <translation>Updating…</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="59"/>
-        <source>一键更新</source>
-        <translation>Update All</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="80"/>
-        <source>ComfyUI 内核</source>
-        <translation>ComfyUI Core</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="81"/>
-        <source>已安装扩展</source>
-        <translation>Installed Extensions</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="82"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="185"/>
         <source>安装新扩展</source>
         <translation>Install Extensions</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="119"/>
-        <source>远程地址</source>
-        <translation>Remote URL</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="234"/>
+        <source>刷新中…</source>
+        <translation>Refreshing…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="126"/>
-        <source>当前分支</source>
-        <translation>Branch</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="234"/>
+        <source>↻  刷新列表</source>
+        <translation>↻  Refresh List</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="131"/>
-        <source>当前版本</source>
-        <translation>Current Version</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="244"/>
+        <source>▣  一键更新</source>
+        <translation>▣  Update All</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="144"/>
-        <source>版本通道</source>
-        <translation>Release Channel</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="284"/>
+        <source>远端地址：</source>
+        <translation>Remote:</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="147"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="286"/>
+        <source>当前分支：</source>
+        <translation>Current branch:</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="288"/>
+        <source>当前版本：</source>
+        <translation>Current version:</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="300"/>
+        <source>⚯  切换分支</source>
+        <translation>⚯  Switch Branch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="70"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="313"/>
         <source>稳定版</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="147"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="68"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="313"/>
         <source>开发版</source>
         <translation>Development</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="191"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="356"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="463"/>
+        <source>版本 ID</source>
+        <translation>Version ID</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="357"/>
+        <source>更新内容</source>
+        <translation>Changes</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="358"/>
+        <source>日期</source>
+        <translation>Date</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="359"/>
         <source>当前</source>
         <translation>Current</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="195"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="388"/>
         <source>切换</source>
         <translation>Switch</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="211"/>
-        <source>搜索已安装扩展</source>
-        <translation>Search installed extensions</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="406"/>
+        <source>搜索已安装插件…</source>
+        <translation>Search installed extensions…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="239"/>
-        <source>启用 %1</source>
-        <translation>Enable %1</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="103"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="105"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="435"/>
+        <source>启用</source>
+        <translation>Enabled</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="249"/>
-        <source>非 Git 扩展</source>
-        <translation>Non-Git extension</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="244"/>
+        <source>更新中…</source>
+        <translation>Updating…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="256"/>
-        <source>可更新</source>
-        <translation>Update available</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="442"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="575"/>
+        <source>插件名</source>
+        <translation>Extension</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="258"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="449"/>
+        <source>远端地址</source>
+        <translation>Remote</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="456"/>
+        <source>当前分支</source>
+        <translation>Branch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="470"/>
+        <source>更新日期</source>
+        <translation>Updated</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="511"/>
         <source>检测中</source>
         <translation>Checking</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="258"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="512"/>
         <source>最新</source>
         <translation>Latest</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="265"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="513"/>
         <source>更新</source>
         <translation>Update</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="272"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="369"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="525"/>
+        <source>切换版本</source>
+        <translation>Switch Version</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="534"/>
         <source>卸载</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="290"/>
-        <source>搜索新扩展</source>
-        <translation>Search new extensions</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="552"/>
+        <source>搜索新插件…</source>
+        <translation>Search extensions…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="333"/>
-        <source>已安装</source>
+        <location filename="../Minifox/App/VersionPage.qml" line="576"/>
+        <source>简介</source>
+        <translation>Description</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="604"/>
+        <source>已装</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="333"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="352"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="604"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="624"/>
         <source>安装</source>
         <translation>Install</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="347"/>
-        <source>扩展 Git URL</source>
-        <translation>Extension Git URL</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="618"/>
+        <source>扩展 URL</source>
+        <translation>Extension URL</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="366"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="691"/>
+        <source>切换分支</source>
+        <translation>Switch Branch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="698"/>
+        <source>分支名称</source>
+        <translation>Branch name</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="707"/>
+        <source>切换扩展版本</source>
+        <translation>Switch Extension Version</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="714"/>
+        <source>提交 ID、标签或分支</source>
+        <translation>Commit ID, tag, or branch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="722"/>
         <source>卸载扩展</source>
         <translation>Uninstall Extension</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="370"/>
-        <source>取消</source>
-        <translation>Cancel</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="376"/>
-        <source>确定卸载此扩展吗？扩展目录将被删除。</source>
-        <translation>Uninstall this extension? Its directory will be deleted.</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="728"/>
+        <source>将永久删除这个扩展目录。确定继续吗？</source>
+        <translation>This permanently deletes the extension directory. Continue?</translation>
     </message>
 </context>
 </TS>

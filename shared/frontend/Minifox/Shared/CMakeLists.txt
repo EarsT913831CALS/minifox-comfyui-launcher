@@ -21,6 +21,7 @@ qt_add_qml_module(minifox_shared_ui
         AppToolButton.qml
         ButtonSurface.qml
         IconLabel.qml
+        MaterialPanel.qml
         PageHeader.qml
         PathField.qml
         StatusBadge.qml

@@ -19,6 +19,8 @@ qt_add_qml_module(minifox_launcher
         Main.qml
         AppShell.qml
         DashboardPage.qml
+        LaunchInformationRow.qml
+        NavigationDestination.qml
         NavigationRail.qml
         VersionPage.qml
 )
@@ -69,8 +71,6 @@ qt_add_translations(minifox_launcher
         ../../translations/qml_en_US.ts
     LUPDATE_OPTIONS
         -no-obsolete
-        -tr-function-alias
-        QT_TR_NOOP+=catalogText
     RESOURCE_PREFIX "/i18n"
 )
 

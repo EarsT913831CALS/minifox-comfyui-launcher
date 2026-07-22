@@ -66,10 +66,20 @@ Fluent.ComboBox {
         }
 
         background: Rectangle {
-            color: Theme.surfaceRaised
+            color: Theme.materialFillStrong
             border.width: 1
-            border.color: Theme.outline
+            border.color: Theme.materialStroke
             radius: Theme.radius
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.leftMargin: Theme.radius
+                anchors.rightMargin: Theme.radius
+                height: 1
+                color: Theme.materialEdge
+            }
         }
     }
 

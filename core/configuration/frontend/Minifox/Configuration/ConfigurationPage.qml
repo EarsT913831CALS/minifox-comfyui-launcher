@@ -8,16 +8,41 @@ Pane {
     id: root
 
     required property var appContext
+    signal launchRequested()
     property int selectedCategoryIndex: 0
     property bool removeRequested: false
     property bool commandPromptErrorRequested: false
+    property string searchQuery: ""
     readonly property var categoryModel: appContext.configuration.categories
     readonly property var selectedCategory: categoryModel[selectedCategoryIndex]
     readonly property string consoleFontFamily: appContext.settings.consoleFontFamily
     readonly property real consoleFontSize: appContext.settings.consoleFontSize
     readonly property bool consoleWordWrap: appContext.settings.consoleWordWrap
+    readonly property bool compactCategories: width < 1040
 
     padding: Theme.spacingLg
+
+    function filteredParameters() {
+        const query = searchQuery.trim().toLowerCase();
+        if (query.length === 0)
+            return appContext.configuration.parametersForCategory(selectedCategory.key);
+
+        const results = [];
+        for (let categoryIndex = 0; categoryIndex < categoryModel.length; ++categoryIndex) {
+            const category = categoryModel[categoryIndex];
+            if (category.key === "environment" || category.key === "custom")
+                continue;
+            const parameters = appContext.configuration.parametersForCategory(category.key);
+            for (let parameterIndex = 0; parameterIndex < parameters.length; ++parameterIndex) {
+                const parameter = parameters[parameterIndex];
+                const haystack = [parameter.title, parameter.description, parameter.flag, category.title]
+                    .join(" ").toLowerCase();
+                if (haystack.indexOf(query) >= 0)
+                    results.push(parameter);
+            }
+        }
+        return results;
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -25,10 +50,11 @@ Pane {
 
         RowLayout {
             Layout.fillWidth: true
+            spacing: Theme.spacingMd
 
             PageHeader {
-                title: qsTr("启动配置")
-                description: qsTr("保存多套 ComfyUI 启动方式；所有可视化选项都直接映射到当前 ComfyUI 命令行参数。")
+                title: qsTr("高级选项")
+                description: qsTr("管理启动配置，并按需调整 ComfyUI 命令行参数。")
                 icon: "\uE713"
                 Layout.fillWidth: true
             }
@@ -40,58 +66,88 @@ Pane {
                         root.commandPromptErrorRequested = true;
                 }
             }
+
+            AppButton {
+                text: qsTr("一键启动")
+                accented: true
+                enabled: root.appContext.runtime.canStart
+                         && root.appContext.configuration.valid
+                onClicked: root.launchRequested()
+            }
         }
 
-        Frame {
+        AppTextField {
+            Layout.fillWidth: true
+            placeholderText: qsTr("搜索参数、分类或命令行标志")
+            text: root.searchQuery
+            Accessible.name: qsTr("搜索高级选项")
+            onTextChanged: root.searchQuery = text
+        }
+
+        MaterialPanel {
             Layout.fillWidth: true
             padding: Theme.spacingMd
 
-            RowLayout {
+            ColumnLayout {
                 anchors.fill: parent
                 spacing: Theme.spacingSm
 
-                AppLabel {
-                    text: qsTr("配置")
-                }
-
-                AppComboBox {
-                    Layout.preferredWidth: 220
-                    model: root.appContext.configuration.profileNames
-                    currentIndex: root.appContext.configuration.currentProfileIndex
-                    onActivated: index => root.appContext.configuration.currentProfileIndex = index
-                }
-
-                AppTextField {
+                RowLayout {
                     Layout.fillWidth: true
-                    text: root.appContext.configuration.currentProfileName
-                    placeholderText: qsTr("配置名称")
-                    onEditingFinished: root.appContext.configuration.currentProfileName = text
+                    spacing: Theme.spacingSm
+
+                    AppLabel {
+                        text: qsTr("配置")
+                    }
+
+                    AppComboBox {
+                        Layout.preferredWidth: Math.min(240, Math.max(170, root.width * 0.24))
+                        model: root.appContext.configuration.profileNames
+                        currentIndex: root.appContext.configuration.currentProfileIndex
+                        onActivated: index => root.appContext.configuration.currentProfileIndex = index
+                    }
+
+                    AppTextField {
+                        Layout.fillWidth: true
+                        text: root.appContext.configuration.currentProfileName
+                        placeholderText: qsTr("配置名称")
+                        onEditingFinished: root.appContext.configuration.currentProfileName = text
+                    }
                 }
 
-                AppButton {
-                    text: qsTr("新建")
-                    accented: true
-                    onClicked: root.appContext.configuration.addProfile()
-                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingSm
 
-                AppButton {
-                    text: qsTr("复制")
-                    onClicked: root.appContext.configuration.duplicateCurrentProfile()
-                }
+                    Item {
+                        Layout.fillWidth: true
+                    }
 
-                AppToolButton {
-                    text: "\uE74D"
-                    destructive: true
-                    font.family: Theme.iconFontFamily
-                    Accessible.name: qsTr("删除当前配置")
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("删除当前配置")
-                    onClicked: root.removeRequested = true
+                    AppButton {
+                        text: qsTr("新建")
+                        accented: true
+                        onClicked: root.appContext.configuration.addProfile()
+                    }
+
+                    AppButton {
+                        text: qsTr("复制")
+                        onClicked: root.appContext.configuration.duplicateCurrentProfile()
+                    }
+
+                    AppToolButton {
+                        text: "\uE74D"
+                        destructive: true
+                        font.family: Theme.iconFontFamily
+                        Accessible.name: qsTr("删除当前配置")
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("删除当前配置")
+                        onClicked: root.removeRequested = true
+                    }
                 }
             }
         }
 
-        Frame {
+        MaterialPanel {
             Layout.fillWidth: true
             padding: Theme.spacingMd
 
@@ -125,7 +181,7 @@ Pane {
             }
         }
 
-        Frame {
+        MaterialPanel {
             visible: !root.appContext.configuration.valid
             Layout.fillWidth: true
             padding: Theme.spacingMd
@@ -164,9 +220,9 @@ Pane {
             Layout.fillHeight: true
             spacing: Theme.spacingMd
 
-            Frame {
+            MaterialPanel {
                 Layout.fillHeight: true
-                Layout.preferredWidth: 230
+                Layout.preferredWidth: root.compactCategories ? 72 : 230
                 padding: Theme.spacingXs
 
                 ListView {
@@ -194,17 +250,19 @@ Pane {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: Theme.spacingMd
-                            anchors.rightMargin: Theme.spacingMd
-                            spacing: Theme.spacingMd
+                            anchors.leftMargin: root.compactCategories ? Theme.spacingSm : Theme.spacingMd
+                            anchors.rightMargin: root.compactCategories ? Theme.spacingSm : Theme.spacingMd
+                            spacing: root.compactCategories ? 0 : Theme.spacingMd
 
                             IconLabel {
                                 glyph: categoryDelegate.modelData.icon
                                 iconPointSize: Theme.bodySize
                                 color: Theme.foreground
+                                Layout.alignment: Qt.AlignHCenter
                             }
 
                             AppLabel {
+                                visible: !root.compactCategories
                                 text: categoryDelegate.modelData.title
                                 color: Theme.foreground
                                 font.pointSize: Theme.bodySize
@@ -221,53 +279,70 @@ Pane {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 contentWidth: availableWidth
+                contentHeight: optionColumn.implicitHeight
 
-                ColumnLayout {
+                Column {
+                    id: optionColumn
+
                     width: optionScroll.availableWidth
                     spacing: Theme.spacingMd
 
                     PageHeader {
-                        title: root.selectedCategory.title
-                        description: root.selectedCategory.description
-                        icon: root.selectedCategory.icon
-                        Layout.fillWidth: true
+                        title: root.searchQuery.trim().length > 0 ? qsTr("搜索结果") : root.selectedCategory.title
+                        description: root.searchQuery.trim().length > 0
+                                     ? qsTr("显示所有分类中与“%1”匹配的选项。").arg(root.searchQuery.trim())
+                                     : root.selectedCategory.description
+                        icon: root.searchQuery.trim().length > 0 ? "\uE721" : root.selectedCategory.icon
+                        width: optionColumn.width
                     }
 
                     Loader {
-                        active: root.selectedCategory.key === "device"
+                        active: root.searchQuery.trim().length === 0 && root.selectedCategory.key === "device"
                         sourceComponent: cudaDevicePanelComponent
-                        Layout.fillWidth: true
+                        visible: active
+                        width: optionColumn.width
+                        height: active ? implicitHeight : 0
                     }
 
                     Repeater {
                         model: {
                             root.appContext.configuration.parameterRevision;
-                            return root.appContext.configuration.parametersForCategory(root.selectedCategory.key);
+                            return root.filteredParameters();
                         }
 
                         delegate: ParameterEditor {
                             required property var modelData
                             appContext: root.appContext
                             parameter: modelData
+                            width: optionColumn.width
                         }
                     }
 
                     Loader {
-                        active: root.selectedCategory.key === "environment"
+                        active: root.searchQuery.trim().length === 0 && root.selectedCategory.key === "environment"
                         sourceComponent: environmentEditorComponent
-                        Layout.fillWidth: true
+                        visible: active
+                        width: optionColumn.width
+                        height: active ? implicitHeight : 0
                     }
 
                     Loader {
-                        active: root.selectedCategory.key === "custom"
+                        active: root.searchQuery.trim().length === 0 && root.selectedCategory.key === "custom"
                         sourceComponent: customArgumentsComponent
-                        Layout.fillWidth: true
+                        visible: active
+                        width: optionColumn.width
+                        height: active ? implicitHeight : 0
                     }
 
-                    Item {
-                        Layout.fillHeight: true
-                        Layout.minimumHeight: Theme.spacingLg
+                    AppLabel {
+                        visible: root.searchQuery.trim().length > 0 && root.filteredParameters().length === 0
+                        text: qsTr("没有找到匹配的高级选项。")
+                        color: Theme.foregroundSecondary
+                        horizontalAlignment: Text.AlignHCenter
+                        width: optionColumn.width
+                        topPadding: Theme.spacingXl
                     }
+
                 }
             }
         }
@@ -277,7 +352,7 @@ Pane {
         id: cudaDevicePanelComponent
 
         CudaDevicePanel {
-            hardware: root.appContext.hardware
+            appContext: root.appContext
         }
     }
 
@@ -292,7 +367,7 @@ Pane {
     Component {
         id: customArgumentsComponent
 
-        Frame {
+        MaterialPanel {
             padding: Theme.spacingMd
 
             ColumnLayout {
@@ -346,10 +421,13 @@ Pane {
             Component.onCompleted: open()
 
             AppLabel {
-                text: root.appContext.runtime.lastError
+                text: root.appContext.runtime.lastError.length > 0
+                      ? root.appContext.runtime.lastError
+                      : qsTr("命令提示符未能启动。")
                 wrapMode: Text.Wrap
             }
 
+            onAccepted: root.commandPromptErrorRequested = false
             onClosed: root.commandPromptErrorRequested = false
         }
     }

@@ -9,6 +9,7 @@ Rectangle {
     required property bool controlFocused
     property bool accented: false
     property bool destructive: false
+    property bool prominent: false
 
     readonly property color normalFill: {
         if (!controlEnabled)
@@ -40,11 +41,25 @@ Rectangle {
     }
 
     implicitWidth: 96
-    implicitHeight: Theme.controlHeight
-    radius: Theme.controlRadius
+    implicitHeight: prominent ? Theme.prominentControlHeight : Theme.controlHeight
+    radius: prominent ? Theme.prominentControlRadius : Theme.controlRadius
     color: normalFill
     border.width: 1
     border.color: normalStroke
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.leftMargin: surface.radius
+        anchors.rightMargin: surface.radius
+        height: 1
+        color: surface.accented
+               ? Qt.rgba(1, 1, 1, Theme.dark ? 0.34 : 0.58)
+               : Theme.materialEdge
+        visible: surface.accented
+        opacity: surface.controlEnabled && !surface.controlPressed ? 0.92 : 0
+    }
 
     Rectangle {
         anchors.left: parent.left

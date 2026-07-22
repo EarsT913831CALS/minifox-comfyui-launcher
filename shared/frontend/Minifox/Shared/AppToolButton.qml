@@ -16,7 +16,7 @@ Fluent.ToolButton {
     rightPadding: 8
     topPadding: 7
     bottomPadding: 7
-    scale: !enabled ? 1.0 : down ? 0.97 : hovered ? 1.015 : 1.0
+    scale: !enabled ? 1.0 : down && hovered ? 0.97 : 1.0
     transformOrigin: Item.Center
     font.family: Theme.uiFontFamily
     palette.window: Theme.surface
@@ -36,14 +36,16 @@ Fluent.ToolButton {
         controlFocused: control.visualFocus
         accented: control.accented
         destructive: control.destructive
+        prominent: false
     }
 
     Behavior on scale {
         enabled: control.motionDuration > 0
 
         ScaleAnimator {
-            duration: control.motionDuration
-            easing.type: Easing.OutCubic
+            duration: control.down && control.hovered ? 120 : 90
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1]
         }
     }
 

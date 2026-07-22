@@ -10,6 +10,7 @@ Pane {
 
     required property var appContext
     property bool exportRequested: false
+    property bool detailsExpanded: false
 
     padding: Theme.spacingLg
 
@@ -22,8 +23,8 @@ Pane {
             spacing: Theme.spacingMd
 
             PageHeader {
-                title: qsTr("运行与控制台")
-                description: qsTr("启动、停止并监控当前 ComfyUI 实例；进度在控制台底部单独显示。")
+                title: qsTr("控制台")
+                description: qsTr("查看 ComfyUI 输出、进度和运行状态。")
                 icon: "\uE756"
                 Layout.fillWidth: true
             }
@@ -65,7 +66,7 @@ Pane {
             }
         }
 
-        Frame {
+        MaterialPanel {
             Layout.fillWidth: true
             padding: Theme.spacingMd
 
@@ -111,7 +112,7 @@ Pane {
             }
         }
 
-        Frame {
+        MaterialPanel {
             visible: root.appContext.runtime.lastError.length > 0
             Layout.fillWidth: true
             padding: Theme.spacingSm
@@ -127,6 +128,49 @@ Pane {
                     color: Theme.error
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
+                }
+            }
+        }
+
+        MaterialPanel {
+            Layout.fillWidth: true
+            padding: Theme.spacingMd
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSm
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    AppLabel {
+                        text: qsTr("启动详情")
+                        font.weight: Font.DemiBold
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                    }
+
+                    AppToolButton {
+                        text: root.detailsExpanded ? "\uE70E" : "\uE70D"
+                        font.family: Theme.iconFontFamily
+                        Accessible.name: root.detailsExpanded ? qsTr("收起启动详情") : qsTr("展开启动详情")
+                        onClicked: root.detailsExpanded = !root.detailsExpanded
+                    }
+                }
+
+                AppTextArea {
+                    visible: root.detailsExpanded
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 92
+                    text: root.appContext.runtime.commandPreview
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: root.appContext.settings.consoleWordWrap ? TextEdit.WrapAnywhere : TextEdit.NoWrap
+                    font.family: root.appContext.settings.consoleFontFamily
+                    font.pointSize: root.appContext.settings.consoleFontSize
+                    Accessible.name: qsTr("ComfyUI 启动命令")
                 }
             }
         }
