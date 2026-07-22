@@ -1,10 +1,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Minifox.Shared
 
-Frame {
+MaterialPanel {
     id: root
 
     required property var appContext
@@ -31,9 +30,9 @@ Frame {
         anchors.fill: parent
         spacing: Theme.spacingSm
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: Theme.spacingMd
+            spacing: Theme.spacingSm
 
             ColumnLayout {
                 Layout.fillWidth: true
@@ -55,23 +54,36 @@ Frame {
                 }
             }
 
-            ColumnLayout {
-                spacing: 0
-                Layout.alignment: Qt.AlignRight | Qt.AlignTop
+            Flow {
+                Layout.fillWidth: true
+                Layout.preferredHeight: childrenRect.height
+                spacing: Theme.spacingXs
 
                 Repeater {
                     model: root.displayFlags
 
-                    delegate: AppLabel {
+                    delegate: Rectangle {
+                        id: flagDelegate
+
                         required property string modelData
 
-                        text: modelData
-                        color: palette.highlight
-                        font.family: root.consoleFontFamily
-                        font.pointSize: root.consoleFontSize
-                        horizontalAlignment: Text.AlignRight
-                        wrapMode: Text.NoWrap
-                        Layout.alignment: Qt.AlignRight
+                        width: flagText.implicitWidth + Theme.spacingSm * 2
+                        height: flagText.implicitHeight + Theme.spacingXs * 2
+                        radius: Theme.controlRadius
+                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b,
+                                       Theme.dark ? 0.16 : 0.08)
+                        border.width: 1
+                        border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.24)
+
+                        AppLabel {
+                            id: flagText
+                            anchors.centerIn: parent
+                            text: flagDelegate.modelData
+                            color: Theme.accent
+                            font.family: root.consoleFontFamily
+                            font.pointSize: root.consoleFontSize
+                            wrapMode: Text.NoWrap
+                        }
                     }
                 }
             }

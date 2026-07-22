@@ -47,7 +47,7 @@ Pane {
                 width: settingsScroll.availableWidth
                 spacing: Theme.spacingMd
 
-                Frame {
+                MaterialPanel {
                     Layout.fillWidth: true
                     padding: Theme.spacingLg
 
@@ -176,7 +176,7 @@ Pane {
                     }
                 }
 
-                Frame {
+                MaterialPanel {
                     Layout.fillWidth: true
                     padding: Theme.spacingLg
 
@@ -255,7 +255,7 @@ Pane {
                     }
                 }
 
-                Frame {
+                MaterialPanel {
                     Layout.fillWidth: true
                     padding: Theme.spacingLg
 

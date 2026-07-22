@@ -63,17 +63,8 @@ Rectangle {
         reuseItems: true
         clip: true
         spacing: 1
-        contentWidth: root.consoleWordWrap
-            ? width
-            : Math.max(width, contentItem.childrenRect.width)
-        flickableDirection: root.consoleWordWrap
-            ? Flickable.VerticalFlick
-            : Flickable.HorizontalAndVerticalFlick
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollBar {}
-        ScrollBar.horizontal: ScrollBar {
-            policy: root.consoleWordWrap ? ScrollBar.AlwaysOff : ScrollBar.AsNeeded
-        }
 
         delegate: Item {
             id: logDelegate
@@ -86,9 +77,7 @@ Rectangle {
             required property string ansiColor
             required property int lineNumber
 
-            width: root.consoleWordWrap
-                ? ListView.view.width
-                : Math.max(ListView.view.width, logRow.implicitWidth + Theme.spacingSm * 2)
+            width: ListView.view.width
             implicitHeight: logRow.implicitHeight + Theme.spacingXs * 2
 
             RowLayout {

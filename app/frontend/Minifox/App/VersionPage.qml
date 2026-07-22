@@ -12,90 +12,252 @@ Pane {
     readonly property var versions: appContext.versions
     property int selectedTab: 0
     property int coreChannel: 0
+    property bool coreChannelInitialized: false
     property string installedSearch: ""
     property string availableSearch: ""
     property string extensionUrl: ""
     property string pendingRemovalPath: ""
+    property string pendingExtensionPath: ""
+    readonly property bool englishUi: root.appContext.settings.language === "en_US"
+                                      || (root.appContext.settings.language === "system"
+                                          && Qt.locale().name.toLowerCase().startsWith("en"))
+    readonly property real tableFontSize: Theme.captionSize + 0.5
+    readonly property int coreActionWidth: 68
+    readonly property int statusActionWidth: root.englishUi ? 72 : 60
+    readonly property int versionActionWidth: root.englishUi ? 104 : 76
+    readonly property int removeActionWidth: root.statusActionWidth
+    readonly property int extensionActionsWidth: root.statusActionWidth
+                                                 + root.versionActionWidth
+                                                 + root.removeActionWidth
+    readonly property int availableActionWidth: root.englishUi ? 86 : 74
+    property real extensionViewportWidth: 1280
+    property real extensionEnabledWidth: 56
+    property real extensionNameWidth: 300
+    property real extensionBranchWidth: 120
+    property real extensionCommitWidth: 100
+    property real extensionDateWidth: 190
+    readonly property real extensionRemoteWidth: Math.max(
+        160,
+        root.extensionViewportWidth - root.extensionEnabledWidth
+        - root.extensionNameWidth - root.extensionBranchWidth
+        - root.extensionCommitWidth - root.extensionDateWidth
+        - root.extensionActionsWidth)
 
-    padding: Theme.spacingLg
+    padding: 0
 
-    function matches(value, query) {
-        return query.length === 0
-                || String(value).toLowerCase().indexOf(query.toLowerCase()) >= 0;
+    function matches(text, query) {
+        return query.length === 0 || String(text).toLowerCase().indexOf(query.toLowerCase()) >= 0;
     }
 
-    function refreshCurrentTab() {
-        if (selectedTab === 0)
-            versions.refreshCore();
-        else if (selectedTab === 1)
-            versions.refreshInstalledExtensions();
-        else
-            versions.refreshAvailableExtensions();
+    function extensionStatusColor(status) {
+        if (status === "outdated") return Theme.error;
+        if (status === "checking") return Theme.warning;
+        if (status === "latest") return Theme.foreground;
+        return Theme.foregroundSecondary;
+    }
+
+    function detectedCoreChannel() {
+        const branch = String(root.versions.branch).toLowerCase();
+        return branch === "main" || branch === "master"
+                || branch === "minifox/development" ? 1 : 0;
+    }
+
+    function coreBranchDescription() {
+        const branch = String(root.versions.branch).toLowerCase();
+        if (branch === "main" || branch === "master"
+                || branch === "minifox/development") return qsTr("开发版");
+        if (branch === "minifox/stable"
+                || branch === "minifox/version-core") return qsTr("稳定版");
+        return root.versions.branch.length > 0 ? root.versions.branch : "—";
+    }
+
+    function clampColumn(value, minimum, maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    function resizeAbsorbingRemote(propertyName, delta, minimum, maximum) {
+        const current = root[propertyName];
+        const allowedPositive = Math.max(0, root.extensionRemoteWidth - 160);
+        root[propertyName] = root.clampColumn(
+            current + delta, minimum, Math.min(maximum, current + allowedPositive));
+    }
+
+    function resizeColumnPair(leftProperty, rightProperty, delta, leftMinimum, rightMinimum) {
+        const total = root[leftProperty] + root[rightProperty];
+        const nextLeft = root.clampColumn(root[leftProperty] + delta,
+                                          leftMinimum, total - rightMinimum);
+        root[leftProperty] = nextLeft;
+        root[rightProperty] = total - nextLeft;
+    }
+
+    component ExtensionHeaderCell: Item {
+        id: headerCell
+
+        property string label: ""
+        property bool adjustable: true
+        signal resizeRequested(real delta)
+
+        AppLabel {
+            anchors.fill: parent
+            verticalAlignment: Text.AlignVCenter
+            horizontalAlignment: headerCell.label === qsTr("启用")
+                                 ? Text.AlignHCenter : Text.AlignLeft
+            leftPadding: headerCell.label === qsTr("启用") ? 0 : 8
+            rightPadding: headerCell.adjustable ? 8 : 0
+            text: headerCell.label
+            font.pointSize: root.tableFontSize
+            elide: Text.ElideRight
+        }
+
+        Rectangle {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: 1
+            height: parent.height - 10
+            color: Theme.materialStroke
+            visible: headerCell.adjustable
+        }
+
+        MouseArea {
+            id: resizeArea
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 10
+            enabled: headerCell.adjustable
+            cursorShape: Qt.SplitHCursor
+            preventStealing: true
+            property real previousX: 0
+
+            onPressed: mouse => previousX = mapToItem(root, mouse.x, mouse.y).x
+            onPositionChanged: mouse => {
+                if (!pressed) return;
+                const currentX = mapToItem(root, mouse.x, mouse.y).x;
+                headerCell.resizeRequested(currentX - previousX);
+                previousX = currentX;
+            }
+        }
+    }
+
+    Connections {
+        target: root.versions
+
+        function onStateChanged() {
+            if (!root.coreChannelInitialized && root.versions.branch.length > 0) {
+                root.coreChannel = root.detectedCoreChannel();
+                root.coreChannelInitialized = true;
+            }
+        }
+
+        function onRefreshCompleted(success, message) {
+            refreshNotice.success = success;
+            refreshNotice.message = message;
+            refreshNotice.open();
+        }
+
+        function onOperationCompleted(success, message) {
+            refreshNotice.success = success;
+            refreshNotice.message = message;
+            refreshNotice.open();
+            if (success && root.selectedTab === 2) root.extensionUrl = "";
+        }
     }
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Theme.spacingMd
+        spacing: 0
 
-        RowLayout {
+        Rectangle {
             Layout.fillWidth: true
-            spacing: Theme.spacingMd
+            Layout.preferredHeight: 64
+            color: Theme.materialFillStrong
 
-            PageHeader {
-                title: qsTr("版本管理")
-                description: qsTr("管理 ComfyUI 内核版本、已安装扩展和可安装扩展。")
-                icon: "\uE81C"
-                Layout.fillWidth: true
-            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spacingLg
+                anchors.rightMargin: Theme.spacingLg
+                spacing: Theme.spacingLg
 
-            AppButton {
-                text: root.versions.busy ? qsTr("刷新中…") : qsTr("刷新当前页")
-                enabled: !root.versions.busy
-                onClicked: root.refreshCurrentTab()
-            }
+                Repeater {
+                    model: [
+                        { title: qsTr("内核"), icon: "\uE81C" },
+                        { title: qsTr("扩展"), icon: "\uE71D" },
+                        { title: qsTr("安装新扩展"), icon: "\uE7BF" }
+                    ]
 
-            AppButton {
-                visible: root.selectedTab !== 2
-                text: root.versions.updating ? qsTr("更新中…") : qsTr("一键更新")
-                accented: true
-                enabled: root.selectedTab === 0
-                         ? root.versions.canUpdate
-                         : !root.versions.busy
-                           && root.versions.installedExtensions.length > 0
-                onClicked: {
-                    if (root.selectedTab === 0)
-                        root.versions.updateComfyUi(root.coreChannel);
-                    else
-                        root.versions.updateAllExtensions();
+                    delegate: Item {
+                        id: tabDelegate
+                        required property int index
+                        required property var modelData
+                        Layout.preferredWidth: tabRow.implicitWidth
+                        Layout.fillHeight: true
+
+                        Row {
+                            id: tabRow
+                            anchors.centerIn: parent
+                            spacing: Theme.spacingSm
+
+                            AppLabel {
+                                text: tabDelegate.modelData.icon
+                                font.family: Theme.iconFontFamily
+                                font.pointSize: Theme.bodySize
+                                color: root.selectedTab === tabDelegate.index ? Theme.foreground : Theme.foregroundSecondary
+                            }
+
+                            AppLabel {
+                                text: tabDelegate.modelData.title
+                                font.pointSize: Theme.bodySize
+                                color: root.selectedTab === tabDelegate.index ? Theme.foreground : Theme.foregroundSecondary
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: Math.max(24, tabRow.width * 0.28)
+                            height: 4
+                            radius: 2
+                            color: Theme.accent
+                            visible: root.selectedTab === tabDelegate.index
+                        }
+
+                        TapHandler {
+                            onTapped: root.selectedTab = tabDelegate.index
+                        }
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                AppButton {
+                    text: root.versions.busy && !root.versions.updating
+                          ? qsTr("刷新中…") : qsTr("↻  刷新列表")
+                    enabled: !root.versions.busy
+                    onClicked: {
+                        if (root.selectedTab === 0) root.versions.refreshCore();
+                        else if (root.selectedTab === 1) root.versions.refreshInstalledExtensions();
+                        else root.versions.refreshAvailableExtensions();
+                    }
+                }
+
+                AppButton {
+                    text: root.versions.updating ? qsTr("更新中…") : qsTr("▣  一键更新")
+                    visible: root.selectedTab !== 2
+                    enabled: root.selectedTab === 0
+                             ? root.versions.canUpdate
+                             : !root.versions.busy && root.versions.installedExtensions.length > 0
+                    onClicked: {
+                        if (root.selectedTab === 0) root.versions.updateComfyUi(root.coreChannel);
+                        else root.versions.updateAllExtensions();
+                    }
                 }
             }
         }
 
-        TabBar {
-            id: versionTabs
+        Rectangle {
             Layout.fillWidth: true
-            currentIndex: root.selectedTab
-            onCurrentIndexChanged: root.selectedTab = currentIndex
-
-            TabButton { text: qsTr("ComfyUI 内核") }
-            TabButton { text: qsTr("已安装扩展") }
-            TabButton { text: qsTr("安装新扩展") }
-        }
-
-        Frame {
-            visible: root.versions.statusMessage.length > 0
-                     || root.versions.lastError.length > 0
-            Layout.fillWidth: true
-            padding: Theme.spacingSm
-
-            AppLabel {
-                width: parent.width
-                text: root.versions.lastError.length > 0
-                      ? root.versions.lastError : root.versions.statusMessage
-                color: root.versions.lastError.length > 0
-                       ? Theme.error : Theme.foregroundSecondary
-                wrapMode: Text.Wrap
-            }
+            Layout.preferredHeight: 1
+            color: Theme.materialStroke
         }
 
         StackLayout {
@@ -103,178 +265,128 @@ Pane {
             Layout.fillHeight: true
             currentIndex: root.selectedTab
 
-            ColumnLayout {
-                spacing: Theme.spacingMd
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingLg
+                    spacing: Theme.spacingMd
 
-                Frame {
-                    Layout.fillWidth: true
-                    padding: Theme.spacingMd
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingLg
 
-                    GridLayout {
-                        anchors.fill: parent
-                        columns: 2
-                        columnSpacing: Theme.spacingMd
-                        rowSpacing: Theme.spacingXs
-
-                        AppLabel { text: qsTr("远程地址") }
-                        AppLabel {
-                            text: root.versions.remoteUrl || "—"
-                            color: Theme.foregroundSecondary
-                            elide: Text.ElideMiddle
+                        GridLayout {
                             Layout.fillWidth: true
-                        }
-                        AppLabel { text: qsTr("当前分支") }
-                        AppLabel {
-                            text: root.versions.branch || "—"
-                            color: Theme.foregroundSecondary
-                        }
-                        AppLabel { text: qsTr("当前版本") }
-                        AppLabel {
-                            text: (root.versions.commit || "—")
-                                  + (root.versions.commitDate.length > 0
-                                     ? "  (" + root.versions.commitDate + ")" : "")
-                            color: Theme.foregroundSecondary
-                        }
-                    }
-                }
+                            columns: 2
+                            columnSpacing: Theme.spacingLg
+                            rowSpacing: Theme.spacingSm
 
-                RowLayout {
-                    Layout.fillWidth: true
-
-                    AppLabel { text: qsTr("版本通道") }
-                    AppComboBox {
-                        Layout.preferredWidth: 180
-                        model: [qsTr("稳定版"), qsTr("开发版")]
-                        currentIndex: root.coreChannel
-                        onActivated: index => root.coreChannel = index
-                    }
-                    Item { Layout.fillWidth: true }
-                }
-
-                ListView {
-                    id: coreVersionList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: Theme.spacingXs
-                    model: root.coreChannel === 0
-                           ? root.versions.stableVersions
-                           : root.versions.coreVersions
-                    ScrollBar.vertical: ScrollBar {}
-
-                    delegate: Frame {
-                        id: coreDelegate
-                        required property var modelData
-                        width: ListView.view.width
-                        padding: Theme.spacingSm
-
-                        RowLayout {
-                            anchors.fill: parent
-                            spacing: Theme.spacingMd
-
+                            AppLabel { text: qsTr("远端地址："); color: Theme.foregroundSecondary }
+                            AppLabel { text: root.versions.remoteUrl.length > 0 ? root.versions.remoteUrl : "—"; font.family: root.appContext.settings.consoleFontFamily; Layout.fillWidth: true; elide: Text.ElideRight }
+                            AppLabel { text: qsTr("当前分支："); color: Theme.foregroundSecondary }
+                            AppLabel { text: root.coreBranchDescription() }
+                            AppLabel { text: qsTr("当前版本："); color: Theme.foregroundSecondary }
                             AppLabel {
-                                text: coreDelegate.modelData.shortCommit
-                                color: Theme.info
+                                text: root.versions.commit.length > 0
+                                      ? root.versions.commit + (root.versions.commitDate.length > 0 ? "  (" + root.versions.commitDate + ")" : "")
+                                      : "—"
                                 font.family: root.appContext.settings.consoleFontFamily
-                            }
-                            AppLabel {
-                                text: coreDelegate.modelData.subject
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
                             }
-                            AppLabel {
-                                text: coreDelegate.modelData.date
-                                color: Theme.foregroundSecondary
-                            }
-                            StatusBadge {
-                                visible: coreDelegate.modelData.current
-                                text: qsTr("当前")
-                                statusColor: Theme.success
-                            }
-                            AppButton {
-                                text: qsTr("切换")
-                                enabled: !coreDelegate.modelData.current
-                                         && !root.versions.busy
-                                onClicked: root.versions.switchCoreVersion(
-                                    coreDelegate.modelData.commit, root.coreChannel)
+                        }
+
+                        AppButton {
+                            text: qsTr("⚯  切换分支")
+                            enabled: false
+                            Layout.preferredHeight: 34
+                            leftPadding: 12
+                            rightPadding: 12
+                            font.pointSize: root.tableFontSize
+                        }
+                    }
+
+                    Row {
+                        spacing: 0
+
+                        Repeater {
+                            model: [qsTr("稳定版"), qsTr("开发版")]
+                            delegate: Rectangle {
+                                id: channelTab
+                                required property int index
+                                required property string modelData
+                                width: 180
+                                height: 42
+                                color: root.coreChannel === index ? Theme.surfaceRaised : Theme.surfaceSubtle
+                                border.width: 1
+                                border.color: Theme.materialStroke
+                                radius: 5
+
+                                AppLabel {
+                                    anchors.centerIn: parent
+                                    text: channelTab.modelData
+                                    font.pointSize: Theme.bodySize
+                                }
+
+                                TapHandler { onTapped: root.coreChannel = channelTab.index }
                             }
                         }
                     }
-                }
-            }
 
-            ColumnLayout {
-                spacing: Theme.spacingMd
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Theme.surfaceRaised
+                        border.width: 1
+                        border.color: Theme.materialStroke
+                        radius: Theme.controlRadius
+                        clip: true
 
-                AppTextField {
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("搜索已安装扩展")
-                    text: root.installedSearch
-                    onTextChanged: root.installedSearch = text
-                }
-
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: Theme.spacingXs
-                    model: root.versions.installedExtensions
-                    ScrollBar.vertical: ScrollBar {}
-
-                    delegate: Frame {
-                        id: installedDelegate
-                        required property var modelData
-                        width: ListView.view.width
-                        visible: root.matches(modelData.name, root.installedSearch)
-                        height: visible ? implicitHeight : 0
-                        padding: visible ? Theme.spacingSm : 0
-
-                        RowLayout {
+                        ColumnLayout {
                             anchors.fill: parent
-                            spacing: Theme.spacingSm
+                            spacing: 0
 
-                            AppSwitch {
-                                checked: installedDelegate.modelData.enabled
-                                enabled: !root.versions.busy
-                                Accessible.name: qsTr("启用 %1").arg(installedDelegate.modelData.name)
-                                onToggled: root.versions.setExtensionEnabled(
-                                    installedDelegate.modelData.path, checked)
-                            }
-                            AppLabel {
-                                text: installedDelegate.modelData.name
-                                Layout.preferredWidth: 250
-                                elide: Text.ElideRight
-                            }
-                            AppLabel {
-                                text: installedDelegate.modelData.remote || qsTr("非 Git 扩展")
-                                color: Theme.foregroundSecondary
+                            Rectangle {
                                 Layout.fillWidth: true
-                                elide: Text.ElideMiddle
+                                Layout.preferredHeight: 36
+                                color: Theme.surfaceSubtle
+
+                                Row {
+                                    anchors.fill: parent
+                                    AppLabel { width: 110; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("版本 ID"); font.pointSize: root.tableFontSize }
+                                    AppLabel { width: parent.width - 110 - 220 - 64 - root.coreActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("更新内容"); font.pointSize: root.tableFontSize }
+                                    AppLabel { width: 220; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("日期"); font.pointSize: root.tableFontSize }
+                                    AppLabel { width: 64; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: qsTr("当前"); font.pointSize: root.tableFontSize }
+                                }
                             }
-                            StatusBadge {
-                                text: installedDelegate.modelData.status === "outdated"
-                                      ? qsTr("可更新")
-                                      : installedDelegate.modelData.status === "checking"
-                                        ? qsTr("检测中") : qsTr("最新")
-                                statusColor: installedDelegate.modelData.status === "outdated"
-                                             ? Theme.error
-                                             : installedDelegate.modelData.status === "checking"
-                                               ? Theme.warning : Theme.success
-                            }
-                            AppButton {
-                                text: qsTr("更新")
-                                enabled: installedDelegate.modelData.repository
-                                         && !root.versions.busy
-                                onClicked: root.versions.updateExtension(
-                                    installedDelegate.modelData.path)
-                            }
-                            AppButton {
-                                text: qsTr("卸载")
-                                destructive: true
-                                enabled: !root.versions.busy
-                                onClicked: {
-                                    root.pendingRemovalPath = installedDelegate.modelData.path;
-                                    removeExtensionDialog.open();
+
+                            ListView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                clip: true
+                                model: root.coreChannel === 0
+                                       ? root.versions.stableVersions
+                                       : root.versions.coreVersions
+                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                                delegate: Rectangle {
+                                    id: coreRow
+                                    required property int index
+                                    required property var modelData
+                                    width: ListView.view.width
+                                    height: 42
+                                    color: index % 2 === 0 ? Theme.materialFill : Theme.surfaceRaised
+                                    border.width: 1
+                                    border.color: Theme.materialStroke
+
+                                    Row {
+                                        anchors.fill: parent
+                                        AppLabel { width: 110; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: coreRow.modelData.shortCommit; color: Theme.info; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: parent.width - 110 - 220 - 64 - root.coreActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: coreRow.modelData.subject; elide: Text.ElideRight; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: 220; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: coreRow.modelData.date; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: 64; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: coreRow.modelData.current ? "✓" : ""; font.pointSize: Theme.bodySize }
+                                        AppButton { width: root.coreActionWidth; height: parent.height; leftPadding: 8; rightPadding: 8; text: qsTr("切换"); enabled: !coreRow.modelData.current && root.versions.canUpdate; font.pointSize: root.tableFontSize; onClicked: root.versions.switchCoreVersion(coreRow.modelData.commit, root.coreChannel) }
+                                    }
                                 }
                             }
                         }
@@ -282,105 +394,339 @@ Pane {
                 }
             }
 
-            ColumnLayout {
-                spacing: Theme.spacingMd
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingLg
+                    spacing: Theme.spacingMd
 
-                AppTextField {
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("搜索新扩展")
-                    text: root.availableSearch
-                    onTextChanged: root.availableSearch = text
-                }
-
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: Theme.spacingXs
-                    model: root.versions.availableExtensions
-                    ScrollBar.vertical: ScrollBar {}
-
-                    delegate: Frame {
-                        id: availableDelegate
-                        required property var modelData
-                        width: ListView.view.width
-                        visible: root.matches(modelData.name, root.availableSearch)
-                                 || root.matches(modelData.description, root.availableSearch)
-                        height: visible ? implicitHeight : 0
-                        padding: visible ? Theme.spacingSm : 0
-
-                        RowLayout {
-                            anchors.fill: parent
-                            spacing: Theme.spacingMd
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: Theme.spacingXs
-                                AppLabel {
-                                    text: availableDelegate.modelData.name
-                                    color: Theme.info
-                                    font.weight: Font.DemiBold
-                                }
-                                AppLabel {
-                                    text: availableDelegate.modelData.description
-                                    color: Theme.foregroundSecondary
-                                    wrapMode: Text.Wrap
-                                    Layout.fillWidth: true
-                                }
-                            }
-                            AppButton {
-                                text: availableDelegate.modelData.installed
-                                      ? qsTr("已安装") : qsTr("安装")
-                                enabled: !availableDelegate.modelData.installed
-                                         && !root.versions.busy
-                                onClicked: root.versions.installExtension(
-                                    availableDelegate.modelData.remote)
-                            }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
                     AppTextField {
                         Layout.fillWidth: true
-                        placeholderText: qsTr("扩展 Git URL")
-                        text: root.extensionUrl
-                        onTextChanged: root.extensionUrl = text
+                        Layout.preferredHeight: 40
+                        placeholderText: qsTr("搜索已安装插件…")
+                        onTextChanged: root.installedSearch = text
                     }
-                    AppButton {
-                        text: qsTr("安装")
-                        accented: true
-                        enabled: root.extensionUrl.trim().length > 0
-                                 && !root.versions.busy
-                        onClicked: root.versions.installExtension(
-                            root.extensionUrl.trim())
+
+                    Rectangle {
+                        id: installedTable
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Theme.surfaceRaised
+                        border.width: 1
+                        border.color: Theme.materialStroke
+                        radius: Theme.controlRadius
+                        clip: true
+                        Component.onCompleted: root.extensionViewportWidth = width
+                        onWidthChanged: root.extensionViewportWidth = width
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 0
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 36
+                                color: Theme.surfaceSubtle
+                                Row {
+                                    anchors.fill: parent
+                                    ExtensionHeaderCell {
+                                        width: root.extensionEnabledWidth
+                                        height: parent.height
+                                        label: qsTr("启用")
+                                        onResizeRequested: delta => root.resizeAbsorbingRemote(
+                                            "extensionEnabledWidth", delta, 46, 100)
+                                    }
+                                    ExtensionHeaderCell {
+                                        width: root.extensionNameWidth
+                                        height: parent.height
+                                        label: qsTr("插件名")
+                                        onResizeRequested: delta => root.resizeAbsorbingRemote(
+                                            "extensionNameWidth", delta, 150, 520)
+                                    }
+                                    ExtensionHeaderCell {
+                                        width: root.extensionRemoteWidth
+                                        height: parent.height
+                                        label: qsTr("远端地址")
+                                        onResizeRequested: delta => root.extensionBranchWidth = root.clampColumn(
+                                            root.extensionBranchWidth - delta, 80, 260)
+                                    }
+                                    ExtensionHeaderCell {
+                                        width: root.extensionBranchWidth
+                                        height: parent.height
+                                        label: qsTr("当前分支")
+                                        onResizeRequested: delta => root.resizeColumnPair(
+                                            "extensionBranchWidth", "extensionCommitWidth", delta, 80, 72)
+                                    }
+                                    ExtensionHeaderCell {
+                                        width: root.extensionCommitWidth
+                                        height: parent.height
+                                        label: qsTr("版本 ID")
+                                        onResizeRequested: delta => root.resizeColumnPair(
+                                            "extensionCommitWidth", "extensionDateWidth", delta, 72, 130)
+                                    }
+                                    ExtensionHeaderCell {
+                                        width: root.extensionDateWidth
+                                        height: parent.height
+                                        label: qsTr("更新日期")
+                                        onResizeRequested: delta => root.resizeAbsorbingRemote(
+                                            "extensionDateWidth", delta, 130, 300)
+                                    }
+                                }
+                            }
+
+                            ListView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                clip: true
+                                model: root.versions.installedExtensions
+                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                                delegate: Rectangle {
+                                    id: extensionRow
+                                    required property int index
+                                    required property var modelData
+                                    readonly property bool matched: root.matches(modelData.name + " " + modelData.remote, root.installedSearch)
+                                    readonly property color statusColor: root.extensionStatusColor(modelData.status)
+                                    width: ListView.view.width
+                                    height: matched ? 40 : 0
+                                    visible: matched
+                                    color: index % 2 === 0 ? Theme.materialFill : Theme.surfaceRaised
+                                    border.width: 1
+                                    border.color: Theme.materialStroke
+                                    clip: true
+
+                                    Row {
+                                        anchors.fill: parent
+                                        CheckBox { width: root.extensionEnabledWidth; height: parent.height; checked: extensionRow.modelData.enabled; onToggled: root.versions.setExtensionEnabled(extensionRow.modelData.path, checked) }
+                                        AppLabel { width: root.extensionNameWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.name; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.remote || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionBranchWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.branch || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionCommitWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.commit || "—"; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: root.extensionDateWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.date; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                        AppButton {
+                                            width: root.statusActionWidth
+                                            height: parent.height
+                                            leftPadding: 6
+                                            rightPadding: 6
+                                            text: extensionRow.modelData.status === "checking" ? qsTr("检测中")
+                                                  : extensionRow.modelData.status === "latest" ? qsTr("最新")
+                                                  : qsTr("更新")
+                                            enabled: extensionRow.modelData.repository
+                                                     && extensionRow.modelData.status === "outdated"
+                                                     && !root.versions.busy
+                                            font.pointSize: root.tableFontSize
+                                            onClicked: root.versions.updateExtension(extensionRow.modelData.path)
+                                        }
+                                        AppButton {
+                                            width: root.versionActionWidth
+                                            height: parent.height
+                                            leftPadding: 6
+                                            rightPadding: 6
+                                            text: qsTr("切换版本")
+                                            enabled: extensionRow.modelData.repository && !root.versions.busy
+                                            font.pointSize: root.tableFontSize
+                                            onClicked: {
+                                                root.pendingExtensionPath = extensionRow.modelData.path;
+                                                extensionCommitField.text = extensionRow.modelData.commit;
+                                                extensionVersionDialog.open();
+                                            }
+                                        }
+                                        AppButton { width: root.removeActionWidth; height: parent.height; leftPadding: 3; rightPadding: 3; text: qsTr("卸载"); destructive: true; font.pointSize: root.tableFontSize; onClicked: { root.pendingRemovalPath = extensionRow.modelData.path; removeDialog.open(); } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item {
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingLg
+                    spacing: Theme.spacingMd
+
+                    AppTextField {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 40
+                        placeholderText: qsTr("搜索新插件…")
+                        onTextChanged: root.availableSearch = text
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: Theme.surfaceRaised
+                        border.width: 1
+                        border.color: Theme.materialStroke
+                        radius: Theme.controlRadius
+                        clip: true
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 0
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 36
+                                color: Theme.surfaceSubtle
+                                Row {
+                                    anchors.fill: parent
+                                    AppLabel { width: 300; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("插件名"); font.pointSize: root.tableFontSize }
+                                    AppLabel { width: parent.width - 300 - root.availableActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("简介"); font.pointSize: root.tableFontSize }
+                                }
+                            }
+
+                            ListView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                clip: true
+                                model: root.versions.availableExtensions
+                                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                                delegate: Rectangle {
+                                    id: availableRow
+                                    required property int index
+                                    required property var modelData
+                                    readonly property bool matched: root.matches(modelData.name + " " + modelData.description, root.availableSearch)
+                                    width: ListView.view.width
+                                    height: matched ? Math.max(48, descriptionLabel.implicitHeight + 14) : 0
+                                    visible: matched
+                                    color: index % 2 === 0 ? Theme.materialFill : Theme.surfaceRaised
+                                    border.width: 1
+                                    border.color: Theme.materialStroke
+                                    clip: true
+
+                                    Row {
+                                        anchors.fill: parent
+                                        AppLabel { width: 300; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: availableRow.modelData.name; color: Theme.info; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
+                                        AppLabel { id: descriptionLabel; width: parent.width - 300 - root.availableActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 10; text: availableRow.modelData.description; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
+                                        AppButton { width: root.availableActionWidth; height: parent.height; leftPadding: 5; rightPadding: 5; text: availableRow.modelData.installed ? qsTr("已装") : qsTr("安装"); enabled: !availableRow.modelData.installed && !root.versions.busy; font.pointSize: root.tableFontSize; onClicked: root.versions.installExtension(availableRow.modelData.remote) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingMd
+
+                        AppTextField {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 46
+                            placeholderText: qsTr("扩展 URL")
+                            text: root.extensionUrl
+                            onTextChanged: root.extensionUrl = text
+                        }
+
+                        AppButton {
+                            text: qsTr("安装")
+                            enabled: root.extensionUrl.trim().length > 0 && !root.versions.busy
+                            Layout.preferredHeight: 34
+                            Layout.preferredWidth: root.availableActionWidth
+                            leftPadding: 6
+                            rightPadding: 6
+                            font.pointSize: root.tableFontSize
+                            onClicked: root.versions.installExtension(root.extensionUrl)
+                        }
                     }
                 }
             }
         }
     }
 
-    AppDialog {
-        id: removeExtensionDialog
-        title: qsTr("卸载扩展")
+    Popup {
+        id: refreshNotice
+
+        property bool success: true
+        property string message: ""
+
+        parent: Overlay.overlay
+        x: Math.max(24, Overlay.overlay.width - width - 24)
+        y: Math.max(24, Overlay.overlay.height - height - 24)
+        width: Math.min(440, Overlay.overlay.width - 48)
+        padding: 12
+        modal: false
+        closePolicy: Popup.NoAutoClose
+        onOpened: refreshNoticeTimer.restart()
+
+        background: Rectangle {
+            color: Theme.surfaceRaised
+            border.width: 1
+            border.color: refreshNotice.success ? Theme.success : Theme.error
+            radius: Theme.controlRadius
+        }
+
+        contentItem: RowLayout {
+            spacing: Theme.spacingSm
+
+            AppLabel {
+                text: refreshNotice.success ? "✓" : "×"
+                color: refreshNotice.success ? Theme.success : Theme.error
+                font.pointSize: Theme.subtitleSize
+                font.bold: true
+            }
+
+            AppLabel {
+                Layout.fillWidth: true
+                text: refreshNotice.message
+                wrapMode: Text.WordWrap
+                color: Theme.foreground
+                font.pointSize: Theme.captionSize
+            }
+        }
+
+        Timer {
+            id: refreshNoticeTimer
+            interval: 5000
+            onTriggered: refreshNotice.close()
+        }
+    }
+
+    Dialog {
+        id: branchDialog
+        anchors.centerIn: Overlay.overlay
         modal: true
-        destructiveAccept: true
-        acceptText: qsTr("卸载")
-        rejectText: qsTr("取消")
-        standardButtons: Dialog.Yes | Dialog.Cancel
-        closePolicy: Popup.CloseOnEscape
+        title: qsTr("切换分支")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: root.versions.switchBranch(branchField.text)
+
+        AppTextField {
+            id: branchField
+            width: 360
+            placeholderText: qsTr("分支名称")
+            text: root.versions.branch
+        }
+    }
+
+    Dialog {
+        id: extensionVersionDialog
+        anchors.centerIn: Overlay.overlay
+        modal: true
+        title: qsTr("切换扩展版本")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: root.versions.switchExtensionVersion(root.pendingExtensionPath, extensionCommitField.text)
+
+        AppTextField {
+            id: extensionCommitField
+            width: 360
+            placeholderText: qsTr("提交 ID、标签或分支")
+        }
+    }
+
+    Dialog {
+        id: removeDialog
+        anchors.centerIn: Overlay.overlay
+        modal: true
+        title: qsTr("卸载扩展")
+        standardButtons: Dialog.Yes | Dialog.No
+        onAccepted: root.versions.removeExtension(root.pendingRemovalPath)
 
         AppLabel {
-            width: removeExtensionDialog.availableWidth
-            text: qsTr("确定卸载此扩展吗？扩展目录将被删除。")
-            wrapMode: Text.Wrap
+            width: 420
+            text: qsTr("将永久删除这个扩展目录。确定继续吗？")
+            wrapMode: Text.WordWrap
         }
-
-        onAccepted: {
-            root.versions.removeExtension(root.pendingRemovalPath);
-            root.pendingRemovalPath = "";
-        }
-        onRejected: root.pendingRemovalPath = ""
     }
 }

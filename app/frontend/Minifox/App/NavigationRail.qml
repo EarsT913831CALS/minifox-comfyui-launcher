@@ -1,4 +1,5 @@
 pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -12,80 +13,50 @@ Pane {
     signal pageSelected(int index)
 
     readonly property var destinations: [
-        {
-            title: qsTr("主页"),
-            icon: "\uE80F"
-        },
-        {
-            title: qsTr("启动配置"),
-            icon: "\uE713"
-        },
-        {
-            title: qsTr("运行与控制台"),
-            icon: "\uE756"
-        },
-        {
-            title: qsTr("版本管理"),
-            icon: "\uE81C"
-        },
-        {
-            title: qsTr("应用设置"),
-            icon: "\uE770"
-        }
+        { title: qsTr("一键启动"), icon: "\uE768" },
+        { title: qsTr("高级选项"), icon: "\uE713" },
+        { title: qsTr("控制台"), icon: "\uE756" },
+        { title: qsTr("版本管理"), icon: "\uE81C" }
     ]
 
     padding: Theme.spacingSm
+    background: Rectangle {
+        color: Theme.sidebar
+    }
 
-    Column {
-        width: parent.width
+    ColumnLayout {
+        anchors.fill: parent
         spacing: Theme.spacingXs
 
         Repeater {
             model: root.destinations
 
-            delegate: AppItemDelegate {
-                id: navigationDelegate
-
+            delegate: NavigationDestination {
                 required property int index
                 required property var modelData
 
-                width: parent.width
-                height: 48
-                highlighted: navigationDelegate.index === root.currentIndex
-                activeFocusOnTab: true
-                Accessible.name: navigationDelegate.modelData.title
-                ToolTip.visible: root.compact && hovered
-                ToolTip.text: navigationDelegate.modelData.title
-                onClicked: root.pageSelected(navigationDelegate.index)
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingMd
-                    anchors.rightMargin: Theme.spacingMd
-                    spacing: Theme.spacingMd
-
-                    IconLabel {
-                        glyph: navigationDelegate.modelData.icon
-                        iconPointSize: Theme.bodySize
-                        color: Theme.foreground
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    AppLabel {
-                        visible: !root.compact
-                        text: navigationDelegate.modelData.title
-                        color: Theme.foreground
-                        font.pointSize: Theme.bodySize
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-
-                    Item {
-                        visible: root.compact
-                        Layout.fillWidth: true
-                    }
-                }
+                Layout.fillWidth: true
+                destinationIndex: index
+                destinationTitle: modelData.title
+                destinationIcon: modelData.icon
+                compact: root.compact
+                current: index === root.currentIndex
+                onDestinationSelected: index => root.pageSelected(index)
             }
+        }
+
+        Item {
+            Layout.fillHeight: true
+        }
+
+        NavigationDestination {
+            Layout.fillWidth: true
+            destinationIndex: 4
+            destinationTitle: qsTr("设置")
+            destinationIcon: "\uE770"
+            compact: root.compact
+            current: root.currentIndex === 4
+            onDestinationSelected: index => root.pageSelected(index)
         }
     }
 }
