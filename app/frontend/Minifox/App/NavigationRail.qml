@@ -25,6 +25,10 @@ Pane {
             icon: "\uE756"
         },
         {
+            title: qsTr("版本管理"),
+            icon: "\uE81C"
+        },
+        {
             title: qsTr("应用设置"),
             icon: "\uE770"
         }

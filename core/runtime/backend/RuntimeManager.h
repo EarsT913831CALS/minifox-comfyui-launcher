@@ -22,6 +22,7 @@ class RuntimeManager final : public QObject
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusChanged)
     Q_PROPERTY(bool canStart READ canStart NOTIFY statusChanged)
     Q_PROPERTY(bool canStop READ canStop NOTIFY statusChanged)
+    Q_PROPERTY(bool active READ active NOTIFY statusChanged)
     Q_PROPERTY(qint64 processId READ processId NOTIFY runtimeInfoChanged)
     Q_PROPERTY(QString uptime READ uptime NOTIFY runtimeInfoChanged)
     Q_PROPERTY(bool serviceReady READ serviceReady NOTIFY serviceReadyChanged)
@@ -50,6 +51,7 @@ public:
     QString statusText() const;
     bool canStart() const;
     bool canStop() const;
+    bool active() const;
     qint64 processId() const;
     QString uptime() const;
     bool serviceReady() const;
@@ -62,6 +64,8 @@ public:
     Q_INVOKABLE void start();
     Q_INVOKABLE void stop();
     Q_INVOKABLE void forceStop();
+    Q_INVOKABLE void shutdown();
+    Q_INVOKABLE bool openCommandPrompt();
     Q_INVOKABLE bool openWebUi();
     Q_INVOKABLE bool exportLog(const QUrl &fileUrl);
     void retranslate();
@@ -80,15 +84,21 @@ private:
     void updateCommandPreview();
     void updateUptime();
     void checkReadiness();
-    void cancelReadinessReply();
+    void cancelReadinessCheck();
     void handleReadinessReply();
     void handleProcessStarted();
     void handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void handleProcessError(QProcess::ProcessError error);
+    void beginDependencyCheck();
+    void handleDependencyCheckStarted();
+    void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void launchConfiguredProcess();
+    void terminateTrackedProcessTree();
 
     ConfigurationManager *m_configuration;
     ApplicationSettings *m_settings;
     QProcess m_process;
+    QProcess m_dependencyCheck;
     LogModel *m_logModel;
     QNetworkAccessManager *m_network;
     QPointer<QNetworkReply> m_readinessReply;
@@ -106,4 +116,5 @@ private:
     QString m_lastError;
     int m_lastExitCode = 0;
     bool m_stopRequested = false;
+    bool m_startupAborted = false;
 };

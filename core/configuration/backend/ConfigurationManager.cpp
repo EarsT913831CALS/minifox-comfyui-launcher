@@ -18,6 +18,68 @@
 #include <QUrl>
 #include <QUuid>
 
+namespace {
+
+QString existingBundledPython(const QString &comfyRoot)
+{
+    QStringList candidates;
+    if (!comfyRoot.isEmpty()) {
+        const QDir comfyDirectory(comfyRoot);
+        candidates.append({
+            comfyDirectory.filePath(QStringLiteral(".venv/Scripts/python.exe")),
+            comfyDirectory.filePath(QStringLiteral("../python/python.exe")),
+            comfyDirectory.filePath(QStringLiteral("../python_embeded/python.exe"))
+        });
+    }
+
+    const QDir applicationDirectory(QCoreApplication::applicationDirPath());
+    candidates.append({
+        applicationDirectory.filePath(QStringLiteral("python/python.exe")),
+        applicationDirectory.filePath(QStringLiteral("python_embeded/python.exe"))
+    });
+
+    for (const QString &candidate : candidates) {
+        const QFileInfo file(candidate);
+        if (file.exists() && file.isFile()) {
+            return QDir::cleanPath(file.absoluteFilePath());
+        }
+    }
+    return {};
+}
+
+bool sameExecutable(const QString &left, const QString &right)
+{
+    if (left.isEmpty() || right.isEmpty()) {
+        return false;
+    }
+    const QFileInfo leftFile(left);
+    const QFileInfo rightFile(right);
+    const QString leftPath = leftFile.canonicalFilePath().isEmpty()
+        ? QDir::cleanPath(leftFile.absoluteFilePath())
+        : leftFile.canonicalFilePath();
+    const QString rightPath = rightFile.canonicalFilePath().isEmpty()
+        ? QDir::cleanPath(rightFile.absoluteFilePath())
+        : rightFile.canonicalFilePath();
+#ifdef Q_OS_WIN
+    return leftPath.compare(rightPath, Qt::CaseInsensitive) == 0;
+#else
+    return leftPath == rightPath;
+#endif
+}
+
+bool shouldAdoptBundledPython(const QString &currentPython, const QString &bundledPython)
+{
+    if (bundledPython.isEmpty()) {
+        return false;
+    }
+    const QFileInfo currentFile(currentPython);
+    return currentPython.isEmpty()
+        || !currentFile.exists()
+        || sameExecutable(currentPython, QStandardPaths::findExecutable(QStringLiteral("python.exe")));
+}
+
+} // namespace
+
 ConfigurationManager::ConfigurationManager(const QString &storagePath, QObject *parent)
     : QObject(parent),
       m_storagePath(storagePath.isEmpty() ? PortablePaths::configurationFile() : storagePath)
@@ -98,6 +160,10 @@ void ConfigurationManager::setComfyRoot(const QString &path)
         return;
     }
     currentProfile().comfyRoot = normalized;
+    const QString bundledPython = existingBundledPython(normalized);
+    if (shouldAdoptBundledPython(currentProfile().pythonPath, bundledPython)) {
+        currentProfile().pythonPath = bundledPython;
+    }
     updateAfterEdit();
 }
 
@@ -161,7 +227,6 @@ QString ConfigurationManager::lastError() const
 void ConfigurationManager::retranslate()
 {
     validate();
-    emit catalogChanged();
     emit currentProfileChanged();
     emit parameterRevisionChanged();
 }
@@ -351,6 +416,7 @@ void ConfigurationManager::load()
     const QJsonObject root = document.object();
     const int schemaVersion = root.value(QStringLiteral("schemaVersion")).toInt(1);
     const bool migrationRequired = schemaVersion < 2;
+    bool bundledPythonRepaired = false;
     const QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
     const QString currentId = root.value(QStringLiteral("currentProfileId")).toString();
     for (const auto &value : profiles) {
@@ -383,6 +449,12 @@ void ConfigurationManager::load()
                         || entry.name == QStringLiteral("PYTHONUNBUFFERED"));
             });
         }
+        const QString bundledPython = existingBundledPython(profile.comfyRoot);
+        if (shouldAdoptBundledPython(profile.pythonPath, bundledPython)
+            && !sameExecutable(profile.pythonPath, bundledPython)) {
+            profile.pythonPath = bundledPython;
+            bundledPythonRepaired = true;
+        }
         if (profile.id == currentId) {
             m_currentProfileIndex = m_profiles.size();
         }
@@ -396,7 +468,7 @@ void ConfigurationManager::load()
         m_currentProfileIndex = 0;
     }
 
-    if (migrationRequired) {
+    if (migrationRequired || bundledPythonRepaired) {
         save();
     }
 }
@@ -581,9 +653,12 @@ QString ConfigurationManager::findDefaultPython(const QString &comfyRoot)
         return QDir::cleanPath(environmentOverride);
     }
 
+    const QString bundledPython = existingBundledPython(comfyRoot);
+    if (!bundledPython.isEmpty()) {
+        return bundledPython;
+    }
+
     const QStringList candidates {
-        QDir(comfyRoot).filePath(QStringLiteral(".venv/Scripts/python.exe")),
-        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("python_embeded/python.exe")),
         QDir(QDir::homePath()).filePath(QStringLiteral("micromamba/envs/comfy-neo-env/python.exe"))
     };
     for (const QString &candidate : candidates) {

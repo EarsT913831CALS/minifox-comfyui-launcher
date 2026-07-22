@@ -38,28 +38,28 @@
 <context>
     <name>AppShell</name>
     <message>
-        <location filename="../Minifox/App/AppShell.qml" line="111"/>
+        <location filename="../Minifox/App/AppShell.qml" line="121"/>
         <source>Minifox</source>
         <translation>Minifox</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/AppShell.qml" line="123"/>
+        <location filename="../Minifox/App/AppShell.qml" line="133"/>
         <source>当前启动配置</source>
         <translation>Current launch profile</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/AppShell.qml" line="138"/>
+        <location filename="../Minifox/App/AppShell.qml" line="148"/>
         <source>启动</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/AppShell.qml" line="146"/>
+        <location filename="../Minifox/App/AppShell.qml" line="156"/>
         <source>停止</source>
         <translation>Stop</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/AppShell.qml" line="158"/>
-        <location filename="../Minifox/App/AppShell.qml" line="160"/>
+        <location filename="../Minifox/App/AppShell.qml" line="168"/>
+        <location filename="../Minifox/App/AppShell.qml" line="170"/>
         <source>打开 WebUI</source>
         <translation>Open WebUI</translation>
     </message>
@@ -95,100 +95,100 @@
 <context>
     <name>ConfigurationManager</name>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="208"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="273"/>
         <source>新配置 %1</source>
         <translation>New profile %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="224"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="289"/>
         <source>%1 - 副本</source>
         <translation>%1 - Copy</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="238"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="303"/>
         <source>至少需要保留一个启动配置。</source>
         <translation>At least one launch profile must be kept.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="330"/>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="336"/>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="347"/>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="393"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="395"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="401"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="412"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="465"/>
         <source>默认配置</source>
         <translation>Default profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="335"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="400"/>
         <source>无法读取启动配置：%1</source>
         <translation>Unable to read launch profiles: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="346"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="411"/>
         <source>启动配置文件格式无效：%1</source>
         <translation>The launch profile file is invalid: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="377"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="443"/>
         <source>未命名配置</source>
         <translation>Unnamed profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="414"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="486"/>
         <source>无法创建配置目录：%1</source>
         <translation>Unable to create the profile directory: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="447"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="519"/>
         <source>无法保存启动配置：%1</source>
         <translation>Unable to save launch profiles: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="452"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="524"/>
         <source>无法提交启动配置：%1</source>
         <translation>Unable to commit launch profiles: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="489"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="561"/>
         <source>请输入环境变量名称。</source>
         <translation>Enter an environment variable name.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="491"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="563"/>
         <source>环境变量名称只能包含英文字母、数字和下划线，且不能以数字开头。</source>
         <translation>Environment variable names may contain only letters, numbers, and underscores, and cannot start with a number.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="493"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="565"/>
         <source>环境变量名称重复：%1</source>
         <translation>Duplicate environment variable name: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="506"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="578"/>
         <source>请选择 Python 可执行文件。</source>
         <translation>Select a Python executable.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="508"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="580"/>
         <source>Python 可执行文件不存在。</source>
         <translation>The Python executable does not exist.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="513"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="585"/>
         <source>请选择 ComfyUI 根目录。</source>
         <translation>Select the ComfyUI root directory.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="515"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="587"/>
         <source>ComfyUI 根目录中未找到 main.py。</source>
         <translation>main.py was not found in the ComfyUI root directory.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="520"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="592"/>
         <source>端口必须在 1 到 65535 之间。</source>
         <translation>The port must be between 1 and 65535.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="526"/>
+        <location filename="../../../core/configuration/backend/ConfigurationManager.cpp" line="598"/>
         <source>TLS 私钥与证书必须同时设置。</source>
         <translation>The TLS private key and certificate must be configured together.</translation>
     </message>
@@ -196,83 +196,98 @@
 <context>
     <name>ConfigurationPage</name>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="26"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="30"/>
         <source>启动配置</source>
         <translation>Launch Profiles</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="27"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="31"/>
         <source>保存多套 ComfyUI 启动方式；所有可视化选项都直接映射到当前 ComfyUI 命令行参数。</source>
         <translation>Save multiple ComfyUI launch setups. Every visual option maps directly to a current ComfyUI command-line argument.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="41"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="37"/>
+        <source>启动命令提示符</source>
+        <translation>Open Command Prompt</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="54"/>
         <source>配置</source>
         <translation>Profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="54"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="67"/>
         <source>配置名称</source>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="59"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="72"/>
         <source>新建</source>
         <translation>New</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="65"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="78"/>
         <source>复制</source>
         <translation>Duplicate</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="73"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="75"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="86"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="88"/>
         <source>删除当前配置</source>
         <translation>Delete current profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="92"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="105"/>
         <source>Python 可执行文件</source>
         <translation>Python executable</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="103"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="116"/>
         <source>ComfyUI 根目录</source>
         <translation>ComfyUI root directory</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="130"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="143"/>
         <source>请先修正以下配置</source>
         <translation>Fix the following settings first</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="276"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="303"/>
         <source>自定义参数会追加在可视化参数之后，可用于尚未被启动器覆盖的新参数。</source>
         <translation>Custom arguments are appended after visual options and can be used for new options not yet covered by the launcher.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="286"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="313"/>
         <source>例如：--some-new-option value</source>
         <translation>Example: --some-new-option value</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="309"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="341"/>
+        <source>无法启动命令提示符</source>
+        <translation>Unable to Start Command Prompt</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="343"/>
+        <source>确定</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="361"/>
         <source>删除启动配置</source>
         <translation>Delete Launch Profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="312"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="364"/>
         <source>删除</source>
         <translation>Delete</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="313"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="365"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="319"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="371"/>
         <source>确定删除“%1”吗？此操作无法撤销。</source>
         <translation>Delete “%1”? This action cannot be undone.</translation>
     </message>
@@ -315,6 +330,39 @@
         <location filename="../../../core/runtime/frontend/Minifox/Runtime/ConsoleView.qml" line="164"/>
         <source>启动 ComfyUI 后，完整输出会显示在这里。</source>
         <translation>Complete output will appear here after ComfyUI starts.</translation>
+    </message>
+</context>
+<context>
+    <name>CudaDevicePanel</name>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="26"/>
+        <source>CUDA 设备检测</source>
+        <translation>CUDA Device Detection</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="40"/>
+        <source>检测中…</source>
+        <translation>Detecting…</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="40"/>
+        <source>重新检测</source>
+        <translation>Detect again</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="46"/>
+        <source>使用全部设备</source>
+        <translation>Use all devices</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="67"/>
+        <source>设备 %1</source>
+        <translation>Device %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/CudaDevicePanel.qml" line="78"/>
+        <source>使用此设备</source>
+        <translation>Use this device</translation>
     </message>
 </context>
 <context>
@@ -434,1110 +482,69 @@
     </message>
 </context>
 <context>
-    <name>LaunchParameterCatalog</name>
+    <name>HardwareManager</name>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="107"/>
-        <source>浏览器启动策略</source>
-        <translation>Browser Launch Policy</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="26"/>
+        <source>未找到可用的 CUDA 检测工具。</source>
+        <translation>No CUDA detection tool is available.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="107"/>
-        <source>使用 ComfyUI 默认行为，或显式开启、关闭启动后自动打开浏览器。</source>
-        <translation>Use ComfyUI&apos;s default behavior, or explicitly enable or disable opening the browser after launch.</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="39"/>
+        <source>CUDA 设备检测超时。</source>
+        <translation>CUDA device detection timed out.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="108"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="112"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="143"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="145"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="149"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="153"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="155"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="161"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="166"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="168"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="173"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="175"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="178"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="181"/>
-        <source>默认</source>
-        <translation>Default</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="64"/>
+        <source>正在检测 CUDA 设备…</source>
+        <translation>Detecting CUDA devices…</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="108"/>
-        <source>自动打开</source>
-        <translation>Open Automatically</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="67"/>
+        <source>未检测到 CUDA 设备</source>
+        <translation>No CUDA device detected</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="108"/>
-        <source>不自动打开</source>
-        <translation>Do Not Open Automatically</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="75"/>
+        <source>检测到 %1 个 CUDA 设备</source>
+        <translation>Detected %1 CUDA devices</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="109"/>
-        <source>多用户模式</source>
-        <translation>Multi-user Mode</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="144"/>
+        <source>未检测到 NVIDIA 驱动或支持 CUDA 的 PyTorch 环境。</source>
+        <translation>No NVIDIA driver or CUDA-enabled PyTorch environment was detected.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="109"/>
-        <source>为不同用户启用独立存储。</source>
-        <translation>Enable separate storage for different users.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="110"/>
-        <source>启用 ComfyUI Manager</source>
-        <translation>Enable ComfyUI Manager</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="110"/>
-        <source>启用 ComfyUI 内置的 Manager 功能。</source>
-        <translation>Enable ComfyUI&apos;s built-in Manager features.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="111"/>
-        <source>Manager 界面模式</source>
-        <translation>Manager UI Mode</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="111"/>
-        <source>选择默认界面、禁用界面端点或使用旧版界面。</source>
-        <translation>Use the default UI, disable UI endpoints, or use the legacy UI.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="112"/>
-        <source>禁用界面</source>
-        <translation>Disable UI</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="112"/>
-        <source>旧版界面</source>
-        <translation>Legacy UI</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="113"/>
-        <source>日志级别</source>
-        <translation>Log Level</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="113"/>
-        <source>设置 ComfyUI 输出的最低日志级别。</source>
-        <translation>Set the minimum log level emitted by ComfyUI.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="114"/>
-        <source>调试</source>
-        <translation>Debug</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="114"/>
-        <source>信息（默认）</source>
-        <translation>Info (Default)</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="114"/>
-        <source>警告</source>
-        <translation>Warning</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="114"/>
-        <source>错误</source>
-        <translation>Error</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="114"/>
-        <source>严重错误</source>
-        <translation>Critical</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="115"/>
-        <source>常规日志写入 stdout</source>
-        <translation>Write Regular Logs to stdout</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="115"/>
-        <source>将常规进程输出从 stderr 改为 stdout。</source>
-        <translation>Send regular process output to stdout instead of stderr.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="116"/>
-        <source>Windows 独立包兼容模式</source>
-        <translation>Windows Portable Package Compatibility</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="116"/>
-        <source>启用 ComfyUI Windows 独立包的便利行为。</source>
-        <translation>Enable convenience behavior for the ComfyUI Windows portable package.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="118"/>
-        <source>监听地址</source>
-        <translation>Listen Address</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="118"/>
-        <source>可填写单个地址或用逗号分隔多个地址。</source>
-        <translation>Enter one address or multiple comma-separated addresses.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="119"/>
-        <source>监听端口</source>
-        <translation>Listen Port</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="119"/>
-        <source>ComfyUI Web 服务使用的 TCP 端口。</source>
-        <translation>TCP port used by the ComfyUI web service.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="120"/>
-        <source>TLS 私钥文件</source>
-        <translation>TLS Private Key File</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="120"/>
-        <source>与证书文件同时设置后启用 HTTPS。</source>
-        <translation>Set together with the certificate file to enable HTTPS.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="121"/>
-        <source>TLS 证书文件</source>
-        <translation>TLS Certificate File</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="121"/>
-        <source>与私钥文件同时设置后启用 HTTPS。</source>
-        <translation>Set together with the private key file to enable HTTPS.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="122"/>
-        <source>CORS 来源</source>
-        <translation>CORS Origin</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="122"/>
-        <source>留空不启用；填写 * 允许所有来源。</source>
-        <translation>Leave empty to disable; enter * to allow all origins.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="123"/>
-        <source>最大上传大小</source>
-        <translation>Maximum Upload Size</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="123"/>
-        <source>允许上传的最大文件大小，单位 MB。</source>
-        <translation>Maximum allowed upload size in MB.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="124"/>
-        <source>压缩响应正文</source>
-        <translation>Compress Response Body</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="124"/>
-        <source>启用 HTTP 响应正文压缩。</source>
-        <translation>Enable compression for HTTP response bodies.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="125"/>
-        <source>Comfy API 地址</source>
-        <translation>Comfy API URL</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="125"/>
-        <source>覆盖 ComfyUI 使用的 API 基础地址。</source>
-        <translation>Override the API base URL used by ComfyUI.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="126"/>
-        <source>数据库 URL</source>
-        <translation>Database URL</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="126"/>
-        <source>留空使用 ComfyUI 默认 SQLite 数据库。</source>
-        <translation>Leave empty to use ComfyUI&apos;s default SQLite database.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="128"/>
-        <source>基础目录</source>
-        <translation>Base Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="128"/>
-        <source>统一设置模型、节点、输入、输出、临时和用户目录的基础路径。</source>
-        <translation>Set a common base path for model, node, input, output, temporary, and user directories.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="129"/>
-        <source>模型目录</source>
-        <translation>Model Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="129"/>
-        <source>覆盖基础目录中的 models 目录。</source>
-        <translation>Override the models directory under the base directory.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="130"/>
-        <source>输出目录</source>
-        <translation>Output Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="130"/>
-        <source>覆盖基础目录中的 output 目录。</source>
-        <translation>Override the output directory under the base directory.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="131"/>
-        <source>输入目录</source>
-        <translation>Input Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="131"/>
-        <source>覆盖基础目录中的 input 目录。</source>
-        <translation>Override the input directory under the base directory.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="132"/>
-        <source>临时目录</source>
-        <translation>Temporary Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="132"/>
-        <source>覆盖基础目录中的 temp 目录。</source>
-        <translation>Override the temp directory under the base directory.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="133"/>
-        <source>用户目录</source>
-        <translation>User Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="133"/>
-        <source>覆盖基础目录中的 user 目录。</source>
-        <translation>Override the user directory under the base directory.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="134"/>
-        <source>额外模型路径配置</source>
-        <translation>Extra Model Path Configurations</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="134"/>
-        <source>每行填写一个 extra_model_paths.yaml 文件。</source>
-        <translation>Enter one extra_model_paths.yaml file per line.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="136"/>
-        <source>CUDA 可见设备</source>
-        <translation>CUDA Visible Devices</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="136"/>
-        <source>填写一个或多个用逗号分隔的 CUDA 设备编号。</source>
-        <translation>Enter one or more comma-separated CUDA device IDs.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="137"/>
-        <source>默认设备</source>
-        <translation>Default Device</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="137"/>
-        <source>指定默认设备编号，其他设备仍然可见。</source>
-        <translation>Specify the default device ID while keeping other devices visible.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="138"/>
-        <source>DirectML</source>
-        <translation>DirectML</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="138"/>
-        <source>留空禁用；填写 auto 自动选择，或填写设备编号。</source>
-        <translation>Leave empty to disable; enter auto for automatic selection, or enter a device ID.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="139"/>
-        <source>oneAPI 设备选择器</source>
-        <translation>oneAPI Device Selector</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="139"/>
-        <source>设置 oneAPI 设备选择字符串。</source>
-        <translation>Set the oneAPI device selector string.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="140"/>
-        <source>显存模式</source>
-        <translation>VRAM Mode</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="140"/>
-        <source>选择 ComfyUI 的模型驻留和卸载策略。</source>
-        <translation>Choose ComfyUI&apos;s model residency and offloading strategy.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="141"/>
-        <source>默认（动态显存）</source>
-        <translation>Default (Dynamic VRAM)</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="141"/>
-        <source>仅 GPU</source>
-        <translation>GPU Only</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="141"/>
-        <source>高显存</source>
-        <translation>High VRAM</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="141"/>
-        <source>低显存</source>
-        <translation>Low VRAM</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="141"/>
-        <source>极低显存</source>
-        <translation>Very Low VRAM</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="141"/>
-        <source>仅 CPU</source>
-        <translation>CPU Only</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="142"/>
-        <source>cudaMallocAsync</source>
-        <translation>cudaMallocAsync</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="142"/>
-        <source>显式开启、关闭，或保留 PyTorch 默认行为。</source>
-        <translation>Explicitly enable or disable it, or keep the PyTorch default behavior.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="143"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="145"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="166"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="168"/>
-        <source>启用</source>
-        <translation>Enable</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="143"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="145"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="166"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="168"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="181"/>
-        <source>禁用</source>
-        <translation>Disable</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="144"/>
-        <source>Triton 后端</source>
-        <translation>Triton Backend</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="144"/>
-        <source>显式开启或强制关闭 comfy-kitchen Triton 后端。</source>
-        <translation>Explicitly enable or force-disable the comfy-kitchen Triton backend.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="146"/>
-        <source>声明支持 FP8 计算</source>
-        <translation>Declare FP8 Compute Support</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="146"/>
-        <source>让 ComfyUI 按支持 FP8 计算的设备处理。</source>
-        <translation>Tell ComfyUI to treat the device as supporting FP8 computation.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="148"/>
-        <source>全局精度</source>
-        <translation>Global Precision</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="148"/>
-        <source>显式强制使用 FP32 或 FP16。</source>
-        <translation>Explicitly force FP32 or FP16.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="149"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="153"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="155"/>
-        <source>FP32</source>
-        <translation>FP32</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="149"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="153"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="155"/>
-        <source>FP16</source>
-        <translation>FP16</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="150"/>
-        <source>扩散模型精度</source>
-        <translation>Diffusion Model Precision</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="150"/>
-        <source>设置 UNet / 扩散模型权重精度。</source>
-        <translation>Set the precision of UNet / diffusion model weights.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <source>FP64</source>
-        <translation>FP64</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="153"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="155"/>
-        <source>BF16</source>
-        <translation>BF16</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="155"/>
-        <source>FP8 E4M3FN</source>
-        <translation>FP8 E4M3FN</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="155"/>
-        <source>FP8 E5M2</source>
-        <translation>FP8 E5M2</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="151"/>
-        <source>FP8 E8M0FNU</source>
-        <translation>FP8 E8M0FNU</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="152"/>
-        <source>VAE 精度</source>
-        <translation>VAE Precision</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="152"/>
-        <source>设置 VAE 的计算精度。</source>
-        <translation>Set the VAE computation precision.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="154"/>
-        <source>文本编码器精度</source>
-        <translation>Text Encoder Precision</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="154"/>
-        <source>设置文本编码器权重精度。</source>
-        <translation>Set the text encoder weight precision.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="156"/>
-        <source>VAE 使用 CPU</source>
-        <translation>Run VAE on CPU</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="156"/>
-        <source>在 CPU 上运行 VAE。</source>
-        <translation>Run the VAE on the CPU.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="157"/>
-        <source>FP16 中间张量</source>
-        <translation>FP16 Intermediate Tensors</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="157"/>
-        <source>实验性地使用 FP16 节点间中间张量。</source>
-        <translation>Experimentally use FP16 intermediate tensors between nodes.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="158"/>
-        <source>Channels Last</source>
-        <translation>Channels Last</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="158"/>
-        <source>推理时强制使用 channels-last 内存格式。</source>
-        <translation>Force the channels-last memory format during inference.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="160"/>
-        <source>缓存模式</source>
-        <translation>Cache Mode</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="160"/>
-        <source>选择默认缓存、RAM 压力缓存、经典缓存、LRU 或禁用缓存。</source>
-        <translation>Choose the default cache, RAM-pressure cache, classic cache, LRU cache, or no cache.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="161"/>
-        <source>RAM 压力缓存</source>
-        <translation>RAM-pressure Cache</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="161"/>
-        <source>经典缓存</source>
-        <translation>Classic Cache</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="161"/>
-        <source>LRU 缓存</source>
-        <translation>LRU Cache</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="161"/>
-        <source>禁用缓存</source>
-        <translation>Disable Cache</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="161"/>
-        <source>高内存模式</source>
-        <translation>High-memory Mode</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="162"/>
-        <source>缓存参数</source>
-        <translation>Cache Parameters</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="162"/>
-        <source>RAM 模式填写一至两个 GB 阈值；LRU 模式填写最大节点结果数。</source>
-        <translation>For RAM mode, enter one or two thresholds in GB; for LRU mode, enter the maximum number of node results.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="163"/>
-        <source>系统保留显存</source>
-        <translation>Reserved System VRAM</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="163"/>
-        <source>为操作系统或其他软件保留的显存，单位 GB。</source>
-        <translation>VRAM reserved for the operating system or other software, in GB.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="164"/>
-        <source>动态显存余量</source>
-        <translation>Dynamic VRAM Headroom</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="164"/>
-        <source>在默认值之上保持完全空闲的额外显存，单位 GB。</source>
-        <translation>Additional VRAM kept completely free above the default value, in GB.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="165"/>
-        <source>动态显存</source>
-        <translation>Dynamic VRAM</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="165"/>
-        <source>显式启用或禁用动态显存。</source>
-        <translation>Explicitly enable or disable dynamic VRAM.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="167"/>
-        <source>异步权重卸载</source>
-        <translation>Asynchronous Weight Offloading</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="167"/>
-        <source>显式启用、禁用或保留平台默认行为。</source>
-        <translation>Explicitly enable or disable it, or keep the platform default behavior.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="169"/>
-        <source>异步卸载流数量</source>
-        <translation>Asynchronous Offload Stream Count</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="169"/>
-        <source>启用异步卸载时使用；留空采用 ComfyUI 默认值 2。</source>
-        <translation>Used when asynchronous offloading is enabled; leave empty to use ComfyUI&apos;s default of 2.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="170"/>
-        <source>快速磁盘卸载</source>
-        <translation>Fast Disk Offloading</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="170"/>
-        <source>优先使用磁盘支持的动态加载和卸载。</source>
-        <translation>Prefer disk-backed dynamic loading and offloading.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="171"/>
-        <source>禁用智能内存</source>
-        <translation>Disable Smart Memory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="171"/>
-        <source>更积极地将模型卸载到常规内存。</source>
-        <translation>Offload models to system memory more aggressively.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="172"/>
-        <source>固定内存策略</source>
-        <translation>Pinned Memory Policy</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="172"/>
-        <source>默认使用固定内存，或显式禁用。</source>
-        <translation>Use pinned memory by default, or explicitly disable it.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="173"/>
-        <source>禁用固定内存</source>
-        <translation>Disable Pinned Memory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="174"/>
-        <source>内存映射策略</source>
-        <translation>Memory Mapping Policy</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="174"/>
-        <source>显式启用 torch 文件 mmap，或禁用 safetensors mmap。</source>
-        <translation>Explicitly enable mmap for torch files, or disable mmap for safetensors.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="175"/>
-        <source>启用 torch mmap</source>
-        <translation>Enable torch mmap</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="175"/>
-        <source>禁用 mmap</source>
-        <translation>Disable mmap</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="177"/>
-        <source>注意力实现</source>
-        <translation>Attention Implementation</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="177"/>
-        <source>选择交叉注意力优化实现。</source>
-        <translation>Choose the cross-attention optimization implementation.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="178"/>
-        <source>Split</source>
-        <translation>Split</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="178"/>
-        <source>Sub-quadratic</source>
-        <translation>Sub-quadratic</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="178"/>
-        <source>PyTorch 2</source>
-        <translation>PyTorch 2</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="178"/>
-        <source>Sage Attention</source>
-        <translation>Sage Attention</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="178"/>
-        <source>FlashAttention</source>
-        <translation>FlashAttention</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="179"/>
-        <source>禁用 xFormers</source>
-        <translation>Disable xFormers</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="179"/>
-        <source>强制不使用 xFormers。</source>
-        <translation>Force xFormers not to be used.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="180"/>
-        <source>注意力 Upcast</source>
-        <translation>Attention Upcast</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="180"/>
-        <source>显式强制启用或禁用注意力 upcast。</source>
-        <translation>Explicitly force attention upcasting on or off.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="181"/>
-        <source>强制启用</source>
-        <translation>Force Enable</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="182"/>
-        <source>非阻塞操作</source>
-        <translation>Non-blocking Operations</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="182"/>
-        <source>对适用张量强制使用非阻塞操作。</source>
-        <translation>Force non-blocking operations for applicable tensors.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="183"/>
-        <source>默认哈希算法</source>
-        <translation>Default Hash Algorithm</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="183"/>
-        <source>选择重复文件和内容比较使用的哈希算法。</source>
-        <translation>Choose the hash algorithm used for duplicate-file and content comparisons.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="184"/>
-        <source>MD5</source>
-        <translation>MD5</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="184"/>
-        <source>SHA-1</source>
-        <translation>SHA-1</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="184"/>
-        <source>SHA-256（默认）</source>
-        <translation>SHA-256 (Default)</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="184"/>
-        <source>SHA-512</source>
-        <translation>SHA-512</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="185"/>
-        <source>确定性算法</source>
-        <translation>Deterministic Algorithms</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="185"/>
-        <source>尽可能使用较慢的确定性 PyTorch 算法。</source>
-        <translation>Use slower deterministic PyTorch algorithms whenever possible.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="186"/>
-        <source>实验性优化</source>
-        <translation>Experimental Optimizations</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="186"/>
-        <source>填写空格分隔的 fp16_accumulation、fp8_matrix_mult、cublas_ops、autotune；填写 all 启用全部。</source>
-        <translation>Enter space-separated fp16_accumulation, fp8_matrix_mult, cublas_ops, and autotune values; enter all to enable everything.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="188"/>
-        <source>采样预览方法</source>
-        <translation>Sampler Preview Method</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="188"/>
-        <source>设置采样节点的默认预览方式。</source>
-        <translation>Set the default preview method for sampler nodes.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="189"/>
-        <source>无预览（默认）</source>
-        <translation>No Preview (Default)</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="189"/>
-        <source>自动</source>
-        <translation>Automatic</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="189"/>
-        <source>Latent2RGB</source>
-        <translation>Latent2RGB</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="189"/>
-        <source>TAESD</source>
-        <translation>TAESD</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="190"/>
-        <source>最大预览尺寸</source>
-        <translation>Maximum Preview Size</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="190"/>
-        <source>设置采样预览图的最大边长。</source>
-        <translation>Set the maximum edge length of sampler preview images.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="191"/>
-        <source>前端版本</source>
-        <translation>Frontend Version</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="191"/>
-        <source>留空使用 ComfyUI 默认前端版本；也可填写 owner/repo@version。</source>
-        <translation>Leave empty to use ComfyUI&apos;s default frontend version, or enter owner/repo@version.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="192"/>
-        <source>本地前端目录</source>
-        <translation>Local Frontend Directory</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="192"/>
-        <source>使用本地前端目录并覆盖前端版本。</source>
-        <translation>Use a local frontend directory and override the frontend version.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="193"/>
-        <source>Assets 系统</source>
-        <translation>Assets System</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="193"/>
-        <source>启用资源 API、数据库同步和后台扫描。</source>
-        <translation>Enable the assets API, database synchronization, and background scanning.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="194"/>
-        <source>资源内容哈希</source>
-        <translation>Asset Content Hashing</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="194"/>
-        <source>扫描资源时计算 BLAKE3 内容哈希。</source>
-        <translation>Calculate BLAKE3 content hashes while scanning assets.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="195"/>
-        <source>功能标志</source>
-        <translation>Feature Flags</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="195"/>
-        <source>每行填写一个 KEY 或 KEY=VALUE；参数会逐项传递。</source>
-        <translation>Enter one KEY or KEY=VALUE per line; each entry is passed separately.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="197"/>
-        <source>禁用元数据</source>
-        <translation>Disable Metadata</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="197"/>
-        <source>不在生成文件中保存元数据。</source>
-        <translation>Do not save metadata in generated files.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="198"/>
-        <source>禁用全部自定义节点</source>
-        <translation>Disable All Custom Nodes</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="198"/>
-        <source>启动时不加载任何自定义节点。</source>
-        <translation>Do not load any custom nodes at startup.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="199"/>
-        <source>自定义节点白名单</source>
-        <translation>Custom Node Allowlist</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="199"/>
-        <source>禁用全部自定义节点时仍允许加载的文件夹；每行一项。</source>
-        <translation>Folders still allowed when all custom nodes are disabled; enter one per line.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="200"/>
-        <source>禁用 API 节点</source>
-        <translation>Disable API Nodes</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="200"/>
-        <source>禁用全部 API 节点，并阻止前端访问互联网。</source>
-        <translation>Disable all API nodes and prevent the frontend from accessing the internet.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="202"/>
-        <source>挂起诊断</source>
-        <translation>Hang Diagnostics</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="202"/>
-        <source>启用 Ctrl+C 时的堆栈转储。</source>
-        <translation>Enable stack dumps when Ctrl+C is pressed.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="203"/>
-        <source>隐藏服务器输出</source>
-        <translation>Hide Server Output</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="203"/>
-        <source>禁止打印服务器输出。</source>
-        <translation>Suppress server output.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="204"/>
-        <source>CI 快速测试</source>
-        <translation>CI Quick Test</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="204"/>
-        <source>运行 ComfyUI 的 CI 快速测试模式。</source>
-        <translation>Run ComfyUI&apos;s CI quick-test mode.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="205"/>
-        <source>列出功能标志后退出</source>
-        <translation>List Feature Flags and Exit</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="205"/>
-        <source>打印可由命令行设置的功能标志 JSON，然后退出。</source>
-        <translation>Print JSON for feature flags configurable from the command line, then exit.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="213"/>
-        <source>常规</source>
-        <translation>General</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="213"/>
-        <source>启动行为、Manager 与日志</source>
-        <translation>Launch behavior, Manager, and logging</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="214"/>
-        <source>网络与服务</source>
-        <translation>Network and Services</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="214"/>
-        <source>地址、端口、TLS 与 API</source>
-        <translation>Addresses, ports, TLS, and APIs</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="215"/>
-        <source>目录</source>
-        <translation>Directories</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="215"/>
-        <source>模型、输入输出与用户目录</source>
-        <translation>Model, input/output, and user directories</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="216"/>
-        <source>设备</source>
-        <translation>Devices</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="216"/>
-        <source>CUDA、DirectML 与显存模式</source>
-        <translation>CUDA, DirectML, and VRAM modes</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="217"/>
-        <source>精度</source>
-        <translation>Precision</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="217"/>
-        <source>模型、VAE 与编码器精度</source>
-        <translation>Model, VAE, and encoder precision</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="218"/>
-        <source>内存与缓存</source>
-        <translation>Memory and Cache</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="218"/>
-        <source>缓存、卸载与内存映射</source>
-        <translation>Caching, offloading, and memory mapping</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="219"/>
-        <source>性能</source>
-        <translation>Performance</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="219"/>
-        <source>注意力、哈希与实验优化</source>
-        <translation>Attention, hashing, and experimental optimizations</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="220"/>
-        <source>前端与预览</source>
-        <translation>Frontend and Preview</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="220"/>
-        <source>预览、前端版本与功能标志</source>
-        <translation>Preview, frontend version, and feature flags</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="221"/>
-        <source>安全与节点</source>
-        <translation>Security and Nodes</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="221"/>
-        <source>元数据、自定义节点与 API</source>
-        <translation>Metadata, custom nodes, and APIs</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="222"/>
-        <source>诊断</source>
-        <translation>Diagnostics</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="222"/>
-        <source>调试、测试与诊断选项</source>
-        <translation>Debugging, testing, and diagnostic options</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="223"/>
-        <source>环境变量</source>
-        <translation>Environment Variables</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="223"/>
-        <source>常用与自定义子进程环境</source>
-        <translation>Common and custom child-process environment</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="224"/>
-        <source>自定义参数</source>
-        <translation>Custom Arguments</translation>
-    </message>
-    <message>
-        <location filename="../../../core/configuration/backend/LaunchParameterCatalog.cpp" line="224"/>
-        <source>追加未覆盖的命令行参数</source>
-        <translation>Append command-line arguments not covered above</translation>
+        <location filename="../../backend/HardwareManager.cpp" line="197"/>
+        <source>未检测到可用的 CUDA 设备。</source>
+        <translation>No usable CUDA device was detected.</translation>
     </message>
 </context>
 <context>
     <name>Main</name>
     <message>
-        <location filename="../Minifox/App/Main.qml" line="15"/>
+        <location filename="../Minifox/App/Main.qml" line="16"/>
         <source>Minifox ComfyUI 启动器</source>
         <translation>Minifox ComfyUI Launcher</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="92"/>
+        <source>ComfyUI 正在运行</source>
+        <translation>ComfyUI Is Running</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="95"/>
+        <source>停止并退出</source>
+        <translation>Stop and Exit</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="96"/>
+        <source>取消</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="101"/>
+        <source>关闭启动器会停止正在运行的 ComfyUI，并释放其占用的浏览器端口。确定要退出吗？</source>
+        <translation>Closing the launcher will stop ComfyUI and release its browser port. Are you sure you want to exit?</translation>
     </message>
 </context>
 <context>
@@ -1559,6 +566,11 @@
     </message>
     <message>
         <location filename="../Minifox/App/NavigationRail.qml" line="28"/>
+        <source>版本管理</source>
+        <translation>Version Management</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/NavigationRail.qml" line="32"/>
         <source>应用设置</source>
         <translation>Application Settings</translation>
     </message>
@@ -1639,112 +651,167 @@
 <context>
     <name>RuntimeManager</name>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="74"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="149"/>
         <source>已停止</source>
         <translation>Stopped</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="75"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="150"/>
         <source>启动中</source>
         <translation>Starting</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="76"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="151"/>
         <source>运行中</source>
         <translation>Running</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="77"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="152"/>
         <source>停止中</source>
         <translation>Stopping</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="78"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="153"/>
         <source>启动失败</source>
         <translation>Launch failed</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="124"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="206"/>
         <source>正在启动配置“%1”…</source>
         <translation>Starting profile “%1”…</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="130"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="281"/>
+        <source>ComfyUI 工作目录不存在。</source>
+        <translation>The ComfyUI working directory does not exist.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="287"/>
+        <source>Python 可执行文件不存在：%1</source>
+        <translation>The Python executable does not exist: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="300"/>
+        <source>无法打开启动命令提示符。</source>
+        <translation>Could not open the launch command prompt.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="301"/>
+        <source>无法打开启动命令提示符：%1</source>
+        <translation>Unable to open the command prompt: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="348"/>
+        <source>找不到 ComfyUI 依赖清单：%1</source>
+        <translation>Could not find the ComfyUI dependency manifest: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="468"/>
+        <source>正在使用所选 Python 离线检查 requirements.txt…</source>
+        <translation>Checking requirements.txt offline with the selected Python…</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="481"/>
+        <source>无法将依赖检查进程加入安全作业，已中止启动。</source>
+        <translation>Could not add the dependency checker to the protected job. Launch was aborted.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="517"/>
+        <source>检查进程退出代码 %1。</source>
+        <translation>The checker exited with code %1.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="519"/>
+        <source>依赖检查未能完成：%1</source>
+        <translation>The dependency check could not complete: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="537"/>
+        <source>依赖检查失败，ComfyUI 未启动。</source>
+        <translation>The dependency check failed. ComfyUI was not started.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="551"/>
+        <source>依赖检查通过（已检查 %1 项），准备启动 ComfyUI。</source>
+        <translation>Dependency check passed (%1 items checked). Preparing to start ComfyUI.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="570"/>
         <source>手动代理未启用：代理主机为空或无效。</source>
         <translation>Manual proxy is disabled because the proxy host is empty or invalid.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="131"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="571"/>
         <source>已为 ComfyUI 子进程设置代理：%1</source>
         <translation>Proxy configured for the ComfyUI child process: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="135"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="575"/>
         <source>已移除 ComfyUI 子进程的代理环境变量。</source>
         <translation>Proxy environment variables were removed from the ComfyUI child process.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="161"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="745"/>
+        <source>无法将 ComfyUI 加入安全作业，已中止启动以避免残留 Python 进程。</source>
+        <translation>Could not add ComfyUI to the protected job. Launch was aborted to avoid leaving Python processes behind.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="228"/>
         <source>正在停止 ComfyUI…</source>
         <translation>Stopping ComfyUI…</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="172"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="113"/>
+        <source>无法启动 Python 依赖检查：%1</source>
+        <translation>Could not start the Python dependency check: %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="252"/>
         <source>正在强制终止 ComfyUI 进程树…</source>
         <translation>Force terminating the ComfyUI process tree…</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="175"/>
-        <source>无法完整终止 ComfyUI 进程树，正在终止主进程。</source>
-        <translation>Unable to terminate the complete ComfyUI process tree; terminating the main process.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="185"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="312"/>
         <source>服务地址无效。</source>
         <translation>The service address is invalid.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="190"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="317"/>
         <source>无法打开 WebUI。</source>
         <translation>Unable to open WebUI.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="206"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="333"/>
         <source>无法导出日志：%1</source>
         <translation>Unable to export the log: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="209"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="336"/>
         <source>日志已导出到 %1</source>
         <translation>Log exported to %1</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="335"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="735"/>
         <source>ComfyUI 服务已就绪：%1</source>
         <translation>ComfyUI service is ready: %1</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="348"/>
-        <source>无法关联 Windows Job Object；强制停止时将使用进程树终止回退。</source>
-        <translation>Unable to attach the Windows Job Object; force stop will use the process-tree termination fallback.</translation>
-    </message>
-    <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="351"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="756"/>
         <source>进程已启动，PID %1。</source>
         <translation>Process started with PID %1.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="373"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="784"/>
         <source>ComfyUI 已停止，退出代码 %1。</source>
         <translation>ComfyUI stopped with exit code %1.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="376"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="787"/>
         <source>ComfyUI 异常退出，退出代码 %1。</source>
         <translation>ComfyUI exited unexpectedly with code %1.</translation>
     </message>
     <message>
-        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="385"/>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="796"/>
         <source>进程无法启动：%1</source>
         <translation>The process could not start: %1</translation>
     </message>
@@ -2025,6 +1092,534 @@
         <location filename="../../../core/application-settings/frontend/Minifox/ApplicationSettings/SettingsPage.qml" line="328"/>
         <source>ComfyUI 子进程将继承系统代理环境。</source>
         <translation>The ComfyUI child process will inherit the system proxy environment.</translation>
+    </message>
+</context>
+<context>
+    <name>VersionManager</name>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="41"/>
+        <source>无法启动 Git。请安装 Git for Windows 后重试。</source>
+        <translation>Git could not be started. Install Git for Windows and try again.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="86"/>
+        <source>未检测到 Git 仓库</source>
+        <translation>No Git repository detected</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="88"/>
+        <source>有未提交更改</source>
+        <translation>Uncommitted changes</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="88"/>
+        <source>工作区干净</source>
+        <translation>Working tree clean</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="94"/>
+        <source>领先 %1 个提交，落后 %2 个提交</source>
+        <translation>%1 commits ahead, %2 commits behind</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="97"/>
+        <source>有 %1 个提交可更新</source>
+        <translation>%1 updates available</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="100"/>
+        <source>本地领先 %1 个提交</source>
+        <translation>Local branch is %1 commits ahead</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="102"/>
+        <source>已是最新版本</source>
+        <translation>Up to date</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="133"/>
+        <location filename="../../backend/VersionManager.cpp" line="206"/>
+        <source>请先在高级选项中选择 ComfyUI 根目录。</source>
+        <translation>Select the ComfyUI root directory in Advanced Options first.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="137"/>
+        <source>未找到 Git for Windows，无法刷新核心版本列表。</source>
+        <translation>Git for Windows was not found, so the core version list cannot be refreshed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="156"/>
+        <source>未找到 ComfyUI 的 custom_nodes 目录。</source>
+        <translation>The ComfyUI custom_nodes directory was not found.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="160"/>
+        <source>未找到 Git for Windows，无法检测扩展更新。</source>
+        <translation>Git for Windows was not found, so extension updates cannot be checked.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="165"/>
+        <source>正在检测已安装扩展…</source>
+        <translation>Checking installed extensions…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="210"/>
+        <source>已读取本地版本；安装 Git for Windows 后可检查和更新版本。</source>
+        <translation>Local version detected. Install Git for Windows to check for and install updates.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="234"/>
+        <source>ComfyUI 稳定版已更新到最新版本。</source>
+        <translation>ComfyUI Stable was updated to the latest version.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="235"/>
+        <source>ComfyUI 开发版已更新到最新版本。</source>
+        <translation>ComfyUI Development was updated to the latest version.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="238"/>
+        <source>存在未提交更改。为避免覆盖文件，请先处理这些更改。</source>
+        <translation>Uncommitted changes were found. Resolve them first to avoid overwriting files.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="240"/>
+        <source>当前 ComfyUI 状态不允许更新，请先刷新内核列表。</source>
+        <translation>ComfyUI cannot be updated in its current state. Refresh the core list first.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="255"/>
+        <source>存在未提交更改。为避免覆盖文件，已取消版本切换。</source>
+        <translation>Uncommitted changes were found. Version switching was cancelled to avoid overwriting files.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="257"/>
+        <source>当前 ComfyUI 状态不允许切换版本，请先刷新内核列表。</source>
+        <translation>The current ComfyUI state does not allow switching versions. Refresh the Core list first.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="262"/>
+        <source>核心版本已切换。</source>
+        <translation>Core version switched.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="282"/>
+        <location filename="../../backend/VersionManager.cpp" line="696"/>
+        <source>扩展更新完成。</source>
+        <translation>Extension updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="292"/>
+        <location filename="../../backend/VersionManager.cpp" line="695"/>
+        <source>全部扩展更新完成。</source>
+        <translation>All extensions updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="294"/>
+        <source>未找到 Git for Windows，无法更新扩展。</source>
+        <translation>Git for Windows was not found, so extensions cannot be updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="308"/>
+        <source>没有可更新的扩展。</source>
+        <translation>No extensions can be updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="330"/>
+        <location filename="../../backend/VersionManager.cpp" line="692"/>
+        <source>扩展版本已切换。</source>
+        <translation>Extension version switched.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="342"/>
+        <location filename="../../backend/VersionManager.cpp" line="691"/>
+        <source>扩展安装完成。</source>
+        <translation>Extension installed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="344"/>
+        <source>请输入有效的扩展 URL。</source>
+        <translation>Enter a valid extension URL.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="348"/>
+        <source>未找到 Git for Windows，无法安装扩展。</source>
+        <translation>Git for Windows was not found, so the extension cannot be installed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="354"/>
+        <source>扩展 URL 无效。</source>
+        <translation>Invalid extension URL.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="372"/>
+        <source>无法卸载扩展：%1</source>
+        <translation>Could not uninstall extension: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="376"/>
+        <source>扩展已卸载：%1</source>
+        <translation>Extension uninstalled: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="394"/>
+        <source>无法更改扩展启用状态。</source>
+        <translation>Could not change the extension state.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="411"/>
+        <source>正在读取 ComfyUI 版本…</source>
+        <translation>Reading the ComfyUI version…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="412"/>
+        <source>正在读取提交信息…</source>
+        <translation>Reading commit information…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="413"/>
+        <source>正在检查远程更新…</source>
+        <translation>Checking for remote updates…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="414"/>
+        <source>正在匹配远端分支…</source>
+        <translation>Matching a remote branch…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="415"/>
+        <source>正在比较版本…</source>
+        <translation>Comparing versions…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="423"/>
+        <source>正在更新 ComfyUI…</source>
+        <translation>Updating ComfyUI…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="425"/>
+        <source>正在读取版本列表…</source>
+        <translation>Loading version list…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="426"/>
+        <source>正在读取稳定版本…</source>
+        <translation>Loading stable versions…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="428"/>
+        <source>正在切换核心版本…</source>
+        <translation>Switching core version…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="429"/>
+        <source>正在切换分支…</source>
+        <translation>Switching branch…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="435"/>
+        <source>正在更新扩展…</source>
+        <translation>Updating extension…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="437"/>
+        <source>正在切换扩展版本…</source>
+        <translation>Switching extension version…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="438"/>
+        <source>正在安装扩展…</source>
+        <translation>Installing extension…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="471"/>
+        <source>核心版本列表刷新失败：ComfyUI 目录不是 Git 仓库。</source>
+        <translation>Could not refresh the core version list: the ComfyUI directory is not a Git repository.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="473"/>
+        <source>无法访问远程 Git 仓库。</source>
+        <translation>The remote Git repository could not be reached.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="480"/>
+        <source>Git 操作失败。</source>
+        <translation>The Git operation failed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="496"/>
+        <source>检测到未提交更改，为避免覆盖文件，已取消版本切换。</source>
+        <translation>Uncommitted changes were found. Version switching was cancelled to avoid overwriting files.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="529"/>
+        <source>无法确定 ComfyUI 开发主线，版本列表未更新。</source>
+        <translation>The ComfyUI development mainline could not be determined, so the version list was not updated.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="553"/>
+        <source>核心版本列表刷新失败：%1</source>
+        <translation>Could not refresh the core version list: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="555"/>
+        <source>核心版本列表刷新成功。</source>
+        <translation>Core version list refreshed successfully.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="558"/>
+        <source>已读取本地版本信息。</source>
+        <translation>Local version information loaded.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="596"/>
+        <source>检测到未提交更改，为避免覆盖文件，已取消更新。</source>
+        <translation>Uncommitted changes were found. The update was cancelled to avoid overwriting files.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="619"/>
+        <source>未找到可用的 ComfyUI 稳定版本，仓库未被修改。</source>
+        <translation>No available ComfyUI stable version was found. The repository was not modified.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="630"/>
+        <source>未找到可用的 ComfyUI 开发分支，仓库未被修改。</source>
+        <translation>No available ComfyUI development branch was found. The repository was not modified.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="642"/>
+        <source>无法安全确定当前版本对应的远端分支，已取消更新且未修改仓库。</source>
+        <translation>No remote branch could be safely matched to the current version. The update was cancelled without modifying the repository.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="700"/>
+        <source>扩展 %1 存在未提交更改，已跳过且未修改仓库。</source>
+        <translation>Extension %1 has uncommitted changes. It was skipped without modifying the repository.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="720"/>
+        <source>扩展 %1 无法安全确定远端分支，已跳过且未修改仓库。</source>
+        <translation>No remote branch could be safely matched for extension %1. It was skipped without modifying the repository.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="748"/>
+        <source>扩展 %1 存在未提交更改，已取消版本切换。</source>
+        <translation>Extension %1 has uncommitted changes. Version switching was cancelled.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="873"/>
+        <source>ComfyUI 自定义节点扩展</source>
+        <translation>ComfyUI custom node extension</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1002"/>
+        <source>已安装扩展列表刷新成功。</source>
+        <translation>Installed extensions refreshed successfully.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1006"/>
+        <source>已安装扩展列表刷新失败：%1</source>
+        <translation>Could not refresh installed extensions: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1008"/>
+        <source>；另有 %1 个扩展检测失败。</source>
+        <translation>; %1 more extension(s) could not be checked.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1069"/>
+        <source>检测超时。</source>
+        <translation>The check timed out.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1071"/>
+        <source>无法确定对应的远端分支。</source>
+        <translation>No matching remote branch could be determined.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1077"/>
+        <source>%1：%2</source>
+        <translation>%1: %2</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1142"/>
+        <source>服务器返回了无法识别的扩展索引。</source>
+        <translation>The server returned an unrecognized extension index.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1144"/>
+        <source>可安装扩展列表刷新失败：%1</source>
+        <translation>Could not refresh available extensions: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1150"/>
+        <source>可安装扩展列表刷新成功，共 %1 条。</source>
+        <translation>Available extensions refreshed successfully. %1 entries loaded.</translation>
+    </message>
+</context>
+<context>
+    <name>VersionPage</name>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="45"/>
+        <source>版本管理</source>
+        <translation>Version Management</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="46"/>
+        <source>管理 ComfyUI 内核版本、已安装扩展和可安装扩展。</source>
+        <translation>Manage ComfyUI core versions, installed extensions, and available extensions.</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="52"/>
+        <source>刷新中…</source>
+        <translation>Refreshing…</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="52"/>
+        <source>刷新当前页</source>
+        <translation>Refresh Current Page</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="59"/>
+        <source>更新中…</source>
+        <translation>Updating…</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="59"/>
+        <source>一键更新</source>
+        <translation>Update All</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="80"/>
+        <source>ComfyUI 内核</source>
+        <translation>ComfyUI Core</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="81"/>
+        <source>已安装扩展</source>
+        <translation>Installed Extensions</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="82"/>
+        <source>安装新扩展</source>
+        <translation>Install Extensions</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="119"/>
+        <source>远程地址</source>
+        <translation>Remote URL</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="126"/>
+        <source>当前分支</source>
+        <translation>Branch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="131"/>
+        <source>当前版本</source>
+        <translation>Current Version</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="144"/>
+        <source>版本通道</source>
+        <translation>Release Channel</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="147"/>
+        <source>稳定版</source>
+        <translation>Stable</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="147"/>
+        <source>开发版</source>
+        <translation>Development</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="191"/>
+        <source>当前</source>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="195"/>
+        <source>切换</source>
+        <translation>Switch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="211"/>
+        <source>搜索已安装扩展</source>
+        <translation>Search installed extensions</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="239"/>
+        <source>启用 %1</source>
+        <translation>Enable %1</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="249"/>
+        <source>非 Git 扩展</source>
+        <translation>Non-Git extension</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="256"/>
+        <source>可更新</source>
+        <translation>Update available</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="258"/>
+        <source>检测中</source>
+        <translation>Checking</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="258"/>
+        <source>最新</source>
+        <translation>Latest</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="265"/>
+        <source>更新</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="272"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="369"/>
+        <source>卸载</source>
+        <translation>Uninstall</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="290"/>
+        <source>搜索新扩展</source>
+        <translation>Search new extensions</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="333"/>
+        <source>已安装</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="333"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="352"/>
+        <source>安装</source>
+        <translation>Install</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="347"/>
+        <source>扩展 Git URL</source>
+        <translation>Extension Git URL</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="366"/>
+        <source>卸载扩展</source>
+        <translation>Uninstall Extension</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="370"/>
+        <source>取消</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="376"/>
+        <source>确定卸载此扩展吗？扩展目录将被删除。</source>
+        <translation>Uninstall this extension? Its directory will be deleted.</translation>
     </message>
 </context>
 </TS>

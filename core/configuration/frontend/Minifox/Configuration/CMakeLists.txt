@@ -7,6 +7,7 @@ qt_add_qml_module(minifox_configuration_ui
         TARGET minifox_shared_ui
     QML_FILES
         ConfigurationPage.qml
+        CudaDevicePanel.qml
         EnvironmentEditor.qml
         ParameterEditor.qml
 )

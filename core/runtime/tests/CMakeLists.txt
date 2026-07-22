@@ -5,6 +5,7 @@ qt_add_executable(minifox_runtime_tests
 target_link_libraries(minifox_runtime_tests
     PRIVATE
         Qt6::Test
+        Qt6::Network
         Qt6::Qml
         Qt6::Quick
         Qt6::QuickControls2

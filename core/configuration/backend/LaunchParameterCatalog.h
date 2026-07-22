@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QCoreApplication>
 #include <QList>
 #include <QString>
 #include <QVariant>
@@ -27,8 +26,6 @@ struct LaunchParameterDefinition
 
 class LaunchParameterCatalog final
 {
-    Q_DECLARE_TR_FUNCTIONS(LaunchParameterCatalog)
-
 public:
     static const QList<LaunchParameterDefinition> &parameters();
     static QVariantList categories();

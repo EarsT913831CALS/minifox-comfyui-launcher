@@ -10,6 +10,7 @@ Pane {
     required property var appContext
     property int selectedCategoryIndex: 0
     property bool removeRequested: false
+    property bool commandPromptErrorRequested: false
     readonly property var categoryModel: appContext.configuration.categories
     readonly property var selectedCategory: categoryModel[selectedCategoryIndex]
     readonly property string consoleFontFamily: appContext.settings.consoleFontFamily
@@ -22,11 +23,23 @@ Pane {
         anchors.fill: parent
         spacing: Theme.spacingMd
 
-        PageHeader {
-            title: qsTr("启动配置")
-            description: qsTr("保存多套 ComfyUI 启动方式；所有可视化选项都直接映射到当前 ComfyUI 命令行参数。")
-            icon: "\uE713"
+        RowLayout {
             Layout.fillWidth: true
+
+            PageHeader {
+                title: qsTr("启动配置")
+                description: qsTr("保存多套 ComfyUI 启动方式；所有可视化选项都直接映射到当前 ComfyUI 命令行参数。")
+                icon: "\uE713"
+                Layout.fillWidth: true
+            }
+
+            AppButton {
+                text: qsTr("启动命令提示符")
+                onClicked: {
+                    if (!root.appContext.runtime.openCommandPrompt())
+                        root.commandPromptErrorRequested = true;
+                }
+            }
         }
 
         Frame {
@@ -220,6 +233,12 @@ Pane {
                         Layout.fillWidth: true
                     }
 
+                    Loader {
+                        active: root.selectedCategory.key === "device"
+                        sourceComponent: cudaDevicePanelComponent
+                        Layout.fillWidth: true
+                    }
+
                     Repeater {
                         model: {
                             root.appContext.configuration.parameterRevision;
@@ -251,6 +270,14 @@ Pane {
                     }
                 }
             }
+        }
+    }
+
+    Component {
+        id: cudaDevicePanelComponent
+
+        CudaDevicePanel {
+            hardware: root.appContext.hardware
         }
     }
 
@@ -300,6 +327,31 @@ Pane {
     Loader {
         active: root.removeRequested
         sourceComponent: removeDialogComponent
+    }
+
+    Loader {
+        active: root.commandPromptErrorRequested
+        sourceComponent: commandPromptErrorDialogComponent
+    }
+
+    Component {
+        id: commandPromptErrorDialogComponent
+
+        AppDialog {
+            title: qsTr("无法启动命令提示符")
+            modal: true
+            acceptText: qsTr("确定")
+            standardButtons: Dialog.Ok
+            closePolicy: Popup.CloseOnEscape
+            Component.onCompleted: open()
+
+            AppLabel {
+                text: root.appContext.runtime.lastError
+                wrapMode: Text.Wrap
+            }
+
+            onClosed: root.commandPromptErrorRequested = false
+        }
     }
 
     Component {

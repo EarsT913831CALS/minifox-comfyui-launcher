@@ -49,6 +49,8 @@ Control {
         case 2:
             return runtimePageComponent;
         case 3:
+            return versionPageComponent;
+        case 4:
             return settingsPageComponent;
         default:
             return dashboardPageComponent;
@@ -75,6 +77,14 @@ Control {
         id: runtimePageComponent
 
         RuntimePage {
+            appContext: root.appContext
+        }
+    }
+
+    Component {
+        id: versionPageComponent
+
+        VersionPage {
             appContext: root.appContext
         }
     }

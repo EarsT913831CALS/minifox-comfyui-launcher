@@ -14,7 +14,7 @@ class ConfigurationManager final : public QObject
     Q_PROPERTY(QString comfyRoot READ comfyRoot WRITE setComfyRoot NOTIFY currentProfileChanged)
     Q_PROPERTY(QString customArguments READ customArguments WRITE setCustomArguments NOTIFY currentProfileChanged)
     Q_PROPERTY(QVariantList environmentEntries READ environmentEntries NOTIFY currentProfileChanged)
-    Q_PROPERTY(QVariantList categories READ categories NOTIFY catalogChanged)
+    Q_PROPERTY(QVariantList categories READ categories NOTIFY parameterRevisionChanged)
     Q_PROPERTY(int parameterRevision READ parameterRevision NOTIFY parameterRevisionChanged)
     Q_PROPERTY(bool valid READ isValid NOTIFY validationChanged)
     Q_PROPERTY(QStringList validationErrors READ validationErrors NOTIFY validationChanged)
@@ -62,7 +62,6 @@ signals:
     void profilesChanged();
     void currentProfileChanged();
     void parameterRevisionChanged();
-    void catalogChanged();
     void validationChanged();
     void lastErrorChanged();
 
