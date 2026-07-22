@@ -1,4 +1,6 @@
 qt_add_library(minifox_runtime_backend STATIC
+    CommandPromptBuilder.cpp
+    CommandPromptBuilder.h
     LaunchCommandBuilder.cpp
     LaunchCommandBuilder.h
     LogModel.cpp

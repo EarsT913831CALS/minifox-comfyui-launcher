@@ -1,7 +1,11 @@
 qt_add_executable(minifox_launcher WIN32
     ../../../backend/AppContext.cpp
     ../../../backend/AppContext.h
+    ../../../backend/HardwareManager.cpp
+    ../../../backend/HardwareManager.h
     ../../../backend/main.cpp
+    ../../../backend/VersionManager.cpp
+    ../../../backend/VersionManager.h
 )
 
 qt_add_qml_module(minifox_launcher
@@ -16,6 +20,7 @@ qt_add_qml_module(minifox_launcher
         AppShell.qml
         DashboardPage.qml
         NavigationRail.qml
+        VersionPage.qml
 )
 
 target_link_libraries(minifox_launcher
@@ -23,6 +28,7 @@ target_link_libraries(minifox_launcher
         Qt6::Core
         Qt6::Gui
         Qt6::Qml
+        Qt6::Network
         Qt6::Quick
         Qt6::QuickControls2
         minifox_application_settings_backend

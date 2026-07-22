@@ -1,6 +1,7 @@
 #include "RuntimeManager.h"
 
 #include "ApplicationSettings.h"
+#include "CommandPromptBuilder.h"
 #include "ConfigurationManager.h"
 #include "LaunchCommandBuilder.h"
 #include "LogModel.h"
@@ -8,11 +9,77 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QNetworkProxy>
+#include <QRegularExpression>
+#include <QStandardPaths>
 #include <QUrlQuery>
+
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
+
+namespace {
+
+bool startVisibleCommandPrompt(const CommandPromptBuilder::Result &command,
+                               QString *errorMessage)
+{
+    QProcess prompt;
+    prompt.setWorkingDirectory(command.workingDirectory);
+    prompt.setProcessEnvironment(command.environment);
+    prompt.setProgram(command.program);
+    prompt.setNativeArguments(command.nativeArguments);
+#ifdef Q_OS_WIN
+    prompt.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments) {
+        arguments->flags &= ~CREATE_NO_WINDOW;
+        arguments->flags |= CREATE_NEW_CONSOLE;
+    });
+#endif
+    if (prompt.startDetached()) {
+        return true;
+    }
+    if (errorMessage) {
+        *errorMessage = prompt.errorString();
+    }
+    return false;
+}
+
+void forceKillProcessTree(qint64 processId)
+{
+#ifdef Q_OS_WIN
+    if (processId <= 0) {
+        return;
+    }
+
+    const QString systemRoot = qEnvironmentVariable("SystemRoot", QStringLiteral("C:/Windows"));
+    QString taskkill = QDir(systemRoot).filePath(QStringLiteral("System32/taskkill.exe"));
+    if (!QFileInfo::exists(taskkill)) {
+        taskkill = QStandardPaths::findExecutable(QStringLiteral("taskkill.exe"));
+    }
+    if (taskkill.isEmpty()) {
+        return;
+    }
+
+    QProcess killer;
+    killer.setProgram(taskkill);
+    killer.setArguments({QStringLiteral("/PID"), QString::number(processId),
+                         QStringLiteral("/T"), QStringLiteral("/F")});
+    killer.start();
+    if (!killer.waitForFinished(5000)) {
+        killer.kill();
+        killer.waitForFinished(1000);
+    }
+#else
+    Q_UNUSED(processId)
+#endif
+}
+
+} // namespace
 
 RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
                                ApplicationSettings *settings,
@@ -25,6 +92,7 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
 {
     m_network->setProxy(QNetworkProxy::NoProxy);
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
+    m_dependencyCheck.setProcessChannelMode(QProcess::SeparateChannels);
 
     connect(&m_process, &QProcess::readyReadStandardOutput, this, [this] {
         m_logModel->appendStandardOutput(m_process.readAllStandardOutput());
@@ -35,6 +103,18 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
     connect(&m_process, &QProcess::started, this, &RuntimeManager::handleProcessStarted);
     connect(&m_process, &QProcess::finished, this, &RuntimeManager::handleProcessFinished);
     connect(&m_process, &QProcess::errorOccurred, this, &RuntimeManager::handleProcessError);
+    connect(&m_dependencyCheck, &QProcess::started,
+            this, &RuntimeManager::handleDependencyCheckStarted);
+    connect(&m_dependencyCheck, &QProcess::finished,
+            this, &RuntimeManager::handleDependencyCheckFinished);
+    connect(&m_dependencyCheck, &QProcess::errorOccurred, this,
+            [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart && !m_stopRequested) {
+            setLastError(tr("无法启动 Python 依赖检查：%1").arg(m_dependencyCheck.errorString()));
+            setStatus(Failed);
+            m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        }
+    });
 
     m_readinessTimer.setInterval(800);
     connect(&m_readinessTimer, &QTimer::timeout, this, &RuntimeManager::checkReadiness);
@@ -58,12 +138,7 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
 
 RuntimeManager::~RuntimeManager()
 {
-    cancelReadinessReply();
-    if (m_process.state() != QProcess::NotRunning) {
-        m_processJob.terminate();
-        m_process.kill();
-        m_process.waitForFinished(2000);
-    }
+    shutdown();
 }
 
 RuntimeManager::Status RuntimeManager::status() const { return m_status; }
@@ -82,12 +157,23 @@ QString RuntimeManager::statusText() const
 
 bool RuntimeManager::canStart() const
 {
-    return (m_status == Stopped || m_status == Failed) && m_process.state() == QProcess::NotRunning;
+    return (m_status == Stopped || m_status == Failed)
+        && m_process.state() == QProcess::NotRunning
+        && m_dependencyCheck.state() == QProcess::NotRunning
+        && !m_processJob.isAttached();
 }
 
 bool RuntimeManager::canStop() const
 {
-    return m_process.state() != QProcess::NotRunning && m_status != Stopping;
+    return active() && m_status != Stopping;
+}
+
+bool RuntimeManager::active() const
+{
+    return m_status == Starting || m_status == Running || m_status == Stopping
+        || m_process.state() != QProcess::NotRunning
+        || m_dependencyCheck.state() != QProcess::NotRunning
+        || m_processJob.isAttached();
 }
 
 qint64 RuntimeManager::processId() const { return m_processId; }
@@ -116,26 +202,12 @@ void RuntimeManager::start()
         return;
     }
 
-    LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
-    m_settings->applyToProcessEnvironment(command.environment);
-
     m_logModel->clear();
     m_logModel->appendSystemMessage(tr("正在启动配置“%1”…").arg(m_configuration->currentProfileName()),
                                     QStringLiteral("#0067c0"));
-    m_logModel->appendSystemMessage(command.preview);
-    if (m_settings->proxyMode() == QStringLiteral("manual")) {
-        const QString proxyUrl = m_settings->proxyUrl();
-        m_logModel->appendSystemMessage(proxyUrl.isEmpty()
-                                            ? tr("手动代理未启用：代理主机为空或无效。")
-                                            : tr("已为 ComfyUI 子进程设置代理：%1").arg(proxyUrl),
-                                        proxyUrl.isEmpty() ? QStringLiteral("#9d5d00")
-                                                           : QStringLiteral("#0067c0"));
-    } else if (m_settings->proxyMode() == QStringLiteral("none")) {
-        m_logModel->appendSystemMessage(tr("已移除 ComfyUI 子进程的代理环境变量。"));
-    }
     m_processJob.reset();
     m_stopRequested = false;
+    m_startupAborted = false;
     m_lastExitCode = 0;
     m_processId = 0;
     m_uptime = QStringLiteral("00:00:00");
@@ -143,12 +215,7 @@ void RuntimeManager::start()
     setLastError({});
     setStatus(Starting);
     emit runtimeInfoChanged();
-
-    m_process.setWorkingDirectory(command.workingDirectory);
-    m_process.setProcessEnvironment(command.environment);
-    m_process.setProgram(command.program);
-    m_process.setArguments(command.arguments);
-    m_process.start();
+    beginDependencyCheck();
 }
 
 void RuntimeManager::stop()
@@ -159,23 +226,83 @@ void RuntimeManager::stop()
     m_stopRequested = true;
     setStatus(Stopping);
     m_logModel->appendSystemMessage(tr("正在停止 ComfyUI…"), QStringLiteral("#9d5d00"));
-    m_process.terminate();
-    m_forceStopTimer.start();
+    cancelReadinessCheck();
+    m_readinessTimer.stop();
+    if (m_dependencyCheck.state() != QProcess::NotRunning) {
+        m_dependencyCheck.terminate();
+    }
+    if (m_process.state() != QProcess::NotRunning) {
+        m_process.terminate();
+    }
+    if (m_dependencyCheck.state() != QProcess::NotRunning
+        || m_process.state() != QProcess::NotRunning
+        || m_processJob.isAttached()) {
+        m_forceStopTimer.start();
+    } else {
+        setStatus(Stopped);
+    }
 }
 
 void RuntimeManager::forceStop()
 {
-    if (m_process.state() == QProcess::NotRunning) {
+    if (!active()) {
         return;
     }
     m_stopRequested = true;
     m_logModel->appendSystemMessage(tr("正在强制终止 ComfyUI 进程树…"), QStringLiteral("#c42b1c"));
-    if (!m_processJob.terminate()) {
-        m_logModel->appendSystemMessage(
-            tr("无法完整终止 ComfyUI 进程树，正在终止主进程。"),
-            QStringLiteral("#c42b1c"));
+    terminateTrackedProcessTree();
+    if (m_dependencyCheck.state() == QProcess::NotRunning
+        && m_process.state() == QProcess::NotRunning) {
+        setStatus(Stopped);
+        emit runtimeInfoChanged();
     }
-    m_process.kill();
+}
+
+void RuntimeManager::shutdown()
+{
+    m_stopRequested = true;
+    m_forceStopTimer.stop();
+    m_readinessTimer.stop();
+    m_uptimeTimer.stop();
+    cancelReadinessCheck();
+    terminateTrackedProcessTree();
+    m_processId = 0;
+    m_elapsed.invalidate();
+    setServiceReady(false);
+    setStatus(Stopped);
+    emit runtimeInfoChanged();
+}
+
+bool RuntimeManager::openCommandPrompt()
+{
+    LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    if (command.workingDirectory.isEmpty() || !QDir(command.workingDirectory).exists()) {
+        setLastError(tr("ComfyUI 工作目录不存在。"));
+        return false;
+    }
+
+    const QFileInfo python(command.program);
+    if (!python.isFile()) {
+        setLastError(tr("Python 可执行文件不存在：%1")
+                         .arg(QDir::toNativeSeparators(command.program)));
+        return false;
+    }
+
+    m_settings->applyToProcessEnvironment(command.environment);
+    const CommandPromptBuilder::Result promptCommand = CommandPromptBuilder::build(
+        python.absoluteFilePath(), command.workingDirectory, command.environment);
+
+    QString launchError;
+    const bool opened = startVisibleCommandPrompt(promptCommand, &launchError);
+    if (!opened) {
+        setLastError(launchError.isEmpty()
+                         ? tr("无法打开启动命令提示符。")
+                         : tr("无法打开启动命令提示符：%1").arg(launchError));
+    } else {
+        setLastError({});
+    }
+    return opened;
 }
 
 bool RuntimeManager::openWebUi()
@@ -209,6 +336,278 @@ bool RuntimeManager::exportLog(const QUrl &fileUrl)
     m_logModel->appendSystemMessage(tr("日志已导出到 %1").arg(QDir::toNativeSeparators(path)),
                                     QStringLiteral("#0f7b0f"));
     return true;
+}
+
+void RuntimeManager::beginDependencyCheck()
+{
+    const LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    const QString requirementsPath =
+        QDir(command.workingDirectory).filePath(QStringLiteral("requirements.txt"));
+    if (!QFileInfo::exists(requirementsPath)) {
+        setLastError(tr("找不到 ComfyUI 依赖清单：%1")
+                         .arg(QDir::toNativeSeparators(requirementsPath)));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return;
+    }
+
+    // This check only inspects the selected interpreter's installed metadata.  It never
+    // contacts an index and never installs or changes a package.
+    static const QString checker = QStringLiteral(R"PY(
+import importlib.metadata as metadata
+import json
+import os
+import re
+import sys
+
+try:
+    from packaging.requirements import Requirement
+except Exception:
+    try:
+        from pip._vendor.packaging.requirements import Requirement
+    except Exception as exc:
+        print(json.dumps({"ok": False, "fatal": "Python 中缺少 pip/packaging，无法解析依赖清单：%s" % exc}, ensure_ascii=False))
+        raise SystemExit(3)
+
+seen_files = set()
+raw_requirements = []
+parse_errors = []
+
+def read_file(path):
+    path = os.path.abspath(path)
+    if path in seen_files:
+        return
+    seen_files.add(path)
+    try:
+        with open(path, "r", encoding="utf-8-sig") as stream:
+            physical = stream.readlines()
+    except Exception as exc:
+        parse_errors.append("无法读取 %s：%s" % (path, exc))
+        return
+
+    logical = []
+    pending = ""
+    for raw in physical:
+        line = raw.rstrip("\r\n")
+        if line.rstrip().endswith("\\"):
+            pending += line.rstrip()[:-1] + " "
+            continue
+        logical.append(pending + line)
+        pending = ""
+    if pending:
+        logical.append(pending)
+
+    base = os.path.dirname(path)
+    for line in logical:
+        line = re.split(r"\s+#", line, maxsplit=1)[0].strip()
+        if not line or line.startswith("#"):
+            continue
+        include = re.match(r"^(?:-r|--requirement)\s+(.+)$", line)
+        constraint = re.match(r"^(?:-c|--constraint)\s+(.+)$", line)
+        if include or constraint:
+            child = (include or constraint).group(1).strip().strip("\"'")
+            read_file(os.path.join(base, child))
+            continue
+        if line.startswith("--hash=") or line.startswith("--"):
+            continue
+        if line.startswith("-e ") or line.startswith("--editable "):
+            egg = re.search(r"[#&]egg=([^&]+)", line)
+            if egg:
+                raw_requirements.append(egg.group(1))
+            else:
+                parse_errors.append("无法识别可编辑依赖：%s" % line)
+            continue
+        raw_requirements.append(line)
+
+read_file(sys.argv[1])
+issues = []
+checked = 0
+for raw in raw_requirements:
+    try:
+        requirement = Requirement(raw)
+    except Exception as exc:
+        parse_errors.append("无法解析依赖“%s”：%s" % (raw, exc))
+        continue
+    try:
+        if requirement.marker is not None and not requirement.marker.evaluate():
+            continue
+    except Exception as exc:
+        parse_errors.append("无法计算依赖条件“%s”：%s" % (raw, exc))
+        continue
+    checked += 1
+    try:
+        installed = metadata.version(requirement.name)
+    except metadata.PackageNotFoundError:
+        issues.append("缺少依赖：%s" % requirement.name)
+        continue
+    except Exception as exc:
+        issues.append("无法读取 %s 的版本：%s" % (requirement.name, exc))
+        continue
+    if requirement.specifier and not requirement.specifier.contains(installed, prereleases=True):
+        issues.append("版本不符：%s 已安装 %s，需要 %s" %
+                      (requirement.name, installed, requirement.specifier))
+
+result = {
+    "ok": not issues and not parse_errors,
+    "checked": checked,
+    "issues": issues,
+    "parseErrors": parse_errors,
+}
+print(json.dumps(result, ensure_ascii=False))
+raise SystemExit(0 if result["ok"] else 2)
+)PY");
+
+    QProcessEnvironment environment = command.environment;
+    m_settings->applyToProcessEnvironment(environment);
+    m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
+    m_dependencyCheck.setProcessEnvironment(environment);
+    m_dependencyCheck.setProgram(command.program);
+    m_dependencyCheck.setArguments({QStringLiteral("-c"), checker, requirementsPath});
+    m_logModel->appendSystemMessage(
+        tr("正在使用所选 Python 离线检查 requirements.txt…"),
+        QStringLiteral("#0067c0"));
+    m_dependencyCheck.start();
+}
+
+void RuntimeManager::handleDependencyCheckStarted()
+{
+    const qint64 dependencyPid = m_dependencyCheck.processId();
+    if (m_processJob.attach(dependencyPid)) {
+        return;
+    }
+
+    m_startupAborted = true;
+    setLastError(tr("无法将依赖检查进程加入安全作业，已中止启动。"));
+    setStatus(Failed);
+    m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+    forceKillProcessTree(dependencyPid);
+    m_dependencyCheck.kill();
+}
+
+void RuntimeManager::handleDependencyCheckFinished(int exitCode,
+                                                   QProcess::ExitStatus exitStatus)
+{
+    const QByteArray standardOutput = m_dependencyCheck.readAllStandardOutput();
+    const QByteArray standardError = m_dependencyCheck.readAllStandardError();
+    m_processJob.reset();
+
+    if (m_stopRequested) {
+        if (m_process.state() == QProcess::NotRunning) {
+            m_forceStopTimer.stop();
+            setStatus(Stopped);
+            emit runtimeInfoChanged();
+        }
+        return;
+    }
+    if (m_startupAborted) {
+        return;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(standardOutput.trimmed(), &parseError);
+    const QJsonObject result = document.isObject() ? document.object() : QJsonObject{};
+    if (exitStatus != QProcess::NormalExit || parseError.error != QJsonParseError::NoError
+        || result.isEmpty()) {
+        QString detail = QString::fromUtf8(standardError).trimmed();
+        if (detail.isEmpty()) {
+            detail = QString::fromUtf8(standardOutput).trimmed();
+        }
+        if (detail.isEmpty()) {
+            detail = tr("检查进程退出代码 %1。").arg(exitCode);
+        }
+        setLastError(tr("依赖检查未能完成：%1").arg(detail));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return;
+    }
+
+    QStringList issues;
+    const QString fatal = result.value(QStringLiteral("fatal")).toString();
+    if (!fatal.isEmpty()) {
+        issues.append(fatal);
+    }
+    for (const QJsonValue &value : result.value(QStringLiteral("issues")).toArray()) {
+        issues.append(value.toString());
+    }
+    for (const QJsonValue &value : result.value(QStringLiteral("parseErrors")).toArray()) {
+        issues.append(value.toString());
+    }
+    if (!result.value(QStringLiteral("ok")).toBool() || exitCode != 0 || !issues.isEmpty()) {
+        setLastError(tr("依赖检查失败，ComfyUI 未启动。"));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        for (const QString &issue : issues) {
+            m_logModel->appendSystemMessage(issue, QStringLiteral("#c42b1c"));
+        }
+        const QString diagnostic = QString::fromUtf8(standardError).trimmed();
+        if (!diagnostic.isEmpty()) {
+            m_logModel->appendSystemMessage(diagnostic, QStringLiteral("#9d5d00"));
+        }
+        return;
+    }
+
+    m_logModel->appendSystemMessage(
+        tr("依赖检查通过（已检查 %1 项），准备启动 ComfyUI。")
+            .arg(result.value(QStringLiteral("checked")).toInt()),
+        QStringLiteral("#0f7b0f"));
+    launchConfiguredProcess();
+}
+
+void RuntimeManager::launchConfiguredProcess()
+{
+    if (m_stopRequested || m_startupAborted) {
+        return;
+    }
+
+    LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    m_settings->applyToProcessEnvironment(command.environment);
+    m_logModel->appendSystemMessage(command.preview);
+    if (m_settings->proxyMode() == QStringLiteral("manual")) {
+        const QString proxyUrl = m_settings->proxyUrl();
+        m_logModel->appendSystemMessage(proxyUrl.isEmpty()
+                                            ? tr("手动代理未启用：代理主机为空或无效。")
+                                            : tr("已为 ComfyUI 子进程设置代理：%1").arg(proxyUrl),
+                                        proxyUrl.isEmpty() ? QStringLiteral("#9d5d00")
+                                                           : QStringLiteral("#0067c0"));
+    } else if (m_settings->proxyMode() == QStringLiteral("none")) {
+        m_logModel->appendSystemMessage(tr("已移除 ComfyUI 子进程的代理环境变量。"));
+    }
+
+    m_process.setWorkingDirectory(command.workingDirectory);
+    m_process.setProcessEnvironment(command.environment);
+    m_process.setProgram(command.program);
+    m_process.setArguments(command.arguments);
+    m_process.start();
+}
+
+void RuntimeManager::terminateTrackedProcessTree()
+{
+    const qint64 dependencyPid = m_dependencyCheck.state() == QProcess::NotRunning
+        ? 0 : m_dependencyCheck.processId();
+    const qint64 runtimePid = m_process.state() == QProcess::NotRunning
+        ? 0 : (m_processId > 0 ? m_processId : m_process.processId());
+
+    // taskkill is the fallback for the only unsafe case: Windows refused the Job
+    // assignment.  When assignment succeeded, closing/terminating the Job also makes
+    // abnormal launcher termination release every descendant and the listening port.
+    if (!m_processJob.isAttached()) {
+        forceKillProcessTree(dependencyPid);
+        forceKillProcessTree(runtimePid);
+    } else {
+        m_processJob.terminate();
+    }
+
+    if (m_dependencyCheck.state() != QProcess::NotRunning) {
+        m_dependencyCheck.kill();
+        m_dependencyCheck.waitForFinished(2000);
+    }
+    if (m_process.state() != QProcess::NotRunning) {
+        m_process.kill();
+        m_process.waitForFinished(3000);
+    }
+    m_processJob.reset();
 }
 
 void RuntimeManager::setStatus(Status status)
@@ -305,13 +704,14 @@ void RuntimeManager::checkReadiness()
     connect(m_readinessReply, &QNetworkReply::finished, this, &RuntimeManager::handleReadinessReply);
 }
 
-void RuntimeManager::cancelReadinessReply()
+void RuntimeManager::cancelReadinessCheck()
 {
     QNetworkReply *reply = m_readinessReply.data();
+    m_readinessReply = nullptr;
     if (!reply) {
         return;
     }
-    m_readinessReply = nullptr;
+
     disconnect(reply, nullptr, this, nullptr);
     reply->abort();
     reply->deleteLater();
@@ -320,10 +720,10 @@ void RuntimeManager::cancelReadinessReply()
 void RuntimeManager::handleReadinessReply()
 {
     QNetworkReply *reply = m_readinessReply.data();
+    m_readinessReply = nullptr;
     if (!reply) {
         return;
     }
-    m_readinessReply = nullptr;
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const bool ready = reply->error() == QNetworkReply::NoError
         && statusCode >= 200 && statusCode < 500;
@@ -340,14 +740,19 @@ void RuntimeManager::handleReadinessReply()
 void RuntimeManager::handleProcessStarted()
 {
     m_processId = m_process.processId();
+    if (!m_processJob.attach(m_processId)) {
+        m_startupAborted = true;
+        setLastError(tr("无法将 ComfyUI 加入安全作业，已中止启动以避免残留 Python 进程。"));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        emit runtimeInfoChanged();
+        terminateTrackedProcessTree();
+        return;
+    }
+
     m_elapsed.start();
     m_uptimeTimer.start();
     m_readinessTimer.start();
-    if (!m_processJob.attach(m_processId)) {
-        m_logModel->appendSystemMessage(
-            tr("无法关联 Windows Job Object；强制停止时将使用进程树终止回退。"),
-            QStringLiteral("#9d5d00"));
-    }
     m_logModel->appendSystemMessage(tr("进程已启动，PID %1。").arg(m_processId),
                                     QStringLiteral("#0067c0"));
     emit runtimeInfoChanged();
@@ -358,7 +763,7 @@ void RuntimeManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
 {
     m_forceStopTimer.stop();
     m_readinessTimer.stop();
-    cancelReadinessReply();
+    cancelReadinessCheck();
     m_logModel->flush();
     m_lastExitCode = exitCode;
     m_processId = 0;
@@ -366,6 +771,12 @@ void RuntimeManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     m_elapsed.invalidate();
     setServiceReady(false);
     m_processJob.reset();
+
+    if (m_startupAborted) {
+        setStatus(Failed);
+        emit runtimeInfoChanged();
+        return;
+    }
 
     const bool successful = exitStatus == QProcess::NormalExit && exitCode == 0;
     if (m_stopRequested || successful) {

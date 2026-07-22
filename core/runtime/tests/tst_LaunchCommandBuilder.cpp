@@ -1,7 +1,9 @@
 #include "LaunchCommandBuilder.h"
 #include "ApplicationSettings.h"
+#include "CommandPromptBuilder.h"
 #include "ConfigurationManager.h"
 #include "LogModel.h"
+#include "RuntimeManager.h"
 
 #include <QFontDatabase>
 #include <QFile>
@@ -9,44 +11,21 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocale>
 #include <QPalette>
+#include <QHostAddress>
+#include <QRegularExpression>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickStyle>
 #include <QScopedPointer>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QTcpServer>
 #include <QTest>
-#include <QTranslator>
 
 #include <algorithm>
-
-class CatalogTranslator final : public QTranslator
-{
-public:
-    QString translate(
-        const char *context,
-        const char *sourceText,
-        const char *disambiguation = nullptr,
-        int n = -1) const override
-    {
-        Q_UNUSED(disambiguation)
-        Q_UNUSED(n)
-        if (qstrcmp(context, "LaunchParameterCatalog") != 0) {
-            return {};
-        }
-        if (qstrcmp(sourceText, "常规") == 0) {
-            return QStringLiteral("Translated General");
-        }
-        if (qstrcmp(sourceText, "浏览器启动策略") == 0) {
-            return QStringLiteral("Translated Browser Policy");
-        }
-        if (qstrcmp(sourceText, "默认") == 0) {
-            return QStringLiteral("Translated Default");
-        }
-        return {};
-    }
-};
 
 class LaunchCommandBuilderTest final : public QObject
 {
@@ -60,6 +39,7 @@ public:
 
 private slots:
     void defaultsStayImplicit();
+    void commandPromptActivatesSelectedEnvironment();
     void explicitModesAndCustomArguments();
     void environmentIsAppliedAndSecretsAreMasked();
     void proxySettingsAreAppliedToChildEnvironment();
@@ -68,10 +48,14 @@ private slots:
     void directControlPaletteBindingsOverrideStyleDefaults();
     void applicationSettingsPersistAcrossInstances();
     void environmentEntriesAreValidatedAndLegacyDefaultsMigrated();
-    void launchParameterCatalogRetranslates();
+    void bundledPythonRepairsSystemPythonProfile();
+    void runtimeSurvivesFastChildFailure();
+    void runtimeBlocksMissingDependencies();
+    void runtimeShutdownReleasesChildPort();
     void profilesPersistWithoutLeavingTheTestDirectory();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
+    void englishCatalogContainsNoChineseLabels();
 };
 
 void LaunchCommandBuilderTest::defaultsStayImplicit()
@@ -85,8 +69,81 @@ void LaunchCommandBuilderTest::defaultsStayImplicit()
 
     const auto result = LaunchCommandBuilder::build(profile);
     QCOMPARE(result.arguments, QStringList{QStringLiteral("main.py")});
+    QCOMPARE(result.environment.value(QStringLiteral("PYTHONUTF8")), QStringLiteral("1"));
+    QCOMPARE(result.environment.value(QStringLiteral("PYTHONIOENCODING")), QStringLiteral("utf-8"));
+    QCOMPARE(result.environment.value(QStringLiteral("PYTHONUNBUFFERED")), QStringLiteral("1"));
     QVERIFY(!result.preview.contains(QStringLiteral("--port")));
     QVERIFY(!result.preview.contains(QStringLiteral("--listen")));
+}
+
+void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    QDir root(temporaryDirectory.path());
+    QVERIFY(root.mkpath(QStringLiteral("environment/Scripts")));
+    QVERIFY(root.mkpath(QStringLiteral("ComfyUI")));
+
+    const QString pythonPath = root.filePath(QStringLiteral("environment/Scripts/python.exe"));
+    QFile python(pythonPath);
+    QVERIFY(python.open(QIODevice::WriteOnly));
+    python.close();
+
+    const QString activationPath = root.filePath(QStringLiteral("environment/Scripts/activate.bat"));
+    QFile activation(activationPath);
+    QVERIFY(activation.open(QIODevice::WriteOnly));
+    activation.write("@set MINIFOX_TEST_ACTIVATED=1\r\n");
+    activation.close();
+
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("PYTHONHOME"), QStringLiteral("C:/WrongPython"));
+    const CommandPromptBuilder::Result result = CommandPromptBuilder::build(
+        pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
+
+    QCOMPARE(result.program, QStringLiteral("cmd.exe"));
+    QVERIFY(result.nativeArguments.startsWith(QStringLiteral("/D /K ")));
+    QVERIFY(result.nativeArguments.contains(QStringLiteral("call")));
+    QVERIFY(result.nativeArguments.contains(QDir::toNativeSeparators(activationPath)));
+    QCOMPARE(QDir::cleanPath(result.environmentRoot),
+             QDir::cleanPath(root.filePath(QStringLiteral("environment"))));
+    QCOMPARE(QDir::cleanPath(result.environment.value(QStringLiteral("VIRTUAL_ENV"))),
+             QDir::cleanPath(root.filePath(QStringLiteral("environment"))));
+    QCOMPARE(QDir::cleanPath(result.environment.value(QStringLiteral("MINIFOX_PYTHON"))),
+             QDir::cleanPath(pythonPath));
+    QVERIFY(!result.environment.contains(QStringLiteral("PYTHONHOME")));
+    QCOMPARE(result.environment.value(QStringLiteral("PATH")).split(QDir::listSeparator()).first(),
+             QDir::toNativeSeparators(QFileInfo(pythonPath).absolutePath()));
+
+    QProcess activationProbe;
+    QString probeArguments = result.nativeArguments;
+    probeArguments.replace(QStringLiteral("/D /K "), QStringLiteral("/D /V:ON /C "));
+    probeArguments.append(QStringLiteral(" && echo !MINIFOX_TEST_ACTIVATED!"));
+    activationProbe.setWorkingDirectory(result.workingDirectory);
+    activationProbe.setProcessEnvironment(result.environment);
+    activationProbe.setProcessChannelMode(QProcess::MergedChannels);
+    activationProbe.setProgram(result.program);
+    activationProbe.setNativeArguments(probeArguments);
+    activationProbe.start();
+    QVERIFY(activationProbe.waitForFinished(5000));
+    const QByteArray activationOutput = activationProbe.readAll();
+    QCOMPARE(activationProbe.exitStatus(), QProcess::NormalExit);
+    QVERIFY2(activationProbe.exitCode() == 0, activationOutput.constData());
+    QVERIFY2(activationOutput.contains("1"), activationOutput.constData());
+
+    QVERIFY(root.mkpath(QStringLiteral("portable-python")));
+    const QString portablePythonPath =
+        root.filePath(QStringLiteral("portable-python/python.exe"));
+    QFile portablePython(portablePythonPath);
+    QVERIFY(portablePython.open(QIODevice::WriteOnly));
+    portablePython.close();
+
+    const CommandPromptBuilder::Result portableResult = CommandPromptBuilder::build(
+        portablePythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
+    QVERIFY(portableResult.activationScript.isEmpty());
+    QVERIFY(portableResult.nativeArguments.contains(QStringLiteral("prompt (ComfyUI)")));
+    QCOMPARE(QDir::cleanPath(portableResult.environment.value(QStringLiteral("VIRTUAL_ENV"))),
+             QDir::cleanPath(root.filePath(QStringLiteral("portable-python"))));
 }
 
 void LaunchCommandBuilderTest::explicitModesAndCustomArguments()
@@ -144,30 +201,6 @@ void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
     QVERIFY(result.preview.contains(QStringLiteral("set \"CUSTOM_ENV=value with spaces\"")));
     QVERIFY(result.preview.contains(QStringLiteral("SERVICE_API_KEY=••••••••")));
     QVERIFY(!result.preview.contains(QStringLiteral("top-secret")));
-}
-
-void LaunchCommandBuilderTest::launchParameterCatalogRetranslates()
-{
-    QTemporaryDir temporaryDirectory;
-    QVERIFY(temporaryDirectory.isValid());
-    ConfigurationManager manager(temporaryDirectory.filePath(QStringLiteral("profiles.json")));
-
-    QSignalSpy catalogSpy(&manager, &ConfigurationManager::catalogChanged);
-    CatalogTranslator translator;
-    QVERIFY(QCoreApplication::installTranslator(&translator));
-    manager.retranslate();
-
-    QCOMPARE(catalogSpy.count(), 1);
-    QCOMPARE(manager.categories().constFirst().toMap().value(QStringLiteral("title")).toString(),
-             QStringLiteral("Translated General"));
-    const QVariantMap browser = manager.parametersForCategory(QStringLiteral("basic")).constFirst().toMap();
-    QCOMPARE(browser.value(QStringLiteral("title")).toString(),
-             QStringLiteral("Translated Browser Policy"));
-    QCOMPARE(browser.value(QStringLiteral("options")).toList().constFirst().toMap()
-                 .value(QStringLiteral("label")).toString(),
-             QStringLiteral("Translated Default"));
-
-    QVERIFY(QCoreApplication::removeTranslator(&translator));
 }
 
 void LaunchCommandBuilderTest::proxySettingsAreAppliedToChildEnvironment()
@@ -545,6 +578,182 @@ void LaunchCommandBuilderTest::environmentEntriesAreValidatedAndLegacyDefaultsMi
     QVERIFY(manager.environmentEntries().at(invalidIndex).toMap().value(QStringLiteral("error")).toString().isEmpty());
 }
 
+void LaunchCommandBuilderTest::bundledPythonRepairsSystemPythonProfile()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    QDir packageDirectory(temporaryDirectory.path());
+    QVERIFY(packageDirectory.mkpath(QStringLiteral("ComfyUI")));
+    QVERIFY(packageDirectory.mkpath(QStringLiteral("python")));
+    QFile mainFile(packageDirectory.filePath(QStringLiteral("ComfyUI/main.py")));
+    QVERIFY(mainFile.open(QIODevice::WriteOnly));
+    mainFile.close();
+    QFile bundledPython(packageDirectory.filePath(QStringLiteral("python/python.exe")));
+    QVERIFY(bundledPython.open(QIODevice::WriteOnly));
+    bundledPython.close();
+
+    const QString systemPython = QStandardPaths::findExecutable(QStringLiteral("python.exe"));
+    if (systemPython.isEmpty()) {
+        QSKIP("python.exe is not available on PATH");
+    }
+
+    const QString storagePath = temporaryDirectory.filePath(QStringLiteral("profiles.json"));
+    const QJsonObject profile {
+        {QStringLiteral("id"), QStringLiteral("bundled-profile")},
+        {QStringLiteral("name"), QStringLiteral("Bundled")},
+        {QStringLiteral("pythonPath"), systemPython},
+        {QStringLiteral("comfyRoot"), packageDirectory.filePath(QStringLiteral("ComfyUI"))},
+        {QStringLiteral("parameters"), QJsonObject{}},
+        {QStringLiteral("environment"), QJsonArray{}}
+    };
+    const QJsonObject root {
+        {QStringLiteral("schemaVersion"), 2},
+        {QStringLiteral("currentProfileId"), QStringLiteral("bundled-profile")},
+        {QStringLiteral("profiles"), QJsonArray{profile}}
+    };
+    QFile sourceFile(storagePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    sourceFile.write(QJsonDocument(root).toJson());
+    sourceFile.close();
+
+    ConfigurationManager manager(storagePath);
+    QCOMPARE(QDir::cleanPath(manager.pythonPath()),
+             QDir::cleanPath(bundledPython.fileName()));
+}
+
+void LaunchCommandBuilderTest::runtimeSurvivesFastChildFailure()
+{
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python.exe"));
+    if (python.isEmpty()) {
+        QSKIP("python.exe is not available on PATH");
+    }
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    QFile mainFile(temporaryDirectory.filePath(QStringLiteral("main.py")));
+    QVERIFY(mainFile.open(QIODevice::WriteOnly));
+    mainFile.write("import time\ntime.sleep(0.1)\nraise SystemExit(7)\n");
+    mainFile.close();
+    QFile requirementsFile(temporaryDirectory.filePath(QStringLiteral("requirements.txt")));
+    QVERIFY(requirementsFile.open(QIODevice::WriteOnly));
+    requirementsFile.close();
+
+    ConfigurationManager configuration(
+        temporaryDirectory.filePath(QStringLiteral("profiles.json")));
+    configuration.setComfyRoot(temporaryDirectory.path());
+    configuration.setPythonPath(python);
+    configuration.setParameterValue(QStringLiteral("listen"), QStringLiteral("10.255.255.1"));
+    ApplicationSettings settings(
+        temporaryDirectory.filePath(QStringLiteral("settings.json")));
+    RuntimeManager runtime(&configuration, &settings);
+
+    runtime.start();
+    QTRY_COMPARE_WITH_TIMEOUT(runtime.status(), RuntimeManager::Failed, 3000);
+    QCOMPARE(runtime.lastExitCode(), 7);
+}
+
+void LaunchCommandBuilderTest::runtimeBlocksMissingDependencies()
+{
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python.exe"));
+    if (python.isEmpty()) {
+        QSKIP("python.exe is not available on PATH");
+    }
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString launchMarker = temporaryDirectory.filePath(QStringLiteral("main-started.txt"));
+    QFile mainFile(temporaryDirectory.filePath(QStringLiteral("main.py")));
+    QVERIFY(mainFile.open(QIODevice::WriteOnly));
+    mainFile.write(QStringLiteral("from pathlib import Path\nPath(r'%1').write_text('started')\n")
+                       .arg(QDir::toNativeSeparators(launchMarker)).toUtf8());
+    mainFile.close();
+    QFile requirementsFile(temporaryDirectory.filePath(QStringLiteral("requirements.txt")));
+    QVERIFY(requirementsFile.open(QIODevice::WriteOnly));
+    requirementsFile.write("minifox-definitely-missing-dependency-xyz==1.0\n");
+    requirementsFile.close();
+
+    ConfigurationManager configuration(
+        temporaryDirectory.filePath(QStringLiteral("profiles.json")));
+    configuration.setComfyRoot(temporaryDirectory.path());
+    configuration.setPythonPath(python);
+    ApplicationSettings settings(
+        temporaryDirectory.filePath(QStringLiteral("settings.json")));
+    RuntimeManager runtime(&configuration, &settings);
+
+    runtime.start();
+    QTRY_COMPARE_WITH_TIMEOUT(runtime.status(), RuntimeManager::Failed, 5000);
+    QVERIFY(!QFileInfo::exists(launchMarker));
+    QVERIFY(!runtime.lastError().isEmpty());
+}
+
+void LaunchCommandBuilderTest::runtimeShutdownReleasesChildPort()
+{
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python.exe"));
+    if (python.isEmpty()) {
+        QSKIP("python.exe is not available on PATH");
+    }
+
+    QTcpServer portProbe;
+    QVERIFY(portProbe.listen(QHostAddress::LocalHost, 0));
+    const quint16 port = portProbe.serverPort();
+    portProbe.close();
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString readyMarker = QDir::fromNativeSeparators(
+        temporaryDirectory.filePath(QStringLiteral("child-ready.txt")));
+    const QString childCode = QStringLiteral(
+        "import pathlib,socket,time;"
+        "s=socket.socket();"
+        "s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
+        "s.bind(('127.0.0.1',%1));"
+        "s.listen();"
+        "pathlib.Path(r'%2').write_text('ready');"
+        "time.sleep(120)")
+                                  .arg(port)
+                                  .arg(readyMarker);
+    const QString mainCode = QStringLiteral(
+        "import subprocess,sys,time\n"
+        "subprocess.Popen([sys.executable, '-c', %1])\n"
+        "time.sleep(120)\n")
+                                 .arg(QStringLiteral("%1").arg(childCode).replace(
+                                     QLatin1Char('\\'), QStringLiteral("\\\\"))
+                                          .replace(QLatin1Char('\''), QStringLiteral("\\'"))
+                                          .prepend(QLatin1Char('\''))
+                                          .append(QLatin1Char('\'')));
+
+    QFile mainFile(temporaryDirectory.filePath(QStringLiteral("main.py")));
+    QVERIFY(mainFile.open(QIODevice::WriteOnly));
+    mainFile.write(mainCode.toUtf8());
+    mainFile.close();
+    QFile requirementsFile(temporaryDirectory.filePath(QStringLiteral("requirements.txt")));
+    QVERIFY(requirementsFile.open(QIODevice::WriteOnly));
+    requirementsFile.close();
+
+    ConfigurationManager configuration(
+        temporaryDirectory.filePath(QStringLiteral("profiles.json")));
+    configuration.setComfyRoot(temporaryDirectory.path());
+    configuration.setPythonPath(python);
+    configuration.setParameterValue(QStringLiteral("listen"), QStringLiteral("127.0.0.1"));
+    configuration.setParameterValue(QStringLiteral("port"), port);
+    ApplicationSettings settings(
+        temporaryDirectory.filePath(QStringLiteral("settings.json")));
+    RuntimeManager runtime(&configuration, &settings);
+
+    runtime.start();
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(readyMarker), 5000);
+    runtime.shutdown();
+    QCOMPARE(runtime.status(), RuntimeManager::Stopped);
+    QVERIFY(!runtime.active());
+
+    const auto portIsFree = [port] {
+        QTcpServer server;
+        return server.listen(QHostAddress::LocalHost, port);
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(portIsFree(), 5000);
+}
+
 void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()
 {
     LogModel model;
@@ -602,6 +811,36 @@ void LaunchCommandBuilderTest::carriageReturnLineEndingsRemainNormalLogLines()
     model.appendStandardOutput(QByteArrayLiteral("Memory 50% (1/2)\n"));
     QCOMPARE(model.rowCount(), 3);
     QVERIFY(!model.progressActive());
+}
+
+void LaunchCommandBuilderTest::englishCatalogContainsNoChineseLabels()
+{
+    const QLocale previousLocale;
+    QLocale::setDefault(QLocale(QStringLiteral("en_US")));
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ConfigurationManager manager(directory.filePath(QStringLiteral("profiles.json")));
+    const QRegularExpression chinese(QStringLiteral("[\\x{4e00}-\\x{9fff}]"));
+
+    const QVariantList categories = manager.categories();
+    QVERIFY(!categories.isEmpty());
+    for (const QVariant &categoryEntry : categories) {
+        const QVariantMap category = categoryEntry.toMap();
+        QVERIFY(!chinese.match(category.value(QStringLiteral("title")).toString()).hasMatch());
+        QVERIFY(!chinese.match(category.value(QStringLiteral("description")).toString()).hasMatch());
+
+        const QVariantList parameters = manager.parametersForCategory(
+            category.value(QStringLiteral("key")).toString());
+        for (const QVariant &parameterEntry : parameters) {
+            const QVariantMap parameter = parameterEntry.toMap();
+            QVERIFY(!chinese.match(parameter.value(QStringLiteral("title")).toString()).hasMatch());
+            QVERIFY(!chinese.match(parameter.value(QStringLiteral("description")).toString()).hasMatch());
+            for (const QVariant &optionEntry : parameter.value(QStringLiteral("options")).toList()) {
+                QVERIFY(!chinese.match(optionEntry.toMap().value(QStringLiteral("label")).toString()).hasMatch());
+            }
+        }
+    }
+    QLocale::setDefault(previousLocale);
 }
 
 QTEST_MAIN(LaunchCommandBuilderTest)

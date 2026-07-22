@@ -50,7 +50,14 @@ LaunchCommandBuilder::Result LaunchCommandBuilder::build(const QVariantMap &prof
     }
 
     result.environment = QProcessEnvironment::systemEnvironment();
-    QStringList environmentPreview;
+    result.environment.insert(QStringLiteral("PYTHONUTF8"), QStringLiteral("1"));
+    result.environment.insert(QStringLiteral("PYTHONIOENCODING"), QStringLiteral("utf-8"));
+    result.environment.insert(QStringLiteral("PYTHONUNBUFFERED"), QStringLiteral("1"));
+    QStringList environmentPreview {
+        QStringLiteral("set \"PYTHONUTF8=1\""),
+        QStringLiteral("set \"PYTHONIOENCODING=utf-8\""),
+        QStringLiteral("set \"PYTHONUNBUFFERED=1\"")
+    };
     static const QRegularExpression environmentName(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
     for (const auto &value : profile.value(QStringLiteral("environment")).toList()) {
         const QVariantMap entry = value.toMap();

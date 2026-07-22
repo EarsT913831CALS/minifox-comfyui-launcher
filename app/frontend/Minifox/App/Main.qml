@@ -6,6 +6,7 @@ ApplicationWindow {
     id: window
 
     required property var appContext
+    property bool allowClose: false
 
     width: 1280
     height: 800
@@ -35,6 +36,14 @@ ApplicationWindow {
     palette.placeholderText: Theme.foregroundSecondary
     palette.link: Theme.info
     palette.linkVisited: Theme.info
+
+    onClosing: close => {
+        if (appContext.runtime.active && !allowClose) {
+            close.accepted = false;
+            if (!closeConfirmation.visible)
+                closeConfirmation.open();
+        }
+    }
 
     Binding {
         target: Theme
@@ -75,5 +84,28 @@ ApplicationWindow {
     AppShell {
         anchors.fill: parent
         appContext: window.appContext
+    }
+
+    AppDialog {
+        id: closeConfirmation
+
+        title: qsTr("ComfyUI 正在运行")
+        modal: true
+        standardButtons: Dialog.Yes | Dialog.Cancel
+        acceptText: qsTr("停止并退出")
+        rejectText: qsTr("取消")
+        closePolicy: Popup.CloseOnEscape
+
+        AppLabel {
+            width: closeConfirmation.availableWidth
+            text: qsTr("关闭启动器会停止正在运行的 ComfyUI，并释放其占用的浏览器端口。确定要退出吗？")
+            wrapMode: Text.Wrap
+        }
+
+        onAccepted: {
+            window.allowClose = true;
+            window.appContext.runtime.shutdown();
+            window.close();
+        }
     }
 }
