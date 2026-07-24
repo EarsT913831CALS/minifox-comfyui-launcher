@@ -24,4 +24,5 @@ target_link_libraries(minifox_runtime_backend
         Qt6::Network
         minifox_application_settings_backend
         minifox_configuration_backend
+        minifox_shared_backend
 )
