@@ -1,11 +1,226 @@
 #include "LogModel.h"
 
 #include <QFile>
+#include <QFontMetricsF>
+#include <QQuickTextDocument>
 #include <QRegularExpression>
+#include <QTextBlockFormat>
+#include <QTextCharFormat>
+#include <QTextCursor>
+#include <QTextDocument>
 #include <QTextStream>
 
 #include <algorithm>
 #include <utility>
+
+namespace {
+QString styledText(QString text)
+{
+    text = text.toHtmlEscaped();
+    text.replace(QLatin1Char('\t'), QStringLiteral("&nbsp;&nbsp;&nbsp;&nbsp;"));
+
+    QString result;
+    result.reserve(text.size());
+    bool atLineStart = true;
+    for (qsizetype index = 0; index < text.size();) {
+        if (text.at(index) != QLatin1Char(' ')) {
+            result += text.at(index++);
+            atLineStart = false;
+            continue;
+        }
+
+        qsizetype end = index;
+        while (end < text.size() && text.at(end) == QLatin1Char(' ')) {
+            ++end;
+        }
+        const qsizetype count = end - index;
+        if (!atLineStart) {
+            result += QLatin1Char(' ');
+        }
+        const qsizetype nonBreakingCount = atLineStart ? count : count - 1;
+        for (qsizetype space = 0; space < nonBreakingCount; ++space) {
+            result += QStringLiteral("&nbsp;");
+        }
+        index = end;
+    }
+    return result;
+}
+
+QString coloredSpan(const QString &text, const QString &color)
+{
+    if (color.isEmpty()) {
+        return text;
+    }
+    return QStringLiteral("<font color=\"%1\">%2</font>").arg(color, text);
+}
+
+enum class SemanticLevel {
+    None,
+    Info,
+    Warning,
+    Error,
+    Debug,
+    Success
+};
+
+SemanticLevel semanticLevel(const QString &name)
+{
+    if (name == QStringLiteral("INFO")) {
+        return SemanticLevel::Info;
+    }
+    if (name == QStringLiteral("WARNING") || name == QStringLiteral("WARN")) {
+        return SemanticLevel::Warning;
+    }
+    if (name == QStringLiteral("ERROR") || name == QStringLiteral("CRITICAL")) {
+        return SemanticLevel::Error;
+    }
+    if (name == QStringLiteral("DEBUG")) {
+        return SemanticLevel::Debug;
+    }
+    if (name == QStringLiteral("START") || name == QStringLiteral("DONE")) {
+        return SemanticLevel::Success;
+    }
+    return SemanticLevel::None;
+}
+
+QString semanticColor(SemanticLevel level,
+                      const QString &secondaryColor,
+                      const QString &infoColor,
+                      const QString &successColor,
+                      const QString &warningColor,
+                      const QString &errorColor)
+{
+    switch (level) {
+    case SemanticLevel::Info: return successColor;
+    case SemanticLevel::Warning: return warningColor;
+    case SemanticLevel::Error: return errorColor;
+    case SemanticLevel::Debug: return secondaryColor;
+    case SemanticLevel::Success: return infoColor;
+    case SemanticLevel::None: return {};
+    }
+    return {};
+}
+
+QString semanticStyledText(const QString &text,
+                           const QString &baseColor,
+                           const QString &secondaryColor,
+                           const QString &infoColor,
+                           const QString &successColor,
+                           const QString &warningColor,
+                           const QString &errorColor)
+{
+    static const QRegularExpression levelExpression(
+        QStringLiteral(R"(\[(INFO|WARNING|WARN|ERROR|CRITICAL|DEBUG|START|DONE)\])"));
+
+    QString output;
+    qsizetype cursor = 0;
+    auto matches = levelExpression.globalMatch(text);
+    while (matches.hasNext()) {
+        const auto match = matches.next();
+        output += coloredSpan(styledText(text.mid(cursor, match.capturedStart() - cursor)),
+                              baseColor);
+        output += coloredSpan(styledText(match.captured(0)),
+                              semanticColor(semanticLevel(match.captured(1)),
+                                            secondaryColor,
+                                            infoColor,
+                                            successColor,
+                                            warningColor,
+                                            errorColor));
+        cursor = match.capturedEnd();
+    }
+    output += coloredSpan(styledText(text.mid(cursor)), baseColor);
+    return output;
+}
+
+bool hasSemanticLevel(const QString &text)
+{
+    static const QRegularExpression levelExpression(
+        QStringLiteral(R"(\[(?:INFO|WARNING|WARN|ERROR|CRITICAL|DEBUG|START|DONE)\])"));
+    return levelExpression.match(text).hasMatch();
+}
+
+bool looksLikeActualError(const QString &text)
+{
+    static const QRegularExpression errorExpression(
+        QStringLiteral(
+            R"(^\s*(?:Traceback \(most recent call last\):|Exception in callback\b|During handling of the above exception\b|The above exception was the direct cause\b|(?:[\w.]*Error|[\w.]*Exception|Fatal):))"),
+        QRegularExpression::CaseInsensitiveOption);
+    return errorExpression.match(text).hasMatch();
+}
+
+QString visibleStreamLabel(const QString &stream, const QString &text)
+{
+    if (stream == QStringLiteral("system")) {
+        return QStringLiteral("SYS");
+    }
+    if (stream == QStringLiteral("stderr")
+        && !hasSemanticLevel(text)
+        && looksLikeActualError(text)) {
+        return QStringLiteral("ERR");
+    }
+    return {};
+}
+
+QColor semanticColorValue(SemanticLevel level,
+                          const QColor &secondaryColor,
+                          const QColor &infoColor,
+                          const QColor &successColor,
+                          const QColor &warningColor,
+                          const QColor &errorColor)
+{
+    switch (level) {
+    case SemanticLevel::Info: return successColor;
+    case SemanticLevel::Warning: return warningColor;
+    case SemanticLevel::Error: return errorColor;
+    case SemanticLevel::Debug: return secondaryColor;
+    case SemanticLevel::Success: return infoColor;
+    case SemanticLevel::None: return {};
+    }
+    return {};
+}
+
+QTextCharFormat documentTextFormat(const QColor &color)
+{
+    QTextCharFormat format;
+    if (color.isValid()) {
+        format.setForeground(color);
+    }
+    format.setFontWeight(QFont::Normal);
+    return format;
+}
+
+void insertSemanticDocumentText(QTextCursor &cursor,
+                                const QString &text,
+                                const QColor &baseColor,
+                                const QColor &secondaryColor,
+                                const QColor &infoColor,
+                                const QColor &successColor,
+                                const QColor &warningColor,
+                                const QColor &errorColor)
+{
+    static const QRegularExpression expression(
+        QStringLiteral(R"(\[(INFO|WARNING|WARN|ERROR|CRITICAL|DEBUG|START|DONE)\])"));
+
+    qsizetype offset = 0;
+    auto matches = expression.globalMatch(text);
+    while (matches.hasNext()) {
+        const QRegularExpressionMatch match = matches.next();
+        cursor.insertText(
+            text.mid(offset, match.capturedStart() - offset),
+            documentTextFormat(baseColor));
+        cursor.insertText(
+            match.captured(0),
+            documentTextFormat(semanticColorValue(semanticLevel(match.captured(1)),
+                                                  secondaryColor,
+                                                  infoColor,
+                                                  successColor,
+                                                  warningColor,
+                                                  errorColor)));
+        offset = match.capturedEnd();
+    }
+    cursor.insertText(text.mid(offset), documentTextFormat(baseColor));
+}
+}
 
 LogModel::LogModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -122,6 +337,212 @@ void LogModel::clear()
     endResetModel();
     emit countChanged();
     resetProgress();
+}
+
+QString LogModel::displayText(bool showTimestamps, bool compact) const
+{
+    QString output;
+    output.reserve(m_entries.size() * 96);
+
+    const int lineNumberWidth = QString::number(m_entries.size()).size();
+    for (qsizetype index = 0; index < m_entries.size(); ++index) {
+        const auto &entry = m_entries.at(index);
+        if (!compact) {
+            output += QString::number(index + 1).rightJustified(lineNumberWidth);
+            output += QLatin1Char(' ');
+            if (showTimestamps) {
+                output += entry.timestamp.toString(QStringLiteral("HH:mm:ss.zzz"));
+                output += QLatin1Char(' ');
+            }
+            output += visibleStreamLabel(entry.stream, entry.text).leftJustified(4);
+        }
+        output += entry.text;
+        if (index + 1 < m_entries.size()) {
+            output += QLatin1Char('\n');
+        }
+    }
+    return output;
+}
+
+QString LogModel::displayStyledText(bool showTimestamps,
+                                    bool compact,
+                                    const QString &secondaryColor,
+                                    const QString &foregroundColor,
+                                    const QString &warningColor,
+                                    const QString &infoColor,
+                                    const QString &successColor,
+                                    const QString &errorColor) const
+{
+    return displayStyledTextRange(0,
+                                  showTimestamps,
+                                  compact,
+                                  secondaryColor,
+                                  foregroundColor,
+                                  warningColor,
+                                  infoColor,
+                                  successColor,
+                                  errorColor);
+}
+
+QString LogModel::displayStyledTextRange(int firstRow,
+                                         bool showTimestamps,
+                                         bool compact,
+                                         const QString &secondaryColor,
+                                         const QString &foregroundColor,
+                                         const QString &warningColor,
+                                         const QString &infoColor,
+                                         const QString &successColor,
+                                         const QString &errorColor) const
+{
+    firstRow = std::clamp(firstRow, 0, static_cast<int>(m_entries.size()));
+    if (firstRow >= m_entries.size()) {
+        return {};
+    }
+
+    QString output;
+    output.reserve((m_entries.size() - firstRow) * 160);
+    output += QStringLiteral(
+        "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\">");
+
+    for (qsizetype index = firstRow; index < m_entries.size(); ++index) {
+        const auto &entry = m_entries.at(index);
+        output += QStringLiteral("<tr>");
+        if (!compact) {
+            output += QStringLiteral(
+                "<td width=\"48\" nowrap align=\"right\" valign=\"top\">");
+            output += coloredSpan(styledText(QString::number(index + 1)), secondaryColor);
+            output += QStringLiteral(
+                "</td><td width=\"8\" nowrap valign=\"top\">&nbsp;</td>");
+            if (showTimestamps) {
+                output += QStringLiteral("<td width=\"104\" nowrap valign=\"top\">");
+                output += coloredSpan(
+                    styledText(entry.timestamp.toString(QStringLiteral("HH:mm:ss.zzz"))),
+                    secondaryColor);
+                output += QStringLiteral(
+                    "</td><td width=\"8\" nowrap valign=\"top\">&nbsp;</td>");
+            }
+            output += QStringLiteral("<td width=\"32\" nowrap valign=\"top\">");
+            const QString streamLabel = visibleStreamLabel(entry.stream, entry.text);
+            if (streamLabel == QStringLiteral("SYS")) {
+                output += coloredSpan(QStringLiteral("SYS"), infoColor);
+            } else if (streamLabel == QStringLiteral("ERR")) {
+                output += coloredSpan(QStringLiteral("ERR"), errorColor);
+            } else {
+                output += QStringLiteral("&nbsp;&nbsp;&nbsp;");
+            }
+            output += QStringLiteral(
+                "</td><td width=\"8\" nowrap valign=\"top\">&nbsp;</td>");
+        }
+
+        const QString contentColor = entry.color.isEmpty() ? foregroundColor : entry.color;
+        output += QStringLiteral("<td valign=\"top\">");
+        output += semanticStyledText(entry.text,
+                                     contentColor,
+                                     secondaryColor,
+                                     infoColor,
+                                     successColor,
+                                     warningColor,
+                                     errorColor);
+        if (entry.text.isEmpty()) {
+            output += QStringLiteral("&nbsp;");
+        }
+        output += QStringLiteral("</td></tr>");
+    }
+    output += QStringLiteral("</table>");
+    return output;
+}
+
+void LogModel::appendStyledTextRangeToDocument(
+    QQuickTextDocument *quickDocument,
+    int firstRow,
+    bool showTimestamps,
+    bool compact,
+    const QColor &secondaryColor,
+    const QColor &foregroundColor,
+    const QColor &warningColor,
+    const QColor &infoColor,
+    const QColor &successColor,
+    const QColor &errorColor) const
+{
+    if (!quickDocument) {
+        return;
+    }
+
+    firstRow = std::clamp(firstRow, 0, static_cast<int>(m_entries.size()));
+    if (firstRow >= m_entries.size()) {
+        return;
+    }
+
+    QTextDocument *document = quickDocument->textDocument();
+    QTextCursor appendCursor(document);
+    appendCursor.movePosition(QTextCursor::End);
+    appendCursor.beginEditBlock();
+
+    const int prefixCharacters = compact
+        ? 0
+        : 6 + 2 + (showTimestamps ? 12 + 2 : 0) + 3 + 2;
+    const QFontMetricsF metrics(document->defaultFont());
+    const qreal prefixWidth =
+        metrics.horizontalAdvance(QString(prefixCharacters, QLatin1Char('0')));
+
+    bool documentIsEmpty = document->isEmpty();
+    for (qsizetype row = firstRow; row < m_entries.size(); ++row) {
+        QTextBlockFormat blockFormat;
+        blockFormat.setTopMargin(0);
+        blockFormat.setBottomMargin(0);
+        blockFormat.setLeftMargin(prefixWidth);
+        blockFormat.setTextIndent(-prefixWidth);
+
+        if (documentIsEmpty) {
+            appendCursor.setBlockFormat(blockFormat);
+            documentIsEmpty = false;
+        } else {
+            appendCursor.insertBlock(blockFormat);
+        }
+
+        const Entry &entry = m_entries.at(row);
+        if (!compact) {
+            appendCursor.insertText(
+                QString::number(row + 1).rightJustified(6),
+                documentTextFormat(secondaryColor));
+            appendCursor.insertText(
+                QStringLiteral("  "),
+                documentTextFormat(secondaryColor));
+
+            if (showTimestamps) {
+                appendCursor.insertText(
+                    entry.timestamp.toString(QStringLiteral("HH:mm:ss.zzz")),
+                    documentTextFormat(secondaryColor));
+                appendCursor.insertText(
+                    QStringLiteral("  "),
+                    documentTextFormat(secondaryColor));
+            }
+
+            const QString streamLabel = visibleStreamLabel(entry.stream, entry.text);
+            const QColor streamColor = streamLabel == QStringLiteral("SYS")
+                ? infoColor
+                : (streamLabel == QStringLiteral("ERR") ? errorColor : secondaryColor);
+            appendCursor.insertText(
+                streamLabel.leftJustified(3),
+                documentTextFormat(streamColor));
+            appendCursor.insertText(
+                QStringLiteral("  "),
+                documentTextFormat(secondaryColor));
+        }
+
+        const QColor ansiColor(entry.color);
+        insertSemanticDocumentText(
+            appendCursor,
+            entry.text,
+            ansiColor.isValid() ? ansiColor : foregroundColor,
+            secondaryColor,
+            infoColor,
+            successColor,
+            warningColor,
+            errorColor);
+    }
+
+    appendCursor.endEditBlock();
 }
 
 bool LogModel::exportToFile(const QString &path, bool showTimestamps, QString *errorMessage) const

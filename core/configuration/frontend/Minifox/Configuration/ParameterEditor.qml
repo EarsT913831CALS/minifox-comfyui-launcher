@@ -26,6 +26,19 @@ MaterialPanel {
         return 0;
     }
 
+    function optionalPlaceholder() {
+        switch (parameter.key) {
+        case "defaultDevice":
+            return qsTr("留空（由 ComfyUI 自动选择）");
+        case "reserveVram":
+            return qsTr("留空（由 ComfyUI 自动计算）");
+        case "asyncOffloadStreams":
+            return qsTr("留空（默认 2）");
+        default:
+            return qsTr("留空（使用 ComfyUI 默认值）");
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: Theme.spacingSm
@@ -171,7 +184,7 @@ MaterialPanel {
 
         AppTextField {
             text: root.parameter.value
-            placeholderText: qsTr("留空使用默认值")
+            placeholderText: root.optionalPlaceholder()
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
             validator: IntValidator {
@@ -204,7 +217,7 @@ MaterialPanel {
 
         AppTextField {
             text: root.parameter.value
-            placeholderText: qsTr("留空使用默认值")
+            placeholderText: root.optionalPlaceholder()
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
             inputMethodHints: Qt.ImhFormattedNumbersOnly

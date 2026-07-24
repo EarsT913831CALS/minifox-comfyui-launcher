@@ -12,6 +12,7 @@ target_link_libraries(minifox_runtime_tests
         minifox_application_settings_backend
         minifox_configuration_backend
         minifox_runtime_backend
+        minifox_runtime_ui
 )
 
 add_test(NAME minifox_runtime_tests COMMAND minifox_runtime_tests)

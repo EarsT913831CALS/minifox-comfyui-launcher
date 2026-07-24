@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QColor>
 #include <QDateTime>
+#include <QQuickTextDocument>
 #include <QStringConverter>
 #include <QTimer>
 
@@ -51,6 +53,35 @@ public:
     void appendSystemMessage(const QString &message, const QString &color = {});
     void flush();
     Q_INVOKABLE void clear();
+    Q_INVOKABLE QString displayText(bool showTimestamps, bool compact = false) const;
+    Q_INVOKABLE QString displayStyledText(bool showTimestamps,
+                                          bool compact,
+                                          const QString &secondaryColor,
+                                          const QString &foregroundColor,
+                                          const QString &warningColor,
+                                          const QString &infoColor,
+                                          const QString &successColor,
+                                          const QString &errorColor) const;
+    Q_INVOKABLE QString displayStyledTextRange(int firstRow,
+                                               bool showTimestamps,
+                                               bool compact,
+                                               const QString &secondaryColor,
+                                               const QString &foregroundColor,
+                                               const QString &warningColor,
+                                               const QString &infoColor,
+                                               const QString &successColor,
+                                               const QString &errorColor) const;
+    Q_INVOKABLE void appendStyledTextRangeToDocument(
+        QQuickTextDocument *document,
+        int firstRow,
+        bool showTimestamps,
+        bool compact,
+        const QColor &secondaryColor,
+        const QColor &foregroundColor,
+        const QColor &warningColor,
+        const QColor &infoColor,
+        const QColor &successColor,
+        const QColor &errorColor) const;
     bool exportToFile(const QString &path, bool showTimestamps, QString *errorMessage = nullptr) const;
 
 signals:

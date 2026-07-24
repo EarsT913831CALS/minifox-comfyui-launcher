@@ -39,9 +39,7 @@ Rectangle {
             color: root.foreground
             font.family: root.appContext.settings.consoleFontFamily
             font.pointSize: root.appContext.settings.consoleFontSize
-            wrapMode: root.appContext.settings.consoleWordWrap ? Text.WrapAnywhere : Text.NoWrap
-            elide: root.appContext.settings.consoleWordWrap ? Text.ElideNone : Text.ElideRight
-            maximumLineCount: root.appContext.settings.consoleWordWrap ? 3 : 1
+            wrapMode: root.appContext.settings.consoleWordWrap ? Text.WrapAnywhere : Text.Wrap
         }
     }
 }

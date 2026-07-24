@@ -167,7 +167,7 @@ Pane {
                     text: root.appContext.runtime.commandPreview
                     readOnly: true
                     selectByMouse: true
-                    wrapMode: root.appContext.settings.consoleWordWrap ? TextEdit.WrapAnywhere : TextEdit.NoWrap
+                    wrapMode: root.appContext.settings.consoleWordWrap ? TextEdit.WrapAnywhere : TextEdit.Wrap
                     font.family: root.appContext.settings.consoleFontFamily
                     font.pointSize: root.appContext.settings.consoleFontSize
                     Accessible.name: qsTr("ComfyUI 启动命令")
