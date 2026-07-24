@@ -618,6 +618,15 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
             m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
             return;
         }
+        // Escape hatch for headless runs and tests: no console window can be
+        // attended there, so keep the old fail-fast behavior instead of
+        // opening install windows that would wait for input forever.
+        if (qEnvironmentVariableIsSet("MINIFOX_SKIP_DEPENDENCY_INSTALL")) {
+            setLastError(tr("依赖检查失败，ComfyUI 未启动。"));
+            setStatus(Failed);
+            m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+            return;
+        }
         m_logModel->appendSystemMessage(
             tr("发现 %1 个依赖清单不满足，正在打开安装窗口…").arg(failingPaths.size()),
             QStringLiteral("#9d5d00"));
