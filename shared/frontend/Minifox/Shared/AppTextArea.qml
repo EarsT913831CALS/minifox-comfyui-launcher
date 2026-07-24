@@ -5,6 +5,8 @@ Controls.TextArea {
     id: control
 
     font.family: Theme.uiFontFamily
+    color: control.enabled ? Theme.foreground : Theme.foregroundSecondary
+    placeholderTextColor: Theme.foregroundSecondary
     palette.window: Theme.surfaceRaised
     palette.windowText: Theme.foreground
     palette.text: Theme.foreground
@@ -14,16 +16,4 @@ Controls.TextArea {
     palette.highlight: Theme.accent
     palette.highlightedText: Theme.accentForeground
     palette.placeholderText: Theme.foregroundSecondary
-
-    Binding {
-        target: control
-        property: "color"
-        value: control.enabled ? Theme.foreground : Theme.foregroundSecondary
-    }
-
-    Binding {
-        target: control
-        property: "placeholderTextColor"
-        value: Theme.foregroundSecondary
-    }
 }

@@ -17,6 +17,7 @@ target_include_directories(minifox_runtime_backend
 target_link_libraries(minifox_runtime_backend
     PUBLIC
         Qt6::Core
+        Qt6::Quick
         minifox_platform
     PRIVATE
         Qt6::Gui

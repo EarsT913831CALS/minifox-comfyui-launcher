@@ -337,6 +337,11 @@
         <source>启动 ComfyUI 后，完整输出会显示在这里。</source>
         <translation>Complete output will appear here after ComfyUI starts.</translation>
     </message>
+    <message>
+        <location filename="../../../core/runtime/frontend/Minifox/Runtime/ConsoleView.qml" line="169"/>
+        <source>跳到最新输出</source>
+        <translation>Jump to latest output</translation>
+    </message>
 </context>
 <context>
     <name>CudaDevicePanel</name>
@@ -710,10 +715,24 @@
         <translation>Disabled</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="174"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="207"/>
-        <source>留空使用默认值</source>
-        <translation>Leave blank to use the default</translation>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="31"/>
+        <source>留空（由 ComfyUI 自动选择）</source>
+        <translation>Leave blank (selected automatically by ComfyUI)</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="33"/>
+        <source>留空（由 ComfyUI 自动计算）</source>
+        <translation>Leave blank (calculated automatically by ComfyUI)</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="35"/>
+        <source>留空（默认 2）</source>
+        <translation>Leave blank (default: 2)</translation>
+    </message>
+    <message>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="37"/>
+        <source>留空（使用 ComfyUI 默认值）</source>
+        <translation>Leave blank (use the ComfyUI default)</translation>
     </message>
     <message>
         <location filename="../../../core/configuration/frontend/Minifox/Configuration/ParameterEditor.qml" line="247"/>
@@ -1182,8 +1201,18 @@
     </message>
     <message>
         <location filename="../../../core/application-settings/frontend/Minifox/ApplicationSettings/SettingsPage.qml" line="233"/>
-        <source>自动换行</source>
-        <translation>Word wrap</translation>
+        <source>换行方式</source>
+        <translation>Line wrapping</translation>
+    </message>
+    <message>
+        <location filename="../../../core/application-settings/frontend/Minifox/ApplicationSettings/SettingsPage.qml" line="236"/>
+        <source>任意位置换行</source>
+        <translation>Wrap anywhere</translation>
+    </message>
+    <message>
+        <location filename="../../../core/application-settings/frontend/Minifox/ApplicationSettings/SettingsPage.qml" line="236"/>
+        <source>优先按单词换行</source>
+        <translation>Prefer word boundaries</translation>
     </message>
     <message>
         <location filename="../../../core/application-settings/frontend/Minifox/ApplicationSettings/SettingsPage.qml" line="242"/>

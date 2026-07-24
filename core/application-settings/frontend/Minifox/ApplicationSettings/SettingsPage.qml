@@ -230,10 +230,10 @@ Pane {
                             }
 
                             AppLabel {
-                                text: qsTr("自动换行")
+                                text: qsTr("换行方式")
                             }
                             AppSwitch {
-                                text: checked ? qsTr("已启用") : qsTr("未启用")
+                                text: checked ? qsTr("任意位置换行") : qsTr("优先按单词换行")
                                 checked: root.appContext.settings.consoleWordWrap
                                 onToggled: root.appContext.settings.consoleWordWrap = checked
                             }
