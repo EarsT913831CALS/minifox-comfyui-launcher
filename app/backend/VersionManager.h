@@ -14,6 +14,7 @@ class VersionManager final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
+    Q_PROPERTY(bool installingDependencies READ installingDependencies NOTIFY stateChanged)
     Q_PROPERTY(bool updating READ updating NOTIFY stateChanged)
     Q_PROPERTY(bool catalogLoading READ catalogLoading NOTIFY stateChanged)
     Q_PROPERTY(bool repository READ repository NOTIFY stateChanged)
@@ -27,6 +28,8 @@ class VersionManager final : public QObject
     Q_PROPERTY(QString comfyVersion READ comfyVersion NOTIFY stateChanged)
     Q_PROPERTY(QString branch READ branch NOTIFY stateChanged)
     Q_PROPERTY(QString commit READ commit NOTIFY stateChanged)
+    Q_PROPERTY(QString commitFull READ commitFull NOTIFY stateChanged)
+    Q_PROPERTY(int networkRoute READ networkRoute WRITE setNetworkRoute NOTIFY stateChanged)
     Q_PROPERTY(QString commitDate READ commitDate NOTIFY stateChanged)
     Q_PROPERTY(QString commitSubject READ commitSubject NOTIFY stateChanged)
     Q_PROPERTY(QString remoteUrl READ remoteUrl NOTIFY stateChanged)
@@ -45,6 +48,7 @@ public:
     explicit VersionManager(ConfigurationManager *configuration, QObject *parent = nullptr);
 
     bool busy() const;
+    bool installingDependencies() const;
     bool updating() const;
     bool catalogLoading() const;
     bool repository() const;
@@ -58,6 +62,9 @@ public:
     QString comfyVersion() const;
     QString branch() const;
     QString commit() const;
+    QString commitFull() const;
+    int networkRoute() const;
+    void setNetworkRoute(int route);
     QString commitDate() const;
     QString commitSubject() const;
     QString remoteUrl() const;
@@ -92,6 +99,7 @@ signals:
     void stateChanged();
     void refreshCompleted(bool success, const QString &message);
     void operationCompleted(bool success, const QString &message);
+    void dependencyInstallCompleted(bool success, const QString &message);
 
 private:
     enum class Operation {
@@ -123,7 +131,8 @@ private:
         UpdateExtension,
         ValidateExtensionCheckout,
         CheckoutExtension,
-        InstallExtension
+        InstallExtension,
+        NormalizeBranch
     };
 
     enum class RefreshScope {
@@ -151,6 +160,7 @@ private:
     void updateAvailableExtensions();
     QString catalogCachePath() const;
     QStringList repositoryArguments(const QString &root, const QStringList &arguments) const;
+    QStringList networkRouteArguments() const;
     static QString readGitValue(const QString &repositoryRoot, const QString &key);
     static QString readExtensionDescription(const QString &path);
     static QString canonicalRepositoryUrl(const QString &url);
@@ -163,18 +173,36 @@ private:
     void setFailure(const QString &message);
     void finish(const QString &message = {});
     void completeRefresh(bool success, const QString &message);
+    QString normalizedBranchName() const;
+    bool commitHasVersionTag(const QString &commitFull) const;
+    void queueDependencyCheck(const QString &targetDir);
+    void startNextDependencyCheck();
+    void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void handleDependencyInstallFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    static QString requirementsFileFor(const QString &targetDir);
 
     ConfigurationManager *m_configuration;
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_catalogReply;
     QProcess m_process;
     QTimer m_gitTimeout;
+    QProcess m_dependencyProcess;
+    QTimer m_dependencyTimeout;
+    QStringList m_dependencyQueue;
+    QString m_dependencyDir;
+    QString m_dependencyMarkerPath;
+    QString m_dependencyBatPath;
+    bool m_dependencyInstallPhase = false;
+    bool m_dependencyTimedOut = false;
+    bool m_installingDependencies = false;
     Operation m_operation = Operation::None;
     QString m_gitProgram;
     QString m_comfyRoot;
     QString m_comfyVersion;
     QString m_branch;
     QString m_commit;
+    QString m_commitFull;
+    int m_networkRoute = 0;
     QString m_commitDate;
     QString m_commitSubject;
     QString m_remoteUrl;

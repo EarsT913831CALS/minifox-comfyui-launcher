@@ -898,8 +898,8 @@
     </message>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="468"/>
-        <source>正在使用所选 Python 离线检查 requirements.txt…</source>
-        <translation>Checking requirements.txt offline with the selected Python…</translation>
+        <source>正在使用所选 Python 离线检查 %1 个依赖清单…</source>
+        <translation>Checking %1 dependency manifests offline with the selected Python…</translation>
     </message>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="481"/>
@@ -955,6 +955,50 @@
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="796"/>
         <source>进程无法启动：%1</source>
         <translation>The process could not start: %1</translation>
+    </message>
+    <message>
+        <source>无法启动依赖安装窗口：%1</source>
+        <translation>Could not open the dependency install window: %1</translation>
+    </message>
+    <message>
+        <source>发现 %1 个依赖清单不满足，正在打开安装窗口…</source>
+        <translation>%1 dependency manifests are not satisfied. Opening install windows…</translation>
+    </message>
+    <message>
+        <source>依赖复检仍未通过，ComfyUI 未启动。</source>
+        <translation>The dependency re-check still failed. ComfyUI was not started.</translation>
+    </message>
+    <message>
+        <source>依赖复检通过（已检查 %1 项），准备启动 ComfyUI。</source>
+        <translation>Dependency re-check passed (%1 items checked). Preparing to start ComfyUI.</translation>
+    </message>
+    <message>
+        <source>依赖安装结束，正在复检…</source>
+        <translation>Dependency installation finished. Re-checking…</translation>
+    </message>
+    <message>
+        <source>无法创建数据目录，依赖安装已中止：%1</source>
+        <translation>Could not create the data directory. Dependency installation was aborted: %1</translation>
+    </message>
+    <message>
+        <source>无法创建 %1 的依赖安装脚本。</source>
+        <translation>Could not create the dependency install script for %1.</translation>
+    </message>
+    <message>
+        <source>正在安装 %1 的依赖（安装窗口关闭后继续）…</source>
+        <translation>Installing dependencies for %1 (setup continues after the window closes)…</translation>
+    </message>
+    <message>
+        <source>无法将依赖安装进程加入安全作业，已中止启动。</source>
+        <translation>Could not add the dependency installer to the protected job. Launch was aborted.</translation>
+    </message>
+    <message>
+        <source>%1 的依赖安装失败（退出代码 %2），继续处理其余清单。</source>
+        <translation>Dependency installation for %1 failed (exit code %2). Continuing with the remaining manifests.</translation>
+    </message>
+    <message>
+        <source>%1：依赖安装完成。</source>
+        <translation>%1: dependencies installed.</translation>
     </message>
 </context>
 <context>
@@ -1454,6 +1498,11 @@
         <translation>Switching branch…</translation>
     </message>
     <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>正在校正分支…</source>
+        <translation>Normalizing branch…</translation>
+    </message>
+    <message>
         <location filename="../../backend/VersionManager.cpp" line="435"/>
         <source>正在更新扩展…</source>
         <translation>Updating extension…</translation>
@@ -1626,6 +1675,61 @@
         <location filename="../../backend/VersionManager.cpp" line="873"/>
         <source>ComfyUI 自定义节点扩展</source>
         <translation>ComfyUI custom node extension</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>分支已切换。</source>
+        <translation>Branch switched.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>当前 ComfyUI 状态不允许切换分支，请先刷新内核列表。</source>
+        <translation>The current ComfyUI state does not allow switching branches. Refresh the core version list first.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>请输入有效的分支名称。</source>
+        <translation>Please enter a valid branch name.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>未配置有效的 Python 环境，无法检查 %1 的依赖。</source>
+        <translation>No valid Python environment is configured, so dependencies for %1 could not be checked.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>%1 的依赖检查超时。</source>
+        <translation>Dependency check for %1 timed out.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>pip 无法运行。</source>
+        <translation>pip could not be run.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>%1 的依赖检查失败：%2</source>
+        <translation>Dependency check for %1 failed: %2</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>无法创建 %1 的依赖安装脚本。</source>
+        <translation>The dependency installation script for %1 could not be created.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>%1：依赖安装完成。</source>
+        <translation>%1: dependencies installed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>%1：依赖安装窗口被关闭，无法确认安装结果。</source>
+        <translation>%1: the dependency installation window was closed, so the result could not be confirmed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp"/>
+        <source>%1：依赖安装失败（退出码 %2）。</source>
+        <translation>%1: dependency installation failed (exit code %2).</translation>
     </message>
 </context>
 <context>
@@ -1816,6 +1920,21 @@
         <location filename="../Minifox/App/VersionPage.qml" line="698"/>
         <source>分支名称</source>
         <translation>Branch name</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml"/>
+        <source>网络路线：</source>
+        <translation>Network route:</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml"/>
+        <source>官方源（GitHub 直连）</source>
+        <translation>Official source (direct GitHub connection)</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml"/>
+        <source>国内代理加速（敬请期待）</source>
+        <translation>China mirror acceleration (coming soon)</translation>
     </message>
     <message>
         <location filename="../Minifox/App/VersionPage.qml" line="707"/>

@@ -12,7 +12,6 @@ Pane {
     readonly property var versions: appContext.versions
     property int selectedTab: 0
     property int coreChannel: 0
-    property bool coreChannelInitialized: false
     property string installedSearch: ""
     property string availableSearch: ""
     property string extensionUrl: ""
@@ -54,21 +53,6 @@ Pane {
         if (status === "checking") return Theme.warning;
         if (status === "latest") return Theme.foreground;
         return Theme.foregroundSecondary;
-    }
-
-    function detectedCoreChannel() {
-        const branch = String(root.versions.branch).toLowerCase();
-        return branch === "main" || branch === "master"
-                || branch === "minifox/development" ? 1 : 0;
-    }
-
-    function coreBranchDescription() {
-        const branch = String(root.versions.branch).toLowerCase();
-        if (branch === "main" || branch === "master"
-                || branch === "minifox/development") return qsTr("开发版");
-        if (branch === "minifox/stable"
-                || branch === "minifox/version-core") return qsTr("稳定版");
-        return root.versions.branch.length > 0 ? root.versions.branch : "—";
     }
 
     function clampColumn(value, minimum, maximum) {
@@ -142,13 +126,6 @@ Pane {
     Connections {
         target: root.versions
 
-        function onStateChanged() {
-            if (!root.coreChannelInitialized && root.versions.branch.length > 0) {
-                root.coreChannel = root.detectedCoreChannel();
-                root.coreChannelInitialized = true;
-            }
-        }
-
         function onRefreshCompleted(success, message) {
             refreshNotice.success = success;
             refreshNotice.message = message;
@@ -160,6 +137,12 @@ Pane {
             refreshNotice.message = message;
             refreshNotice.open();
             if (success && root.selectedTab === 2) root.extensionUrl = "";
+        }
+
+        function onDependencyInstallCompleted(success, message) {
+            refreshNotice.success = success;
+            refreshNotice.message = message;
+            refreshNotice.open();
         }
     }
 
@@ -284,11 +267,16 @@ Pane {
                             AppLabel { text: qsTr("远端地址："); color: Theme.foregroundSecondary }
                             AppLabel { text: root.versions.remoteUrl.length > 0 ? root.versions.remoteUrl : "—"; font.family: root.appContext.settings.consoleFontFamily; Layout.fillWidth: true; elide: Text.ElideRight }
                             AppLabel { text: qsTr("当前分支："); color: Theme.foregroundSecondary }
-                            AppLabel { text: root.coreBranchDescription() }
+                            AppLabel {
+                                text: root.versions.branch.length > 0 ? root.versions.branch : "—"
+                                font.family: root.appContext.settings.consoleFontFamily
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
                             AppLabel { text: qsTr("当前版本："); color: Theme.foregroundSecondary }
                             AppLabel {
-                                text: root.versions.commit.length > 0
-                                      ? root.versions.commit + (root.versions.commitDate.length > 0 ? "  (" + root.versions.commitDate + ")" : "")
+                                text: root.versions.commitFull.length > 0
+                                      ? root.versions.commitFull + (root.versions.commitDate.length > 0 ? "  (" + root.versions.commitDate + ")" : "")
                                       : "—"
                                 font.family: root.appContext.settings.consoleFontFamily
                                 Layout.fillWidth: true
@@ -298,11 +286,12 @@ Pane {
 
                         AppButton {
                             text: qsTr("⚯  切换分支")
-                            enabled: false
+                            enabled: root.versions.canUpdate
                             Layout.preferredHeight: 34
                             leftPadding: 12
                             rightPadding: 12
                             font.pointSize: root.tableFontSize
+                            onClicked: branchDialog.open()
                         }
                     }
 
@@ -690,13 +679,41 @@ Pane {
         modal: true
         title: qsTr("切换分支")
         standardButtons: Dialog.Ok | Dialog.Cancel
+        onOpened: branchField.text = root.versions.branch
         onAccepted: root.versions.switchBranch(branchField.text)
 
-        AppTextField {
-            id: branchField
-            width: 360
-            placeholderText: qsTr("分支名称")
-            text: root.versions.branch
+        ButtonGroup { id: routeGroup }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spacingMd
+
+            AppTextField {
+                id: branchField
+                Layout.preferredWidth: 380
+                Layout.fillWidth: true
+                placeholderText: qsTr("分支名称")
+            }
+
+            AppLabel {
+                text: qsTr("网络路线：")
+                color: Theme.foregroundSecondary
+                font.pointSize: root.tableFontSize
+            }
+
+            RadioButton {
+                text: qsTr("官方源（GitHub 直连）")
+                checked: true
+                ButtonGroup.group: routeGroup
+                font.pointSize: root.tableFontSize
+                onToggled: if (checked) root.versions.networkRoute = 0
+            }
+
+            RadioButton {
+                text: qsTr("国内代理加速（敬请期待）")
+                enabled: false
+                ButtonGroup.group: routeGroup
+                font.pointSize: root.tableFontSize
+            }
         }
     }
 
