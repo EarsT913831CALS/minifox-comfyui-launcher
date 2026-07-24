@@ -92,6 +92,10 @@ private:
     void beginDependencyCheck();
     void handleDependencyCheckStarted();
     void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void startNextDependencyInstall();
+    void handleDependencyInstallStarted();
+    void handleDependencyInstallFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    QStringList collectRequirementFiles() const;
     void launchConfiguredProcess();
     void terminateTrackedProcessTree();
 
@@ -99,6 +103,12 @@ private:
     ApplicationSettings *m_settings;
     QProcess m_process;
     QProcess m_dependencyCheck;
+    QProcess m_dependencyInstall;
+    QStringList m_dependencyPendingInstalls;
+    QStringList m_dependencyRecheckPaths;
+    QString m_dependencyBatPath;
+    QString m_dependencyCurrentPath;
+    bool m_dependencyRecheckPhase = false;
     LogModel *m_logModel;
     QNetworkAccessManager *m_network;
     QPointer<QNetworkReply> m_readinessReply;

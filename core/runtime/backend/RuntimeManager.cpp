@@ -5,9 +5,13 @@
 #include "ConfigurationManager.h"
 #include "LaunchCommandBuilder.h"
 #include "LogModel.h"
+#include "PortablePaths.h"
 
+#include <QCoreApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -79,6 +83,134 @@ void forceKillProcessTree(qint64 processId)
 #endif
 }
 
+// Offline requirements checker: inspects only the selected interpreter's installed
+// metadata.  It never contacts an index and never installs or changes a package.
+// Every positional argument is one requirements.txt; each gets its own result entry
+// so the caller can install and re-check exactly the files that failed.
+QString dependencyCheckerScript()
+{
+    static const QString checker = QStringLiteral(R"PY(
+import importlib.metadata as metadata
+import json
+import os
+import re
+import sys
+
+try:
+    from packaging.requirements import Requirement
+except Exception:
+    try:
+        from pip._vendor.packaging.requirements import Requirement
+    except Exception as exc:
+        print(json.dumps({"ok": False, "fatal": "Python 中缺少 pip/packaging，无法解析依赖清单：%s" % exc}))
+        raise SystemExit(3)
+
+def check_file(root):
+    seen_files = set()
+    raw_requirements = []
+    parse_errors = []
+
+    def read_file(path):
+        path = os.path.abspath(path)
+        if path in seen_files:
+            return
+        seen_files.add(path)
+        try:
+            with open(path, "r", encoding="utf-8-sig") as stream:
+                physical = stream.readlines()
+        except Exception as exc:
+            parse_errors.append("无法读取 %s：%s" % (path, exc))
+            return
+
+        logical = []
+        pending = ""
+        for raw in physical:
+            line = raw.rstrip("\r\n")
+            if line.rstrip().endswith("\\"):
+                pending += line.rstrip()[:-1] + " "
+                continue
+            logical.append(pending + line)
+            pending = ""
+        if pending:
+            logical.append(pending)
+
+        base = os.path.dirname(path)
+        for line in logical:
+            line = re.split(r"\s+#", line, maxsplit=1)[0].strip()
+            if not line or line.startswith("#"):
+                continue
+            include = re.match(r"^(?:-r|--requirement)\s+(.+)$", line)
+            constraint = re.match(r"^(?:-c|--constraint)\s+(.+)$", line)
+            if include or constraint:
+                child = (include or constraint).group(1).strip().strip("\"'")
+                read_file(os.path.join(base, child))
+                continue
+            if line.startswith("--hash=") or line.startswith("--"):
+                continue
+            if line.startswith("-e ") or line.startswith("--editable "):
+                egg = re.search(r"[#&]egg=([^&]+)", line)
+                if egg:
+                    raw_requirements.append(egg.group(1))
+                else:
+                    parse_errors.append("无法识别可编辑依赖：%s" % line)
+                continue
+            raw_requirements.append(line)
+
+    read_file(root)
+    issues = []
+    checked = 0
+    for raw in raw_requirements:
+        try:
+            requirement = Requirement(raw)
+        except Exception as exc:
+            parse_errors.append("无法解析依赖“%s”：%s" % (raw, exc))
+            continue
+        try:
+            if requirement.marker is not None and not requirement.marker.evaluate():
+                continue
+        except Exception as exc:
+            parse_errors.append("无法计算依赖条件“%s”：%s" % (raw, exc))
+            continue
+        checked += 1
+        try:
+            installed = metadata.version(requirement.name)
+        except metadata.PackageNotFoundError:
+            issues.append("缺少依赖：%s" % requirement.name)
+            continue
+        except Exception as exc:
+            issues.append("无法读取 %s 的版本：%s" % (requirement.name, exc))
+            continue
+        if requirement.specifier and not requirement.specifier.contains(installed, prereleases=True):
+            issues.append("版本不符：%s 已安装 %s，需要 %s" %
+                          (requirement.name, installed, requirement.specifier))
+
+    return {
+        "path": os.path.abspath(root),
+        "ok": not issues and not parse_errors,
+        "checked": checked,
+        "issues": issues,
+        "parseErrors": parse_errors,
+    }
+
+results = [check_file(path) for path in sys.argv[1:]]
+ok = all(item["ok"] for item in results)
+print(json.dumps({"ok": ok, "results": results}))
+raise SystemExit(0 if ok else 2)
+)PY");
+    return checker;
+}
+
+// Kernel requirements live directly in the ComfyUI root; extension requirements live
+// one directory below custom_nodes.  Use that layout for a readable display name.
+QString requirementDisplayName(const QString &requirementsPath)
+{
+    const QDir parent(QFileInfo(requirementsPath).absolutePath());
+    if (parent.dirName().compare(QStringLiteral("custom_nodes"), Qt::CaseInsensitive) == 0) {
+        return QStringLiteral("ComfyUI");
+    }
+    return parent.dirName();
+}
+
 } // namespace
 
 RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
@@ -111,6 +243,20 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
             [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart && !m_stopRequested) {
             setLastError(tr("无法启动 Python 依赖检查：%1").arg(m_dependencyCheck.errorString()));
+            setStatus(Failed);
+            m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        }
+    });
+
+    m_dependencyInstall.setProcessChannelMode(QProcess::SeparateChannels);
+    connect(&m_dependencyInstall, &QProcess::started,
+            this, &RuntimeManager::handleDependencyInstallStarted);
+    connect(&m_dependencyInstall, &QProcess::finished,
+            this, &RuntimeManager::handleDependencyInstallFinished);
+    connect(&m_dependencyInstall, &QProcess::errorOccurred, this,
+            [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart && !m_stopRequested) {
+            setLastError(tr("无法启动依赖安装窗口：%1").arg(m_dependencyInstall.errorString()));
             setStatus(Failed);
             m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
         }
@@ -160,6 +306,7 @@ bool RuntimeManager::canStart() const
     return (m_status == Stopped || m_status == Failed)
         && m_process.state() == QProcess::NotRunning
         && m_dependencyCheck.state() == QProcess::NotRunning
+        && m_dependencyInstall.state() == QProcess::NotRunning
         && !m_processJob.isAttached();
 }
 
@@ -173,6 +320,7 @@ bool RuntimeManager::active() const
     return m_status == Starting || m_status == Running || m_status == Stopping
         || m_process.state() != QProcess::NotRunning
         || m_dependencyCheck.state() != QProcess::NotRunning
+        || m_dependencyInstall.state() != QProcess::NotRunning
         || m_processJob.isAttached();
 }
 
@@ -208,6 +356,10 @@ void RuntimeManager::start()
     m_processJob.reset();
     m_stopRequested = false;
     m_startupAborted = false;
+    m_dependencyRecheckPhase = false;
+    m_dependencyPendingInstalls.clear();
+    m_dependencyRecheckPaths.clear();
+    m_dependencyCurrentPath.clear();
     m_lastExitCode = 0;
     m_processId = 0;
     m_uptime = QStringLiteral("00:00:00");
@@ -231,10 +383,14 @@ void RuntimeManager::stop()
     if (m_dependencyCheck.state() != QProcess::NotRunning) {
         m_dependencyCheck.terminate();
     }
+    if (m_dependencyInstall.state() != QProcess::NotRunning) {
+        m_dependencyInstall.terminate();
+    }
     if (m_process.state() != QProcess::NotRunning) {
         m_process.terminate();
     }
     if (m_dependencyCheck.state() != QProcess::NotRunning
+        || m_dependencyInstall.state() != QProcess::NotRunning
         || m_process.state() != QProcess::NotRunning
         || m_processJob.isAttached()) {
         m_forceStopTimer.start();
@@ -252,6 +408,7 @@ void RuntimeManager::forceStop()
     m_logModel->appendSystemMessage(tr("正在强制终止 ComfyUI 进程树…"), QStringLiteral("#c42b1c"));
     terminateTrackedProcessTree();
     if (m_dependencyCheck.state() == QProcess::NotRunning
+        && m_dependencyInstall.state() == QProcess::NotRunning
         && m_process.state() == QProcess::NotRunning) {
         setStatus(Stopped);
         emit runtimeInfoChanged();
@@ -352,120 +509,17 @@ void RuntimeManager::beginDependencyCheck()
         return;
     }
 
-    // This check only inspects the selected interpreter's installed metadata.  It never
-    // contacts an index and never installs or changes a package.
-    static const QString checker = QStringLiteral(R"PY(
-import importlib.metadata as metadata
-import json
-import os
-import re
-import sys
-
-try:
-    from packaging.requirements import Requirement
-except Exception:
-    try:
-        from pip._vendor.packaging.requirements import Requirement
-    except Exception as exc:
-        print(json.dumps({"ok": False, "fatal": "Python 中缺少 pip/packaging，无法解析依赖清单：%s" % exc}, ensure_ascii=False))
-        raise SystemExit(3)
-
-seen_files = set()
-raw_requirements = []
-parse_errors = []
-
-def read_file(path):
-    path = os.path.abspath(path)
-    if path in seen_files:
-        return
-    seen_files.add(path)
-    try:
-        with open(path, "r", encoding="utf-8-sig") as stream:
-            physical = stream.readlines()
-    except Exception as exc:
-        parse_errors.append("无法读取 %s：%s" % (path, exc))
-        return
-
-    logical = []
-    pending = ""
-    for raw in physical:
-        line = raw.rstrip("\r\n")
-        if line.rstrip().endswith("\\"):
-            pending += line.rstrip()[:-1] + " "
-            continue
-        logical.append(pending + line)
-        pending = ""
-    if pending:
-        logical.append(pending)
-
-    base = os.path.dirname(path)
-    for line in logical:
-        line = re.split(r"\s+#", line, maxsplit=1)[0].strip()
-        if not line or line.startswith("#"):
-            continue
-        include = re.match(r"^(?:-r|--requirement)\s+(.+)$", line)
-        constraint = re.match(r"^(?:-c|--constraint)\s+(.+)$", line)
-        if include or constraint:
-            child = (include or constraint).group(1).strip().strip("\"'")
-            read_file(os.path.join(base, child))
-            continue
-        if line.startswith("--hash=") or line.startswith("--"):
-            continue
-        if line.startswith("-e ") or line.startswith("--editable "):
-            egg = re.search(r"[#&]egg=([^&]+)", line)
-            if egg:
-                raw_requirements.append(egg.group(1))
-            else:
-                parse_errors.append("无法识别可编辑依赖：%s" % line)
-            continue
-        raw_requirements.append(line)
-
-read_file(sys.argv[1])
-issues = []
-checked = 0
-for raw in raw_requirements:
-    try:
-        requirement = Requirement(raw)
-    except Exception as exc:
-        parse_errors.append("无法解析依赖“%s”：%s" % (raw, exc))
-        continue
-    try:
-        if requirement.marker is not None and not requirement.marker.evaluate():
-            continue
-    except Exception as exc:
-        parse_errors.append("无法计算依赖条件“%s”：%s" % (raw, exc))
-        continue
-    checked += 1
-    try:
-        installed = metadata.version(requirement.name)
-    except metadata.PackageNotFoundError:
-        issues.append("缺少依赖：%s" % requirement.name)
-        continue
-    except Exception as exc:
-        issues.append("无法读取 %s 的版本：%s" % (requirement.name, exc))
-        continue
-    if requirement.specifier and not requirement.specifier.contains(installed, prereleases=True):
-        issues.append("版本不符：%s 已安装 %s，需要 %s" %
-                      (requirement.name, installed, requirement.specifier))
-
-result = {
-    "ok": not issues and not parse_errors,
-    "checked": checked,
-    "issues": issues,
-    "parseErrors": parse_errors,
-}
-print(json.dumps(result, ensure_ascii=False))
-raise SystemExit(0 if result["ok"] else 2)
-)PY");
-
+    const QStringList requirementFiles = collectRequirementFiles();
     QProcessEnvironment environment = command.environment;
     m_settings->applyToProcessEnvironment(environment);
     m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
     m_dependencyCheck.setProcessEnvironment(environment);
     m_dependencyCheck.setProgram(command.program);
-    m_dependencyCheck.setArguments({QStringLiteral("-c"), checker, requirementsPath});
+    QStringList arguments{QStringLiteral("-c"), dependencyCheckerScript()};
+    arguments.append(requirementFiles);
+    m_dependencyCheck.setArguments(arguments);
     m_logModel->appendSystemMessage(
-        tr("正在使用所选 Python 离线检查 requirements.txt…"),
+        tr("正在使用所选 Python 离线检查 %1 个依赖清单…").arg(requirementFiles.size()),
         QStringLiteral("#0067c0"));
     m_dependencyCheck.start();
 }
@@ -493,7 +547,8 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
     m_processJob.reset();
 
     if (m_stopRequested) {
-        if (m_process.state() == QProcess::NotRunning) {
+        if (m_process.state() == QProcess::NotRunning
+            && m_dependencyInstall.state() == QProcess::NotRunning) {
             m_forceStopTimer.stop();
             setStatus(Stopped);
             emit runtimeInfoChanged();
@@ -522,36 +577,239 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
         return;
     }
 
-    QStringList issues;
     const QString fatal = result.value(QStringLiteral("fatal")).toString();
     if (!fatal.isEmpty()) {
-        issues.append(fatal);
-    }
-    for (const QJsonValue &value : result.value(QStringLiteral("issues")).toArray()) {
-        issues.append(value.toString());
-    }
-    for (const QJsonValue &value : result.value(QStringLiteral("parseErrors")).toArray()) {
-        issues.append(value.toString());
-    }
-    if (!result.value(QStringLiteral("ok")).toBool() || exitCode != 0 || !issues.isEmpty()) {
         setLastError(tr("依赖检查失败，ComfyUI 未启动。"));
         setStatus(Failed);
         m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
-        for (const QString &issue : issues) {
-            m_logModel->appendSystemMessage(issue, QStringLiteral("#c42b1c"));
-        }
-        const QString diagnostic = QString::fromUtf8(standardError).trimmed();
-        if (!diagnostic.isEmpty()) {
-            m_logModel->appendSystemMessage(diagnostic, QStringLiteral("#9d5d00"));
-        }
+        m_logModel->appendSystemMessage(fatal, QStringLiteral("#c42b1c"));
         return;
     }
 
-    m_logModel->appendSystemMessage(
-        tr("依赖检查通过（已检查 %1 项），准备启动 ComfyUI。")
-            .arg(result.value(QStringLiteral("checked")).toInt()),
-        QStringLiteral("#0f7b0f"));
+    int totalChecked = 0;
+    QStringList failingPaths;
+    const QJsonArray results = result.value(QStringLiteral("results")).toArray();
+    for (const QJsonValue &value : results) {
+        const QJsonObject item = value.toObject();
+        totalChecked += item.value(QStringLiteral("checked")).toInt();
+        if (item.value(QStringLiteral("ok")).toBool()) {
+            continue;
+        }
+        const QString path = item.value(QStringLiteral("path")).toString();
+        failingPaths.append(path);
+        const QString name = requirementDisplayName(path);
+        for (const QJsonValue &issue : item.value(QStringLiteral("issues")).toArray()) {
+            m_logModel->appendSystemMessage(
+                QStringLiteral("%1：%2").arg(name, issue.toString()),
+                QStringLiteral("#c42b1c"));
+        }
+        for (const QJsonValue &issue : item.value(QStringLiteral("parseErrors")).toArray()) {
+            m_logModel->appendSystemMessage(
+                QStringLiteral("%1：%2").arg(name, issue.toString()),
+                QStringLiteral("#c42b1c"));
+        }
+    }
+
+    if (!result.value(QStringLiteral("ok")).toBool() || !failingPaths.isEmpty()) {
+        if (m_dependencyRecheckPhase) {
+            m_dependencyRecheckPhase = false;
+            setLastError(tr("依赖复检仍未通过，ComfyUI 未启动。"));
+            setStatus(Failed);
+            m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+            return;
+        }
+        // Escape hatch for headless runs and tests: no console window can be
+        // attended there, so keep the old fail-fast behavior instead of
+        // opening install windows that would wait for input forever.
+        if (qEnvironmentVariableIsSet("MINIFOX_SKIP_DEPENDENCY_INSTALL")) {
+            setLastError(tr("依赖检查失败，ComfyUI 未启动。"));
+            setStatus(Failed);
+            m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+            return;
+        }
+        m_logModel->appendSystemMessage(
+            tr("发现 %1 个依赖清单不满足，正在打开安装窗口…").arg(failingPaths.size()),
+            QStringLiteral("#9d5d00"));
+        m_dependencyPendingInstalls = failingPaths;
+        m_dependencyRecheckPaths = failingPaths;
+        startNextDependencyInstall();
+        return;
+    }
+
+    if (m_dependencyRecheckPhase) {
+        m_dependencyRecheckPhase = false;
+        m_logModel->appendSystemMessage(
+            tr("依赖复检通过（已检查 %1 项），准备启动 ComfyUI。").arg(totalChecked),
+            QStringLiteral("#0f7b0f"));
+    } else {
+        m_logModel->appendSystemMessage(
+            tr("依赖检查通过（已检查 %1 项），准备启动 ComfyUI。").arg(totalChecked),
+            QStringLiteral("#0f7b0f"));
+    }
     launchConfiguredProcess();
+}
+
+QStringList RuntimeManager::collectRequirementFiles() const
+{
+    const LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    const QDir root(command.workingDirectory);
+    QStringList files;
+    const QString kernelRequirements = root.filePath(QStringLiteral("requirements.txt"));
+    if (QFileInfo::exists(kernelRequirements)) {
+        files.append(kernelRequirements);
+    }
+    const QDir customNodes(root.filePath(QStringLiteral("custom_nodes")));
+    if (customNodes.exists()) {
+        const QFileInfoList entries = customNodes.entryInfoList(
+            QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QFileInfo &entry : entries) {
+            const QString name = entry.fileName();
+            if (name.compare(QStringLiteral("__pycache__"), Qt::CaseInsensitive) == 0
+                || name.endsWith(QStringLiteral(".disabled"), Qt::CaseInsensitive)) {
+                continue;
+            }
+            const QString requirements = QDir(entry.absoluteFilePath())
+                .filePath(QStringLiteral("requirements.txt"));
+            if (QFileInfo::exists(requirements)) {
+                files.append(requirements);
+            }
+        }
+    }
+    return files;
+}
+
+void RuntimeManager::startNextDependencyInstall()
+{
+    if (m_dependencyPendingInstalls.isEmpty()) {
+        // Every failing file got its install window; re-check exactly those files
+        // before ComfyUI is allowed to start.
+        m_dependencyRecheckPhase = true;
+        const LaunchCommandBuilder::Result command =
+            LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+        QProcessEnvironment environment = command.environment;
+        m_settings->applyToProcessEnvironment(environment);
+        m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
+        m_dependencyCheck.setProcessEnvironment(environment);
+        m_dependencyCheck.setProgram(command.program);
+        QStringList arguments{QStringLiteral("-c"), dependencyCheckerScript()};
+        arguments.append(m_dependencyRecheckPaths);
+        m_dependencyCheck.setArguments(arguments);
+        m_logModel->appendSystemMessage(tr("依赖安装结束，正在复检…"),
+                                        QStringLiteral("#0067c0"));
+        m_dependencyCheck.start();
+        return;
+    }
+
+    m_dependencyCurrentPath = m_dependencyPendingInstalls.takeFirst();
+    const QString name = requirementDisplayName(m_dependencyCurrentPath);
+    const LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+
+    QString directoryError;
+    if (!PortablePaths::ensureDataDirectory(&directoryError)) {
+        setLastError(tr("无法创建数据目录，依赖安装已中止：%1").arg(directoryError));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return;
+    }
+    const QString stamp = QStringLiteral("%1-%2")
+        .arg(QCoreApplication::applicationPid())
+        .arg(QDateTime::currentMSecsSinceEpoch());
+    m_dependencyBatPath = QDir(PortablePaths::dataDirectory())
+        .filePath(QStringLiteral("dep-startup-%1.bat").arg(stamp));
+
+    // A failing install leaves the console open so the pip error stays readable;
+    // the exit code still reaches the launcher through cmd.exe.
+    const QString bat = QStringLiteral(
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        "title Minifox - %1\r\n"
+        "\"%2\" -m pip install -r \"%3\"\r\n"
+        "set CODE=%ERRORLEVEL%\r\n"
+        "if not \"%CODE%\"==\"0\" (\r\n"
+        "    echo.\r\n"
+        "    echo [Minifox] 依赖安装失败，按任意键关闭窗口…\r\n"
+        "    pause >nul\r\n"
+        ")\r\n"
+        "exit /b %CODE%\r\n").arg(name,
+                                QDir::toNativeSeparators(command.program),
+                                QDir::toNativeSeparators(m_dependencyCurrentPath));
+    QFile batFile(m_dependencyBatPath);
+    if (!batFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        setLastError(tr("无法创建 %1 的依赖安装脚本。").arg(name));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return;
+    }
+    batFile.write(bat.toUtf8());
+    batFile.close();
+
+    QProcessEnvironment environment = command.environment;
+    m_settings->applyToProcessEnvironment(environment);
+    m_dependencyInstall.setWorkingDirectory(command.workingDirectory);
+    m_dependencyInstall.setProcessEnvironment(environment);
+    m_dependencyInstall.setProgram(QStringLiteral("cmd.exe"));
+    m_dependencyInstall.setArguments({QStringLiteral("/c"),
+                                      QDir::toNativeSeparators(m_dependencyBatPath)});
+#ifdef Q_OS_WIN
+    m_dependencyInstall.setCreateProcessArgumentsModifier(
+        [](QProcess::CreateProcessArguments *arguments) {
+            arguments->flags &= ~CREATE_NO_WINDOW;
+            arguments->flags |= CREATE_NEW_CONSOLE;
+        });
+#endif
+    m_logModel->appendSystemMessage(
+        tr("正在安装 %1 的依赖（安装窗口关闭后继续）…").arg(name),
+        QStringLiteral("#9d5d00"));
+    m_dependencyInstall.start();
+}
+
+void RuntimeManager::handleDependencyInstallStarted()
+{
+    const qint64 installPid = m_dependencyInstall.processId();
+    if (m_processJob.attach(installPid)) {
+        return;
+    }
+
+    m_startupAborted = true;
+    setLastError(tr("无法将依赖安装进程加入安全作业，已中止启动。"));
+    setStatus(Failed);
+    m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+    forceKillProcessTree(installPid);
+    m_dependencyInstall.kill();
+}
+
+void RuntimeManager::handleDependencyInstallFinished(int exitCode,
+                                                     QProcess::ExitStatus exitStatus)
+{
+    m_processJob.reset();
+    QFile::remove(m_dependencyBatPath);
+    const QString name = requirementDisplayName(m_dependencyCurrentPath);
+
+    if (m_stopRequested) {
+        if (m_process.state() == QProcess::NotRunning
+            && m_dependencyCheck.state() == QProcess::NotRunning) {
+            m_forceStopTimer.stop();
+            setStatus(Stopped);
+            emit runtimeInfoChanged();
+        }
+        return;
+    }
+    if (m_startupAborted) {
+        return;
+    }
+
+    if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+        m_logModel->appendSystemMessage(
+            tr("%1 的依赖安装失败（退出代码 %2），继续处理其余清单。")
+                .arg(name).arg(exitCode),
+            QStringLiteral("#c42b1c"));
+    } else {
+        m_logModel->appendSystemMessage(tr("%1：依赖安装完成。").arg(name),
+                                        QStringLiteral("#0f7b0f"));
+    }
+    startNextDependencyInstall();
 }
 
 void RuntimeManager::launchConfiguredProcess()
@@ -586,6 +844,8 @@ void RuntimeManager::terminateTrackedProcessTree()
 {
     const qint64 dependencyPid = m_dependencyCheck.state() == QProcess::NotRunning
         ? 0 : m_dependencyCheck.processId();
+    const qint64 installPid = m_dependencyInstall.state() == QProcess::NotRunning
+        ? 0 : m_dependencyInstall.processId();
     const qint64 runtimePid = m_process.state() == QProcess::NotRunning
         ? 0 : (m_processId > 0 ? m_processId : m_process.processId());
 
@@ -594,6 +854,7 @@ void RuntimeManager::terminateTrackedProcessTree()
     // abnormal launcher termination release every descendant and the listening port.
     if (!m_processJob.isAttached()) {
         forceKillProcessTree(dependencyPid);
+        forceKillProcessTree(installPid);
         forceKillProcessTree(runtimePid);
     } else {
         m_processJob.terminate();
@@ -602,6 +863,10 @@ void RuntimeManager::terminateTrackedProcessTree()
     if (m_dependencyCheck.state() != QProcess::NotRunning) {
         m_dependencyCheck.kill();
         m_dependencyCheck.waitForFinished(2000);
+    }
+    if (m_dependencyInstall.state() != QProcess::NotRunning) {
+        m_dependencyInstall.kill();
+        m_dependencyInstall.waitForFinished(2000);
     }
     if (m_process.state() != QProcess::NotRunning) {
         m_process.kill();

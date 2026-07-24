@@ -671,6 +671,10 @@ void LaunchCommandBuilderTest::runtimeBlocksMissingDependencies()
         QSKIP("python.exe is not available on PATH");
     }
 
+    // The interactive install windows need an attending user; the test only
+    // verifies that unsatisfiable dependencies block the launch.
+    qputenv("MINIFOX_SKIP_DEPENDENCY_INSTALL", "1");
+
     QTemporaryDir temporaryDirectory;
     QVERIFY(temporaryDirectory.isValid());
     const QString launchMarker = temporaryDirectory.filePath(QStringLiteral("main-started.txt"));

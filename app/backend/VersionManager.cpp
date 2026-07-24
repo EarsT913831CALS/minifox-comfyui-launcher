@@ -41,6 +41,30 @@ VersionManager::VersionManager(ConfigurationManager *configuration, QObject *par
             setFailure(tr("无法启动 Git。请安装 Git for Windows 后重试。"));
         }
     });
+    m_dependencyProcess.setProcessChannelMode(QProcess::MergedChannels);
+    m_dependencyTimeout.setSingleShot(true);
+    connect(&m_dependencyTimeout, &QTimer::timeout, this, [this] {
+        m_dependencyTimedOut = true;
+        if (m_dependencyProcess.state() != QProcess::NotRunning) m_dependencyProcess.kill();
+    });
+    connect(&m_dependencyProcess, &QProcess::finished, this,
+            [this](int exitCode, QProcess::ExitStatus exitStatus) {
+        if (m_dependencyInstallPhase) {
+            handleDependencyInstallFinished(exitCode, exitStatus);
+        } else {
+            handleDependencyCheckFinished(exitCode, exitStatus);
+        }
+    });
+    connect(&m_dependencyProcess, &QProcess::errorOccurred, this,
+            [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+            if (m_dependencyInstallPhase) {
+                handleDependencyInstallFinished(-1, QProcess::CrashExit);
+            } else {
+                handleDependencyCheckFinished(-1, QProcess::CrashExit);
+            }
+        }
+    });
     connect(m_configuration, &ConfigurationManager::currentProfileChanged, this, [this] {
         if (!m_busy && m_comfyRoot != m_configuration->comfyRoot()) {
             QTimer::singleShot(150, this, &VersionManager::loadLocalState);
@@ -50,6 +74,7 @@ VersionManager::VersionManager(ConfigurationManager *configuration, QObject *par
 }
 
 bool VersionManager::busy() const { return m_busy || m_catalogLoading; }
+bool VersionManager::installingDependencies() const { return m_installingDependencies; }
 bool VersionManager::updating() const { return m_notifyOnFinish && m_busy; }
 bool VersionManager::catalogLoading() const { return m_catalogLoading; }
 bool VersionManager::repository() const { return m_repository; }
@@ -68,6 +93,15 @@ QString VersionManager::comfyRoot() const { return m_comfyRoot; }
 QString VersionManager::comfyVersion() const { return m_comfyVersion; }
 QString VersionManager::branch() const { return m_branch; }
 QString VersionManager::commit() const { return m_commit; }
+QString VersionManager::commitFull() const { return m_commitFull; }
+int VersionManager::networkRoute() const { return m_networkRoute; }
+void VersionManager::setNetworkRoute(int route)
+{
+    const int normalized = route == 1 ? 1 : 0;
+    if (m_networkRoute == normalized) return;
+    m_networkRoute = normalized;
+    emit stateChanged();
+}
 QString VersionManager::commitDate() const { return m_commitDate; }
 QString VersionManager::commitSubject() const { return m_commitSubject; }
 QString VersionManager::remoteUrl() const { return m_remoteUrl; }
@@ -117,6 +151,7 @@ void VersionManager::refreshCore()
     m_comfyVersion = readComfyVersion(m_comfyRoot);
     m_branch.clear();
     m_commit.clear();
+    m_commitFull.clear();
     m_commitDate.clear();
     m_commitSubject.clear();
     m_remoteUrl.clear();
@@ -184,6 +219,7 @@ void VersionManager::loadLocalState()
     m_comfyVersion = readComfyVersion(m_comfyRoot);
     m_branch.clear();
     m_commit.clear();
+    m_commitFull.clear();
     m_commitDate.clear();
     m_commitSubject.clear();
     m_remoteUrl.clear();
@@ -269,7 +305,20 @@ void VersionManager::switchCoreVersion(const QString &commit, int channel)
 
 void VersionManager::switchBranch(const QString &branch)
 {
-    if (!canUpdate() || branch.trimmed().isEmpty()) return;
+    m_notifyOnFinish = true;
+    m_pendingCompletionMessage = tr("分支已切换。");
+    if (!canUpdate()) {
+        if (m_dirty) {
+            setFailure(tr("存在未提交更改。为避免覆盖文件，请先处理这些更改。"));
+        } else {
+            setFailure(tr("当前 ComfyUI 状态不允许切换分支，请先刷新内核列表。"));
+        }
+        return;
+    }
+    if (branch.trimmed().isEmpty()) {
+        setFailure(tr("请输入有效的分支名称。"));
+        return;
+    }
     startGit(Operation::CheckoutBranch,
              repositoryArguments(m_comfyRoot,
                  {QStringLiteral("checkout"), branch.trimmed()}));
@@ -355,8 +404,10 @@ void VersionManager::installExtension(const QString &url)
         return;
     }
     m_operationPath = QDir(m_comfyRoot).filePath(QStringLiteral("custom_nodes/") + name);
-    startGit(Operation::InstallExtension,
-             {QStringLiteral("clone"), QStringLiteral("--depth=1"), url.trimmed(), m_operationPath});
+    QStringList arguments = networkRouteArguments();
+    arguments.append({QStringLiteral("clone"), QStringLiteral("--depth=1"),
+                      url.trimmed(), m_operationPath});
+    startGit(Operation::InstallExtension, arguments);
 }
 
 void VersionManager::removeExtension(const QString &path)
@@ -427,6 +478,7 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::ValidateCoreCheckout:
     case Operation::CheckoutCore: m_statusMessage = tr("正在切换核心版本…"); break;
     case Operation::CheckoutBranch: m_statusMessage = tr("正在切换分支…"); break;
+    case Operation::NormalizeBranch: m_statusMessage = tr("正在校正分支…"); break;
     case Operation::ValidateExtensionUpdate:
     case Operation::PrepareExtensionUpdateFetch:
     case Operation::ResolveExtensionUpdateBranch:
@@ -500,17 +552,25 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("checkout"), QStringLiteral("-B"),
                       m_requestedCoreChannel == 0
-                          ? QStringLiteral("minifox/stable")
-                          : QStringLiteral("minifox/development"),
+                          ? QStringLiteral("master")
+                          : QStringLiteral("dev"),
                       m_pendingCommit}));
         break;
     case Operation::RefreshLog: {
         const QStringList parts = output.split(QChar(0x1f));
         if (!parts.isEmpty()) m_commit = parts.at(0);
+        if (parts.size() > 1) m_commitFull = parts.at(1);
         if (parts.size() > 2) m_commitDate = parts.at(2);
         if (parts.size() > 3) m_commitSubject = parts.mid(3).join(QStringLiteral(" "));
         if (m_comfyVersion.isEmpty()) m_comfyVersion = m_commit;
         m_remoteUrl = readGitValue(m_comfyRoot, QStringLiteral("remote"));
+        const QString normalizeTarget = normalizedBranchName();
+        if (!normalizeTarget.isEmpty()) {
+            startGit(Operation::NormalizeBranch,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("checkout"), QStringLiteral("-B"), normalizeTarget}));
+            break;
+        }
         if (m_fullRefresh) {
             startGit(Operation::Fetch,
                      repositoryArguments(m_comfyRoot,
@@ -622,7 +682,7 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         startGit(Operation::CheckoutCore,
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("checkout"), QStringLiteral("-B"),
-                      QStringLiteral("minifox/stable"), output.section(QLatin1Char('\n'), 0, 0).trimmed()}));
+                      QStringLiteral("master"), output.section(QLatin1Char('\n'), 0, 0).trimmed()}));
         break;
     case Operation::ResolveDevelopmentUpdateBranch:
         m_targetRemoteBranch = selectDevelopmentBranch(output);
@@ -632,8 +692,9 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         }
         startGit(Operation::CheckoutCore,
                  repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("checkout"), QStringLiteral("-B"),
-                      QStringLiteral("minifox/development"), m_targetRemoteBranch}));
+                     {QStringLiteral("checkout"), QStringLiteral("--track"),
+                      QStringLiteral("-B"),
+                      QStringLiteral("dev"), m_targetRemoteBranch}));
         break;
     case Operation::ResolveCoreUpdateBranch:
         m_targetRemoteBranch = selectRemoteBranch(output, m_branch);
@@ -666,6 +727,12 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     case Operation::Pull:
     case Operation::CheckoutCore:
     case Operation::CheckoutBranch:
+        queueDependencyCheck(m_comfyRoot);
+        m_busy = false;
+        emit stateChanged();
+        refresh();
+        break;
+    case Operation::NormalizeBranch:
         m_busy = false;
         emit stateChanged();
         refresh();
@@ -673,6 +740,7 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     case Operation::UpdateExtension:
     case Operation::CheckoutExtension:
     case Operation::InstallExtension:
+        queueDependencyCheck(m_operationPath);
         if (completed == Operation::UpdateExtension) {
             setExtensionStatus(m_operationPath, QStringLiteral("latest"));
         }
@@ -833,13 +901,26 @@ void VersionManager::parseStableHistory(const QString &output)
     m_stableVersions = versions;
 }
 
+QStringList VersionManager::networkRouteArguments() const
+{
+    if (m_networkRoute != 1) return {};
+    const QString mirror = QStringLiteral("https://ghfast.top/");
+    return {
+        QStringLiteral("-c"),
+        QStringLiteral("url.%1https://github.com/.insteadOf=https://github.com/").arg(mirror),
+        QStringLiteral("-c"),
+        QStringLiteral("url.%1https://github.com/.insteadOf=git@github.com:").arg(mirror)
+    };
+}
+
 QStringList VersionManager::repositoryArguments(const QString &root, const QStringList &arguments) const
 {
-    QStringList result {
+    QStringList result = networkRouteArguments();
+    result.append({
         QStringLiteral("-c"),
         QStringLiteral("safe.directory=%1").arg(QDir::cleanPath(root)),
         QStringLiteral("-C"), root
-    };
+    });
     result.append(arguments);
     return result;
 }
@@ -1111,8 +1192,12 @@ void VersionManager::downloadCatalog()
         m_catalogReply->deleteLater();
     }
 
-    QNetworkRequest request(QUrl(QStringLiteral(
-        "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json")));
+    QString catalogUrl = QStringLiteral(
+        "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json");
+    if (m_networkRoute == 1) {
+        catalogUrl = QStringLiteral("https://ghfast.top/") + catalogUrl;
+    }
+    QNetworkRequest request{QUrl(catalogUrl)};
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Minifox-ComfyUI-Launcher/0.1"));
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -1244,7 +1329,8 @@ QString VersionManager::selectRemoteBranch(const QString &output, const QString 
     }
     if (candidates.isEmpty()) return {};
 
-    if (localBranch.compare(QStringLiteral("minifox/development"), Qt::CaseInsensitive) == 0) {
+    if (localBranch.compare(QStringLiteral("minifox/development"), Qt::CaseInsensitive) == 0
+        || localBranch.compare(QStringLiteral("dev"), Qt::CaseInsensitive) == 0) {
         return selectDevelopmentBranch(output);
     }
     if (!localBranch.isEmpty() && !branchNeedsRecovery(localBranch)) {
@@ -1372,4 +1458,207 @@ void VersionManager::completeRefresh(bool success, const QString &message)
         m_pendingCompletionMessage.clear();
         emit operationCompleted(success, completionMessage);
     }
+}
+
+QString VersionManager::requirementsFileFor(const QString &targetDir)
+{
+    const QString path = QDir(targetDir).filePath(QStringLiteral("requirements.txt"));
+    return QFileInfo::exists(path) ? path : QString();
+}
+
+void VersionManager::queueDependencyCheck(const QString &targetDir)
+{
+    if (targetDir.isEmpty()) return;
+    if (!m_dependencyQueue.contains(targetDir)) {
+        m_dependencyQueue.append(targetDir);
+    }
+    if (!m_installingDependencies) {
+        startNextDependencyCheck();
+    }
+}
+
+void VersionManager::startNextDependencyCheck()
+{
+    while (!m_dependencyQueue.isEmpty()) {
+        m_dependencyDir = m_dependencyQueue.takeFirst();
+        const QString requirements = requirementsFileFor(m_dependencyDir);
+        if (requirements.isEmpty()) {
+            continue;
+        }
+        const QString python = m_configuration->pythonPath();
+        if (python.isEmpty() || !QFileInfo::exists(python)) {
+            emit dependencyInstallCompleted(false,
+                tr("未配置有效的 Python 环境，无法检查 %1 的依赖。")
+                    .arg(QFileInfo(m_dependencyDir).fileName()));
+            continue;
+        }
+        m_installingDependencies = true;
+        m_dependencyInstallPhase = false;
+        m_dependencyTimedOut = false;
+        emit stateChanged();
+        m_dependencyProcess.setProgram(python);
+        m_dependencyProcess.setArguments({
+            QStringLiteral("-m"), QStringLiteral("pip"),
+            QStringLiteral("install"), QStringLiteral("--dry-run"),
+            QStringLiteral("-r"), requirements});
+        m_dependencyTimeout.start(180000);
+        m_dependencyProcess.start();
+        return;
+    }
+    m_installingDependencies = false;
+    emit stateChanged();
+}
+
+void VersionManager::handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    m_dependencyTimeout.stop();
+    const QString output = QString::fromUtf8(m_dependencyProcess.readAllStandardOutput()).trimmed();
+    const QString name = QFileInfo(m_dependencyDir).fileName();
+    const bool timedOut = m_dependencyTimedOut;
+    m_dependencyTimedOut = false;
+
+    if (timedOut) {
+        emit dependencyInstallCompleted(false, tr("%1 的依赖检查超时。").arg(name));
+        startNextDependencyCheck();
+        return;
+    }
+    if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+        QString detail = output;
+        if (detail.size() > 200) detail = QStringLiteral("…") + detail.right(200);
+        if (detail.isEmpty()) detail = tr("pip 无法运行。");
+        emit dependencyInstallCompleted(false, tr("%1 的依赖检查失败：%2").arg(name, detail));
+        startNextDependencyCheck();
+        return;
+    }
+    if (!output.contains(QStringLiteral("Would install"))) {
+        startNextDependencyCheck();
+        return;
+    }
+
+    const QString requirements = requirementsFileFor(m_dependencyDir);
+    const QString python = m_configuration->pythonPath();
+    PortablePaths::ensureDataDirectory();
+    const QString stamp = QStringLiteral("%1-%2")
+        .arg(QCoreApplication::applicationPid())
+        .arg(QDateTime::currentMSecsSinceEpoch());
+    m_dependencyMarkerPath = QDir(PortablePaths::dataDirectory())
+        .filePath(QStringLiteral("dep-%1.code").arg(stamp));
+    m_dependencyBatPath = QDir(PortablePaths::dataDirectory())
+        .filePath(QStringLiteral("dep-%1.bat").arg(stamp));
+
+    const QString bat = QStringLiteral(
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        "title Minifox - %1\r\n"
+        "\"%2\" -m pip install -r \"%3\"\r\n"
+        "set CODE=%ERRORLEVEL%\r\n"
+        "> \"%4\" echo %CODE%\r\n"
+        "if not \"%CODE%\"==\"0\" (\r\n"
+        "    echo.\r\n"
+        "    echo [Minifox] 依赖安装失败，按任意键关闭窗口…\r\n"
+        "    pause >nul\r\n"
+        ")\r\n"
+        "exit /b %CODE%\r\n").arg(name,
+                                QDir::toNativeSeparators(python),
+                                QDir::toNativeSeparators(requirements),
+                                QDir::toNativeSeparators(m_dependencyMarkerPath));
+    QFile batFile(m_dependencyBatPath);
+    if (!batFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        emit dependencyInstallCompleted(false, tr("无法创建 %1 的依赖安装脚本。").arg(name));
+        startNextDependencyCheck();
+        return;
+    }
+    batFile.write(bat.toUtf8());
+    batFile.close();
+
+    m_dependencyInstallPhase = true;
+    emit stateChanged();
+    m_dependencyProcess.setProgram(QStringLiteral("cmd.exe"));
+    m_dependencyProcess.setArguments({
+        QStringLiteral("/c"), QStringLiteral("start"),
+        QStringLiteral("Minifox 依赖安装 - %1").arg(name),
+        QStringLiteral("/wait"),
+        QStringLiteral("cmd"), QStringLiteral("/c"),
+        QDir::toNativeSeparators(m_dependencyBatPath)});
+    m_dependencyProcess.start();
+}
+
+void VersionManager::handleDependencyInstallFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    Q_UNUSED(exitCode);
+    Q_UNUSED(exitStatus);
+    m_dependencyInstallPhase = false;
+    const QString name = QFileInfo(m_dependencyDir).fileName();
+    int code = -1;
+    QFile marker(m_dependencyMarkerPath);
+    if (marker.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        bool ok = false;
+        code = QString::fromUtf8(marker.readAll()).trimmed().toInt(&ok);
+        if (!ok) code = -1;
+        marker.close();
+        marker.remove();
+    }
+    QFile::remove(m_dependencyBatPath);
+    if (code == 0) {
+        emit dependencyInstallCompleted(true, tr("%1：依赖安装完成。").arg(name));
+    } else if (code < 0) {
+        emit dependencyInstallCompleted(false,
+            tr("%1：依赖安装窗口被关闭，无法确认安装结果。").arg(name));
+    } else {
+        emit dependencyInstallCompleted(false,
+            tr("%1：依赖安装失败（退出码 %2）。").arg(name).arg(code));
+    }
+    startNextDependencyCheck();
+}
+
+QString VersionManager::normalizedBranchName() const
+{
+    if (m_branch != QStringLiteral("master") && m_branch != QStringLiteral("dev")) {
+        return {};
+    }
+    const QString target = commitHasVersionTag(m_commitFull)
+        ? QStringLiteral("master") : QStringLiteral("dev");
+    return m_branch == target ? QString() : target;
+}
+
+bool VersionManager::commitHasVersionTag(const QString &commitFull) const
+{
+    if (commitFull.isEmpty()) return false;
+    const QDir gitDir(QDir(m_comfyRoot).filePath(QStringLiteral(".git")));
+
+    const QDir tagsDir(gitDir.filePath(QStringLiteral("refs/tags")));
+    const QFileInfoList looseTags = tagsDir.entryInfoList(
+        QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+    for (const QFileInfo &tagInfo : looseTags) {
+        if (!tagInfo.fileName().startsWith(QLatin1Char('v'))) continue;
+        QFile tagFile(tagInfo.absoluteFilePath());
+        if (tagFile.open(QIODevice::ReadOnly | QIODevice::Text)
+            && QString::fromUtf8(tagFile.readAll()).trimmed() == commitFull) {
+            return true;
+        }
+    }
+
+    QFile packed(gitDir.filePath(QStringLiteral("packed-refs")));
+    if (!packed.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return false;
+    }
+    bool vTagMayFollow = false;
+    const QStringList lines = QString::fromUtf8(packed.readAll()).split(QLatin1Char('\n'));
+    for (const QString &rawLine : lines) {
+        const QString line = rawLine.trimmed();
+        if (line.isEmpty() || line.startsWith(QLatin1Char('#'))) continue;
+        if (line.startsWith(QLatin1Char('^'))) {
+            if (vTagMayFollow && line.mid(1).trimmed() == commitFull) return true;
+            vTagMayFollow = false;
+            continue;
+        }
+        vTagMayFollow = false;
+        const int separator = line.indexOf(QLatin1Char(' '));
+        if (separator < 0) continue;
+        const QString ref = line.mid(separator + 1).trimmed();
+        if (!ref.startsWith(QStringLiteral("refs/tags/v"))) continue;
+        if (line.left(separator) == commitFull) return true;
+        vTagMayFollow = true;
+    }
+    return false;
 }
