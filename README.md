@@ -12,9 +12,14 @@ Minifox 是面向 Windows 10/11 的便携式 ComfyUI 启动器，使用 Qt 6、Q
 - 使用 Windows Job Object 管理子进程树
 - 实时显示 stdout/stderr，支持 UTF-8、ANSI 前景色、时间戳、自动换行和日志导出
 - 自动识别 tqdm 风格动态输出，在控制台底部显示独立的 Windows 11 风格进度条
+- 控制台支持滚轮、拖动滚动条和一键回到底部，滚动状态与悬浮按钮保持同步
+- 管理 ComfyUI 内核分支和历史版本，支持稳定版、开发版、分支切换与一键更新
+- 管理已安装扩展的启用状态、更新、历史版本切换和卸载，并可打开远程仓库
+- 自动识别 NVIDIA、AMD 和混合显卡环境；仅在 AMD-only CUDA PyTorch 环境中引导 ZLUDA
+- 内置通用 ZLUDA 运行包，自动创建便携运行目录和 ZLUDA、Triton、TorchInductor 缓存
 - Fluent/Windows 11 风格界面，支持系统、浅色、深色主题及系统/自定义强调色
 - 支持界面字体、字号、控制台字体、代理、语言和减少动态效果设置
-- 所有用户数据仅保存在 EXE 旁的隐藏目录 `.minifox`
+- 启动器配置、便携运行数据和缓存仅保存在 EXE 所在整合包内，不写入注册表
 
 ## 支持范围
 
@@ -24,6 +29,47 @@ Minifox 是面向 Windows 10/11 的便携式 ComfyUI 启动器，使用 Qt 6、Q
 - Qt：6.8 或更高版本，包含 Core、Gui、Network、Qml、Quick、QuickControls2、LinguistTools 和 Test
 
 本项目已使用 Qt 6.11.1、GCC 16.1.0、CMake 4.4 和 Ninja 完成验证。
+
+## 直接使用
+
+将单文件 `Minifox ComfyUI Launcher.exe` 放到 ComfyUI 整合包根目录。启动器可自动识别常见的 `ComfyUI/` 和 `python/` 便携目录，也可以在配置中手动指定路径。
+
+```text
+ComfyUI-Package/
+├─ Minifox ComfyUI Launcher.exe
+├─ ComfyUI/
+│  └─ main.py
+└─ python/
+   └─ python.exe
+```
+
+### GPU 后端选择
+
+启动器在进入首页前完成显卡和 PyTorch 后端判断，一键启动与手动启动使用相同结果：
+
+| 系统环境 | 启动方式 |
+|---|---|
+| NVIDIA 显卡 | 保持原始 CUDA/PyTorch，不释放或注入 ZLUDA |
+| NVIDIA + AMD 混合显卡 | 保持 NVIDIA CUDA 路径 |
+| AMD 显卡 + 原生 ROCm PyTorch | 直接使用 ROCm，不进入 ZLUDA |
+| 仅 AMD 显卡 + CUDA PyTorch | 自动准备并注入便携 ZLUDA 运行时 |
+
+AMD ZLUDA 用户只需：
+
+1. 使用 AMD 官方安装器安装 HIP SDK；安装器会设置 `HIP_PATH`。
+2. 确保 `<HIP_PATH>/bin/rocblas/library` 中已有适用于本机 `gfx` 架构的 rocBLAS/Tensile 文件。
+3. 使用原本面向 NVIDIA/CUDA 的 ComfyUI 整合包，并把 Minifox EXE 放到整合包根目录。
+
+启动器会自动释放内置 ZLUDA、创建 `.minifox` 与 `.cache` 下的运行目录和缓存，并只向 ComfyUI 子进程注入环境。它不会修改 ComfyUI、PyTorch、系统 HIP 文件或系统环境变量。不同 `gfx` 架构的 rocBLAS/Tensile 补丁不随启动器分发，由 HIP 环境提供。详细打包与隔离规则见 [ZLUDA_PACKAGING.zh-CN.md](ZLUDA_PACKAGING.zh-CN.md)。
+
+### 版本管理
+
+- “刷新列表”只读取远程分支和提交，不改动工作目录。
+- 切换内核版本、切换分支和一键更新会执行强制重置与清理，再切换到目标提交。
+- 扩展版本切换会显示提交说明、日期和当前版本，不需要手工输入 commit ID。
+- 远程仓库地址支持 `Ctrl + 左键` 在默认浏览器中打开。
+
+> **注意：** 强制版本操作会丢弃仓库内已修改文件，并删除未跟踪文件和目录。需要保留的自定义内容请先备份。
 
 ## 1. 安装构建依赖
 
@@ -158,6 +204,7 @@ shared/
 platform/windows/                    Windows 平台实现
 extension-api/                       扩展 API 边界说明
 extensions/                          扩展目录说明
+assets/zluda/                        内置通用 ZLUDA 运行包
 scripts/                             可复现构建入口
 .github/workflows/                   GitHub Actions 编译验证
 ```
@@ -175,15 +222,21 @@ QML 不直接读写配置文件或操作进程，所有业务行为都通过 `ap
 
 ## 用户数据
 
-程序首次运行时在 EXE 旁创建：
+程序首次运行时在 EXE 旁创建 `.minifox`。AMD ZLUDA 路径还会按需创建 `.cache`：
 
 ```text
 .minifox/
 ├── application-settings.json
-└── launch-profiles.json
+├── launch-profiles.json
+├── packages/
+└── runtime/
+.cache/
+├── zluda/
+├── triton/
+└── torchinductor/
 ```
 
-该目录在 Windows 中自动隐藏。程序不使用注册表或系统配置目录；请将 EXE 放在用户拥有写权限的位置。
+这些目录在 Windows 中自动隐藏。程序不使用注册表或系统配置目录；请将 EXE 放在用户拥有写权限的位置。NVIDIA 和原生 ROCm 环境不会创建或注入 ZLUDA 运行时。
 
 ## 持续集成
 
