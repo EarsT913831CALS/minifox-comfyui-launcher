@@ -143,13 +143,12 @@ QString pathZludaSource(const QProcessEnvironment &environment)
 
 QString tarExecutable()
 {
-    QString tar = QStandardPaths::findExecutable(QStringLiteral("tar.exe"));
-    if (!tar.isEmpty()) {
-        return tar;
-    }
     const QString systemRoot = qEnvironmentVariable("SystemRoot", QStringLiteral("C:/Windows"));
     const QString systemTar = QDir(systemRoot).filePath(QStringLiteral("System32/tar.exe"));
-    return QFileInfo::exists(systemTar) ? systemTar : QString();
+    if (QFileInfo::exists(systemTar)) {
+        return systemTar;
+    }
+    return QStandardPaths::findExecutable(QStringLiteral("tar.exe"));
 }
 
 QString extractAkiExtpack(const QString &portableRoot,
