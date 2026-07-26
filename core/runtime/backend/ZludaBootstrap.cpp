@@ -143,11 +143,6 @@ QString pathZludaSource(const QProcessEnvironment &environment)
 
 QString tarExecutable()
 {
-    const QString systemRoot = qEnvironmentVariable("SystemRoot", QStringLiteral("C:/Windows"));
-    const QString systemTar = QDir(systemRoot).filePath(QStringLiteral("System32/tar.exe"));
-    if (QFileInfo::exists(systemTar)) {
-        return systemTar;
-    }
     return QStandardPaths::findExecutable(QStringLiteral("tar.exe"));
 }
 
@@ -286,7 +281,7 @@ bool extractEmbeddedArchive(const QString &archivePath,
     const QString tar = tarExecutable();
     if (tar.isEmpty()) {
         if (error) {
-            *error = QStringLiteral("系统缺少 Windows tar.exe，无法释放内置运行包。");
+            *error = QStringLiteral("系统缺少 tar.exe，无法释放内置运行包。");
         }
         return false;
     }
