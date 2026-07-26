@@ -2,8 +2,10 @@
 #include "ApplicationSettings.h"
 #include "CommandPromptBuilder.h"
 #include "ConfigurationManager.h"
+#include "HardwareManager.h"
 #include "LogModel.h"
 #include "RuntimeManager.h"
+#include "ZludaBootstrap.h"
 
 #include <QFontDatabase>
 #include <QFile>
@@ -46,6 +48,7 @@ public:
     }
 
 private slots:
+    void initTestCase();
     void defaultsStayImplicit();
     void commandPromptActivatesSelectedEnvironment();
     void explicitModesAndCustomArguments();
@@ -58,7 +61,13 @@ private slots:
     void environmentEntriesAreValidatedAndLegacyDefaultsMigrated();
     void bundledPythonRepairsSystemPythonProfile();
     void runtimeSurvivesFastChildFailure();
+    void runtimeAcceptsBareVcsDependencies();
     void runtimeBlocksMissingDependencies();
+    void zludaBackendClassificationProtectsNvidia();
+    void zludaRuntimePreparationStagesAliases();
+    void zludaLocalIntegrationWhenConfigured();
+    void zludaRuntimeManagerIntegrationWhenConfigured();
+    void hardwareManagerDetectsPortableZludaWhenConfigured();
     void runtimeShutdownReleasesChildPort();
     void profilesPersistWithoutLeavingTheTestDirectory();
     void tqdmProgressIsSeparatedFromConsoleLog();
@@ -68,6 +77,11 @@ private slots:
     void catalogDefaultOptionsAreDescriptive();
     void englishCatalogContainsNoChineseLabels();
 };
+
+void LaunchCommandBuilderTest::initTestCase()
+{
+    qputenv("MINIFOX_ZLUDA_BOOTSTRAP", "off");
+}
 
 void LaunchCommandBuilderTest::defaultsStayImplicit()
 {
@@ -662,6 +676,337 @@ void LaunchCommandBuilderTest::runtimeSurvivesFastChildFailure()
     runtime.start();
     QTRY_COMPARE_WITH_TIMEOUT(runtime.status(), RuntimeManager::Failed, 3000);
     QCOMPARE(runtime.lastExitCode(), 7);
+}
+
+void LaunchCommandBuilderTest::runtimeAcceptsBareVcsDependencies()
+{
+    const QString python = QStandardPaths::findExecutable(QStringLiteral("python.exe"));
+    if (python.isEmpty()) {
+        QSKIP("python.exe is not available on PATH");
+    }
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString launchMarker = temporaryDirectory.filePath(QStringLiteral("main-started.txt"));
+
+    QFile mainFile(temporaryDirectory.filePath(QStringLiteral("main.py")));
+    QVERIFY(mainFile.open(QIODevice::WriteOnly));
+    mainFile.write(QStringLiteral("from pathlib import Path\nPath(r'%1').write_text('started')\n")
+                       .arg(QDir::toNativeSeparators(launchMarker)).toUtf8());
+    mainFile.close();
+
+    QFile requirementsFile(temporaryDirectory.filePath(QStringLiteral("requirements.txt")));
+    QVERIFY(requirementsFile.open(QIODevice::WriteOnly));
+    requirementsFile.write("git+https://github.com/facebookresearch/sam2\n");
+    requirementsFile.close();
+
+    QDir root(temporaryDirectory.path());
+    QVERIFY(root.mkdir(QStringLiteral("SAM_2-1.0.dist-info")));
+    QFile metadataFile(root.filePath(QStringLiteral("SAM_2-1.0.dist-info/METADATA")));
+    QVERIFY(metadataFile.open(QIODevice::WriteOnly));
+    metadataFile.write("Metadata-Version: 2.1\nName: SAM-2\nVersion: 1.0\n");
+    metadataFile.close();
+    QFile directUrlFile(root.filePath(QStringLiteral("SAM_2-1.0.dist-info/direct_url.json")));
+    QVERIFY(directUrlFile.open(QIODevice::WriteOnly));
+    directUrlFile.write(
+        R"({"url":"https://github.com/facebookresearch/sam2","vcs_info":{"vcs":"git"}})");
+    directUrlFile.close();
+
+    ConfigurationManager configuration(
+        temporaryDirectory.filePath(QStringLiteral("profiles.json")));
+    configuration.setComfyRoot(temporaryDirectory.path());
+    configuration.setPythonPath(python);
+    ApplicationSettings settings(
+        temporaryDirectory.filePath(QStringLiteral("settings.json")));
+    RuntimeManager runtime(&configuration, &settings);
+
+    runtime.start();
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(launchMarker), 5000);
+    runtime.shutdown();
+}
+
+void LaunchCommandBuilderTest::zludaBackendClassificationProtectsNvidia()
+{
+    using Backend = ZludaBootstrap::BackendKind;
+    using Adapter = ZludaBootstrap::SystemAdapterKind;
+
+    QCOMPARE(ZludaBootstrap::classifyBackend(
+                 QStringLiteral("11.8"), {}, {QStringLiteral("NVIDIA GeForce RTX 4090")}),
+             Backend::Nvidia);
+    QCOMPARE(ZludaBootstrap::classifyBackend(
+                 QStringLiteral("11.8"), {}, {QStringLiteral("AMD Radeon 780M Graphics [ZLUDA]")}),
+             Backend::Zluda);
+    QCOMPARE(ZludaBootstrap::classifyBackend(
+                 {}, QStringLiteral("6.2"), {QStringLiteral("AMD Radeon RX 7900 XTX")}),
+             Backend::Rocm);
+    QCOMPARE(ZludaBootstrap::classifyBackend(
+                 QStringLiteral("11.8"), {},
+                 {QStringLiteral("AMD Radeon 780M Graphics [ZLUDA]"),
+                  QStringLiteral("NVIDIA GeForce RTX 4060")}),
+             Backend::Nvidia);
+
+    QVERIFY(ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("AMD Radeon 780M Graphics VEN_1002")}));
+    QVERIFY(!ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("NVIDIA GeForce RTX 4090 VEN_10DE")}));
+    QVERIFY(!ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("AMD Radeon 780M Graphics VEN_1002"),
+         QStringLiteral("NVIDIA GeForce RTX 4060 VEN_10DE")}));
+    QVERIFY(!ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("AMD Radeon 780M Graphics")}, QStringLiteral("off")));
+    QVERIFY(!ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("NVIDIA GeForce RTX 4090")}, QStringLiteral("force")));
+    QVERIFY(!ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("AMD Radeon 780M Graphics"),
+         QStringLiteral("NVIDIA GeForce RTX 4090")}, QStringLiteral("force")));
+    QVERIFY(ZludaBootstrap::shouldProbeAdapters(
+        {QStringLiteral("AMD Radeon 780M Graphics")}, QStringLiteral("force")));
+
+    QCOMPARE(ZludaBootstrap::classifySystemAdapters(
+                 {QStringLiteral("AMD Radeon 780M Graphics VEN_1002")}),
+             Adapter::AmdOnly);
+    QCOMPARE(ZludaBootstrap::classifySystemAdapters(
+                 {QStringLiteral("NVIDIA GeForce RTX 4090 VEN_10DE")}),
+             Adapter::NvidiaOnly);
+    QCOMPARE(ZludaBootstrap::classifySystemAdapters(
+                 {QStringLiteral("AMD Radeon 780M Graphics VEN_1002"),
+                  QStringLiteral("NVIDIA GeForce RTX 4060 VEN_10DE")}),
+             Adapter::Mixed);
+    QCOMPARE(ZludaBootstrap::classifySystemAdapters({}), Adapter::Unknown);
+}
+
+void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    QDir root(temporaryDirectory.path());
+    QVERIFY(root.mkpath(QStringLiteral("ComfyUI")));
+    QVERIFY(root.mkpath(QStringLiteral("python/Lib/site-packages/torch/lib")));
+    QVERIFY(root.mkpath(QStringLiteral("rocm/bin")));
+
+    const auto writeFile = [](const QString &path, const QByteArray &contents) {
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) {
+            return false;
+        }
+        return file.write(contents) == contents.size();
+    };
+
+    const QString pythonPath = root.filePath(QStringLiteral("python/python.exe"));
+    QVERIFY(writeFile(pythonPath, QByteArrayLiteral("python")));
+    const QString torchLib = root.filePath(QStringLiteral("python/Lib/site-packages/torch/lib"));
+    QVERIFY(writeFile(QDir(torchLib).filePath(QStringLiteral("cublas64_11.dll")), QByteArrayLiteral("native")));
+    QVERIFY(writeFile(QDir(torchLib).filePath(QStringLiteral("cusparse64_11.dll")), QByteArrayLiteral("native")));
+    QVERIFY(writeFile(QDir(torchLib).filePath(QStringLiteral("nvrtc64_112_0.dll")), QByteArrayLiteral("native")));
+
+    const QString rocmBin = root.filePath(QStringLiteral("rocm/bin"));
+    QVERIFY(writeFile(QDir(rocmBin).filePath(QStringLiteral("amdhip64.dll")), QByteArrayLiteral("hip")));
+
+    QProcessEnvironment environment;
+    environment.insert(QStringLiteral("PYTHONPATH"), QStringLiteral("C:/existing"));
+    environment.insert(QStringLiteral("HIP_PATH"), root.filePath(QStringLiteral("rocm")));
+    environment.insert(QStringLiteral("MINIFOX_ZLUDA_GFX_ARCH"), QStringLiteral("gfx1103"));
+
+    const ZludaBootstrap::Preparation preparation = ZludaBootstrap::prepare(
+        pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
+    QVERIFY2(preparation.valid, qPrintable(preparation.error));
+    QCOMPARE(QDir::cleanPath(preparation.sourceDirectory),
+             QDir::cleanPath(root.filePath(QStringLiteral(".minifox/packages/zluda"))));
+    QCOMPARE(preparation.gfxArchitecture, QStringLiteral("gfx1103"));
+    QCOMPARE(QDir::cleanPath(preparation.tensileLibraryDirectory),
+             QDir::cleanPath(root.filePath(
+                 QStringLiteral(".minifox/runtime/rocblas/library"))));
+    QCOMPARE(preparation.preloadNames,
+             QStringList({QStringLiteral("nvcuda.dll"),
+                          QStringLiteral("nvrtc64_112_0.dll"),
+                          QStringLiteral("cublas64_11.dll"),
+                          QStringLiteral("cusparse64_11.dll"),
+                          QStringLiteral("nvml.dll")}));
+    QVERIFY(QFileInfo::exists(
+        QDir(preparation.runtimeDirectory).filePath(QStringLiteral("cublas64_11.dll"))));
+    QVERIFY(QFileInfo::exists(
+        QDir(preparation.bootstrapDirectory).filePath(QStringLiteral("sitecustomize.py"))));
+    QFile bootstrapFile(
+        QDir(preparation.bootstrapDirectory).filePath(QStringLiteral("sitecustomize.py")));
+    QVERIFY(bootstrapFile.open(QIODevice::ReadOnly));
+    const QByteArray bootstrapScript = bootstrapFile.readAll();
+    QVERIFY(bootstrapScript.contains(
+        "HIP_HOME = _join_rocm_home('hip') if ROCM_HOME else None"));
+    QVERIFY(bootstrapScript.contains("HIP_HOME = ROCM_HOME"));
+    QVERIFY(bootstrapScript.contains("module.backends.cudnn.enabled = False"));
+    QVERIFY(bootstrapScript.contains("_force_flash_sdp_off"));
+    QVERIFY(bootstrapScript.contains("_force_mem_efficient_sdp_off"));
+    QVERIFY(bootstrapScript.contains("class _MinifoxTorchLoader"));
+    QVERIFY(!bootstrapScript.contains("import torch as"));
+    QVERIFY(QFileInfo::exists(
+        root.filePath(QStringLiteral(".minifox/packages/zluda.extpack"))));
+    QVERIFY(QFileInfo::exists(
+        root.filePath(QStringLiteral(".minifox/packages/tensile-gfx1103.extpack"))));
+    QVERIFY(!QDir(preparation.tensileLibraryDirectory)
+                 .entryList({QStringLiteral("*gfx1103*")}, QDir::Files).isEmpty());
+    QVERIFY(QFileInfo(root.filePath(QStringLiteral(".cache"))).isDir());
+    QVERIFY(QFileInfo(preparation.zludaCacheDirectory).isDir());
+    QVERIFY(QFileInfo(preparation.tritonCacheDirectory).isDir());
+    QVERIFY(QFileInfo(preparation.torchInductorCacheDirectory).isDir());
+    QVERIFY(preparation.rocmBinCandidates.contains(QDir::cleanPath(rocmBin)));
+
+    ZludaBootstrap::apply(preparation, rocmBin, environment);
+    QCOMPARE(environment.value(QStringLiteral("MINIFOX_ZLUDA_BOOTSTRAP")),
+             QStringLiteral("1"));
+    QCOMPARE(environment.value(QStringLiteral("MINIFOX_ROCM_BIN")), rocmBin);
+    QCOMPARE(environment.value(QStringLiteral("ZLUDA_NVRTC_LIB")),
+             QDir(preparation.runtimeDirectory).filePath(QStringLiteral("nvrtc64_112_0.dll")));
+    QCOMPARE(environment.value(QStringLiteral("ZLUDA_CACHE_DIR")),
+             preparation.zludaCacheDirectory);
+    QCOMPARE(environment.value(QStringLiteral("TRITON_CACHE_DIR")),
+             preparation.tritonCacheDirectory);
+    QCOMPARE(environment.value(QStringLiteral("TORCHINDUCTOR_CACHE_DIR")),
+             preparation.torchInductorCacheDirectory);
+    QCOMPARE(environment.value(QStringLiteral("ROCBLAS_TENSILE_LIBPATH")),
+             preparation.tensileLibraryDirectory);
+    QCOMPARE(environment.value(QStringLiteral("DISABLE_ADDMM_CUDA_LT")),
+             QStringLiteral("1"));
+    QCOMPARE(environment.value(QStringLiteral("TORCH_BLAS_PREFER_HIPBLASLT")),
+             QStringLiteral("0"));
+    QCOMPARE(environment.value(QStringLiteral("HIP_PATH")),
+             QDir::cleanPath(QDir(rocmBin).absoluteFilePath(QStringLiteral(".."))));
+    QCOMPARE(environment.value(QStringLiteral("PATH")).split(QDir::listSeparator()).at(0),
+             rocmBin);
+    QCOMPARE(environment.value(QStringLiteral("PATH")).split(QDir::listSeparator()).at(1),
+             preparation.runtimeDirectory);
+    QCOMPARE(environment.value(QStringLiteral("PYTHONPATH")).split(QDir::listSeparator()).constFirst(),
+             preparation.bootstrapDirectory);
+
+    environment.insert(QStringLiteral("MINIFOX_ZLUDA_GFX_ARCH"), QStringLiteral("gfx1200"));
+    const ZludaBootstrap::Preparation unsupported = ZludaBootstrap::prepare(
+        pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
+    QVERIFY(!unsupported.valid);
+    QVERIFY2(unsupported.error.contains(QStringLiteral("gfx1200")),
+             qPrintable(unsupported.error));
+}
+
+void LaunchCommandBuilderTest::zludaLocalIntegrationWhenConfigured()
+{
+    const QString pythonPath = qEnvironmentVariable("MINIFOX_TEST_ZLUDA_PYTHON");
+    const QString comfyRoot = qEnvironmentVariable("MINIFOX_TEST_ZLUDA_COMFY_ROOT");
+    if (pythonPath.isEmpty() || comfyRoot.isEmpty()) {
+        QSKIP("Local ZLUDA integration paths were not provided");
+    }
+    QVERIFY2(ZludaBootstrap::shouldProbeSystem(),
+             qPrintable(ZludaBootstrap::systemAdapterNames().join(QStringLiteral(" | "))));
+
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    const QString rocmPath = qEnvironmentVariable("MINIFOX_TEST_ROCM_PATH");
+    if (!rocmPath.isEmpty()) {
+        environment.insert(QStringLiteral("HIP_PATH"), rocmPath);
+    }
+
+    const ZludaBootstrap::Preparation preparation =
+        ZludaBootstrap::prepare(pythonPath, comfyRoot, environment);
+    QVERIFY2(preparation.valid, qPrintable(preparation.error));
+    QVERIFY(!preparation.rocmBinCandidates.isEmpty());
+    ZludaBootstrap::apply(preparation, preparation.rocmBinCandidates.constFirst(), environment);
+
+    QProcess probe;
+    probe.setWorkingDirectory(comfyRoot);
+    probe.setProcessEnvironment(environment);
+    probe.setProgram(pythonPath);
+    probe.setArguments({QStringLiteral("-c"), ZludaBootstrap::preflightScript()});
+    probe.start();
+    QVERIFY2(probe.waitForFinished(45000), qPrintable(probe.errorString()));
+    const QByteArray output = probe.readAllStandardOutput();
+    const QByteArray error = probe.readAllStandardError();
+    QVERIFY2(probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0,
+             qPrintable(QString::fromUtf8(error)));
+    QVERIFY(output.contains("\"ok\": true"));
+    QVERIFY(output.contains("\"active\": true"));
+    QVERIFY(output.contains("\"cudnn_enabled\": false"));
+    QVERIFY(output.contains("\"flash_sdp_enabled\": false"));
+    QVERIFY(output.contains("\"mem_efficient_sdp_enabled\": false"));
+    QVERIFY(output.contains("\"hip_include\":"));
+}
+
+void LaunchCommandBuilderTest::zludaRuntimeManagerIntegrationWhenConfigured()
+{
+    const QString pythonPath = qEnvironmentVariable("MINIFOX_TEST_ZLUDA_PYTHON");
+    const QString rocmPath = qEnvironmentVariable("MINIFOX_TEST_ROCM_PATH");
+    if (pythonPath.isEmpty() || rocmPath.isEmpty()) {
+        QSKIP("Local ZLUDA integration paths were not provided");
+    }
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    QDir root(temporaryDirectory.path());
+    QVERIFY(root.mkdir(QStringLiteral("ComfyUI")));
+    const QString comfyRoot = root.filePath(QStringLiteral("ComfyUI"));
+    const QString marker = root.filePath(QStringLiteral("runtime-started.txt"));
+
+    QFile mainFile(QDir(comfyRoot).filePath(QStringLiteral("main.py")));
+    QVERIFY(mainFile.open(QIODevice::WriteOnly));
+    mainFile.write(QStringLiteral(
+        "from pathlib import Path\n"
+        "import os\n"
+        "assert os.environ.get('MINIFOX_ZLUDA_ACTIVE') == '1'\n"
+        "Path(r'%1').write_text('started', encoding='utf-8')\n")
+                       .arg(QDir::toNativeSeparators(marker)).toUtf8());
+    mainFile.close();
+    QFile requirementsFile(QDir(comfyRoot).filePath(QStringLiteral("requirements.txt")));
+    QVERIFY(requirementsFile.open(QIODevice::WriteOnly));
+    requirementsFile.close();
+
+    ConfigurationManager configuration(
+        root.filePath(QStringLiteral("profiles.json")));
+    configuration.setComfyRoot(comfyRoot);
+    configuration.setPythonPath(pythonPath);
+    int environmentIndex = configuration.addEnvironmentEntry();
+    configuration.updateEnvironmentEntry(
+        environmentIndex, QStringLiteral("MINIFOX_ZLUDA_BOOTSTRAP"),
+        QStringLiteral("force"), true);
+    environmentIndex = configuration.addEnvironmentEntry();
+    configuration.updateEnvironmentEntry(
+        environmentIndex, QStringLiteral("HIP_PATH"),
+        rocmPath, true);
+
+    ApplicationSettings settings(root.filePath(QStringLiteral("settings.json")));
+    RuntimeManager runtime(&configuration, &settings);
+    runtime.start();
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(marker), 90000);
+    runtime.shutdown();
+}
+
+void LaunchCommandBuilderTest::hardwareManagerDetectsPortableZludaWhenConfigured()
+{
+    const QString pythonPath = qEnvironmentVariable("MINIFOX_TEST_ZLUDA_PYTHON");
+    const QString rocmPath = qEnvironmentVariable("MINIFOX_TEST_ROCM_PATH");
+    if (pythonPath.isEmpty() || rocmPath.isEmpty()) {
+        QSKIP("Local ZLUDA integration paths were not provided");
+    }
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    QDir root(temporaryDirectory.path());
+    QVERIFY(root.mkdir(QStringLiteral("ComfyUI")));
+
+    ConfigurationManager configuration(
+        root.filePath(QStringLiteral("profiles.json")));
+    configuration.setComfyRoot(root.filePath(QStringLiteral("ComfyUI")));
+    configuration.setPythonPath(pythonPath);
+    int environmentIndex = configuration.addEnvironmentEntry();
+    configuration.updateEnvironmentEntry(
+        environmentIndex, QStringLiteral("HIP_PATH"), rocmPath, true);
+
+    HardwareManager hardware(&configuration);
+    QTRY_VERIFY_WITH_TIMEOUT(hardware.hasCuda() || !hardware.lastError().isEmpty(), 60000);
+    QVERIFY2(hardware.hasCuda(), qPrintable(hardware.lastError()));
+    QVERIFY2(hardware.detectionSource().contains(QStringLiteral("ZLUDA")),
+             qPrintable(QStringLiteral("source=%1 torch=%2 cuda=%3")
+                            .arg(hardware.detectionSource(),
+                                 hardware.torchVersion(),
+                                 hardware.cudaRuntimeVersion())));
+    QVERIFY(!hardware.cudaDevices().isEmpty());
+    QVERIFY(hardware.cudaDevices().constFirst().toMap()
+                .value(QStringLiteral("name")).toString()
+                .contains(QStringLiteral("AMD"), Qt::CaseInsensitive));
 }
 
 void LaunchCommandBuilderTest::runtimeBlocksMissingDependencies()

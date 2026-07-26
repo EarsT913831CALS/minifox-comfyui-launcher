@@ -7,6 +7,27 @@ qt_add_library(minifox_runtime_backend STATIC
     LogModel.h
     RuntimeManager.cpp
     RuntimeManager.h
+    ZludaBootstrap.cpp
+    ZludaBootstrap.h
+)
+
+set(minifox_zluda_package_files
+    ${PROJECT_SOURCE_DIR}/assets/zluda/zluda.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx101x.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx1031.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx1032.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx103x.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx1103.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx8xx-9xx.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx906.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/tensile-gfx94x.extpack
+)
+
+qt_add_resources(minifox_runtime_backend minifox_zluda_packages
+    BIG_RESOURCES
+    PREFIX "/minifox/zluda"
+    BASE "${PROJECT_SOURCE_DIR}/assets/zluda"
+    FILES ${minifox_zluda_package_files}
 )
 
 target_include_directories(minifox_runtime_backend

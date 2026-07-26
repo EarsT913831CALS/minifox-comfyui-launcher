@@ -6,6 +6,7 @@
 #include "LaunchCommandBuilder.h"
 #include "LogModel.h"
 #include "PortablePaths.h"
+#include "ZludaBootstrap.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -29,6 +30,23 @@
 #endif
 
 namespace {
+
+constexpr qsizetype kZludaProbeOutputLimit = 1024 * 1024;
+constexpr int kZludaProbeTimeoutMs = 60000;
+
+void appendBounded(QByteArray &buffer, const QByteArray &data, bool *truncated)
+{
+    if (data.isEmpty()) {
+        return;
+    }
+    buffer.append(data);
+    if (buffer.size() > kZludaProbeOutputLimit) {
+        buffer.remove(0, buffer.size() - kZludaProbeOutputLimit);
+        if (truncated) {
+            *truncated = true;
+        }
+    }
+}
 
 bool startVisibleCommandPrompt(const CommandPromptBuilder::Result &command,
                                QString *errorMessage)
@@ -105,6 +123,39 @@ except Exception:
         print(json.dumps({"ok": False, "fatal": "Python 中缺少 pip/packaging，无法解析依赖清单：%s" % exc}))
         raise SystemExit(3)
 
+def normalized_vcs_url(value):
+    value = value.strip()
+    if re.match(r"^(?:git|hg|svn|bzr)\+", value, re.IGNORECASE):
+        value = value.split("+", 1)[1]
+    value = value.split("#", 1)[0].rstrip("/")
+    git_revision = value.lower().find(".git@")
+    if git_revision >= 0:
+        value = value[:git_revision + 4]
+    else:
+        last_slash = value.rfind("/")
+        revision = value.rfind("@")
+        if revision > last_slash:
+            value = value[:revision]
+    if value.lower().endswith(".git"):
+        value = value[:-4]
+    return value.rstrip("/").casefold()
+
+def installed_vcs_distribution(raw):
+    expected_url = normalized_vcs_url(raw)
+    for distribution in metadata.distributions():
+        try:
+            direct_url_text = distribution.read_text("direct_url.json")
+            if not direct_url_text:
+                continue
+            direct_url = json.loads(direct_url_text).get("url", "")
+            if normalized_vcs_url(direct_url) != expected_url:
+                continue
+            name = distribution.metadata.get("Name") or distribution.name
+            return name, distribution.version
+        except Exception:
+            continue
+    return None
+
 def check_file(root):
     seen_files = set()
     raw_requirements = []
@@ -160,6 +211,13 @@ def check_file(root):
     issues = []
     checked = 0
     for raw in raw_requirements:
+        if re.match(r"^(?:git|hg|svn|bzr)\+\S+$", raw, re.IGNORECASE):
+            checked += 1
+            installed_vcs = installed_vcs_distribution(raw)
+            if installed_vcs is None:
+                repository = normalized_vcs_url(raw).rsplit("/", 1)[-1]
+                issues.append("缺少 VCS 依赖：%s（来源：%s）" % (repository, raw))
+            continue
         try:
             requirement = Requirement(raw)
         except Exception as exc:
@@ -224,7 +282,9 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
 {
     m_network->setProxy(QNetworkProxy::NoProxy);
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
+    m_zludaProbe.setProcessChannelMode(QProcess::SeparateChannels);
     m_dependencyCheck.setProcessChannelMode(QProcess::SeparateChannels);
+    m_zludaProbeTimer.setSingleShot(true);
 
     connect(&m_process, &QProcess::readyReadStandardOutput, this, [this] {
         m_logModel->appendStandardOutput(m_process.readAllStandardOutput());
@@ -235,6 +295,24 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
     connect(&m_process, &QProcess::started, this, &RuntimeManager::handleProcessStarted);
     connect(&m_process, &QProcess::finished, this, &RuntimeManager::handleProcessFinished);
     connect(&m_process, &QProcess::errorOccurred, this, &RuntimeManager::handleProcessError);
+    connect(&m_zludaProbe, &QProcess::finished,
+            this, &RuntimeManager::handleZludaProbeFinished);
+    connect(&m_zludaProbe, &QProcess::readyReadStandardOutput,
+            this, &RuntimeManager::drainZludaProbeOutput);
+    connect(&m_zludaProbe, &QProcess::readyReadStandardError,
+            this, &RuntimeManager::drainZludaProbeOutput);
+    connect(&m_zludaProbeTimer, &QTimer::timeout,
+            this, &RuntimeManager::handleZludaProbeTimeout);
+    connect(&m_zludaProbe, &QProcess::errorOccurred, this,
+            [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart && !m_stopRequested) {
+            m_zludaProbeTimer.stop();
+            m_zludaProbeStage = ZludaProbeStage::None;
+            setLastError(tr("无法启动 ZLUDA 兼容性探测：%1").arg(m_zludaProbe.errorString()));
+            setStatus(Failed);
+            m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        }
+    });
     connect(&m_dependencyCheck, &QProcess::started,
             this, &RuntimeManager::handleDependencyCheckStarted);
     connect(&m_dependencyCheck, &QProcess::finished,
@@ -305,6 +383,7 @@ bool RuntimeManager::canStart() const
 {
     return (m_status == Stopped || m_status == Failed)
         && m_process.state() == QProcess::NotRunning
+        && m_zludaProbe.state() == QProcess::NotRunning
         && m_dependencyCheck.state() == QProcess::NotRunning
         && m_dependencyInstall.state() == QProcess::NotRunning
         && !m_processJob.isAttached();
@@ -319,6 +398,7 @@ bool RuntimeManager::active() const
 {
     return m_status == Starting || m_status == Running || m_status == Stopping
         || m_process.state() != QProcess::NotRunning
+        || m_zludaProbe.state() != QProcess::NotRunning
         || m_dependencyCheck.state() != QProcess::NotRunning
         || m_dependencyInstall.state() != QProcess::NotRunning
         || m_processJob.isAttached();
@@ -360,6 +440,15 @@ void RuntimeManager::start()
     m_dependencyPendingInstalls.clear();
     m_dependencyRecheckPaths.clear();
     m_dependencyCurrentPath.clear();
+    m_zludaProbeStage = ZludaProbeStage::None;
+    m_zludaPreparation = {};
+    m_zludaRocmCandidates.clear();
+    m_zludaRocmBin.clear();
+    m_zludaLastProbeError.clear();
+    m_zludaStandardOutput.clear();
+    m_zludaStandardError.clear();
+    m_zludaOutputTruncated = false;
+    m_zludaEnabled = false;
     m_lastExitCode = 0;
     m_processId = 0;
     m_uptime = QStringLiteral("00:00:00");
@@ -367,7 +456,7 @@ void RuntimeManager::start()
     setLastError({});
     setStatus(Starting);
     emit runtimeInfoChanged();
-    beginDependencyCheck();
+    beginZludaBootstrap();
 }
 
 void RuntimeManager::stop()
@@ -380,6 +469,10 @@ void RuntimeManager::stop()
     m_logModel->appendSystemMessage(tr("正在停止 ComfyUI…"), QStringLiteral("#9d5d00"));
     cancelReadinessCheck();
     m_readinessTimer.stop();
+    if (m_zludaProbe.state() != QProcess::NotRunning) {
+        m_zludaProbe.terminate();
+    }
+    m_zludaProbeTimer.stop();
     if (m_dependencyCheck.state() != QProcess::NotRunning) {
         m_dependencyCheck.terminate();
     }
@@ -389,7 +482,8 @@ void RuntimeManager::stop()
     if (m_process.state() != QProcess::NotRunning) {
         m_process.terminate();
     }
-    if (m_dependencyCheck.state() != QProcess::NotRunning
+    if (m_zludaProbe.state() != QProcess::NotRunning
+        || m_dependencyCheck.state() != QProcess::NotRunning
         || m_dependencyInstall.state() != QProcess::NotRunning
         || m_process.state() != QProcess::NotRunning
         || m_processJob.isAttached()) {
@@ -407,7 +501,8 @@ void RuntimeManager::forceStop()
     m_stopRequested = true;
     m_logModel->appendSystemMessage(tr("正在强制终止 ComfyUI 进程树…"), QStringLiteral("#c42b1c"));
     terminateTrackedProcessTree();
-    if (m_dependencyCheck.state() == QProcess::NotRunning
+    if (m_zludaProbe.state() == QProcess::NotRunning
+        && m_dependencyCheck.state() == QProcess::NotRunning
         && m_dependencyInstall.state() == QProcess::NotRunning
         && m_process.state() == QProcess::NotRunning) {
         setStatus(Stopped);
@@ -428,6 +523,234 @@ void RuntimeManager::shutdown()
     setServiceReady(false);
     setStatus(Stopped);
     emit runtimeInfoChanged();
+}
+
+void RuntimeManager::beginZludaBootstrap()
+{
+    if (m_stopRequested || m_startupAborted) {
+        return;
+    }
+
+    LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    m_settings->applyToProcessEnvironment(command.environment);
+    const QString mode =
+        command.environment.value(QStringLiteral("MINIFOX_ZLUDA_BOOTSTRAP"),
+                                  QStringLiteral("auto"));
+    const QStringList adapterNames = ZludaBootstrap::systemAdapterNames();
+    const ZludaBootstrap::SystemAdapterKind adapterKind =
+        ZludaBootstrap::classifySystemAdapters(adapterNames);
+    if (!ZludaBootstrap::shouldProbeAdapters(adapterNames, mode)) {
+        if (adapterKind == ZludaBootstrap::SystemAdapterKind::NvidiaOnly) {
+            m_logModel->appendSystemMessage(
+                tr("System NVIDIA adapter detected; using the normal CUDA startup path."));
+        } else if (adapterKind == ZludaBootstrap::SystemAdapterKind::Mixed) {
+            m_logModel->appendSystemMessage(
+                tr("NVIDIA and AMD adapters detected; using the normal NVIDIA CUDA startup path."));
+        } else if (adapterKind == ZludaBootstrap::SystemAdapterKind::Unknown) {
+            m_logModel->appendSystemMessage(
+                tr("No supported AMD-only adapter configuration was detected; ZLUDA is disabled."),
+                QStringLiteral("#9d5d00"));
+        }
+        beginDependencyCheck();
+        return;
+    }
+
+    m_zludaProbeStage = ZludaProbeStage::Detection;
+    m_logModel->appendSystemMessage(
+        tr("检测到仅 AMD 的显示适配器配置，正在确认是否为 ZLUDA 后端…"),
+        QStringLiteral("#0067c0"));
+    m_zludaProbe.setWorkingDirectory(command.workingDirectory);
+    m_zludaProbe.setProcessEnvironment(command.environment);
+    m_zludaProbe.setProgram(command.program);
+    m_zludaProbe.setArguments({
+        QStringLiteral("-c"),
+        ZludaBootstrap::detectionScript()
+    });
+    m_zludaStandardOutput.clear();
+    m_zludaStandardError.clear();
+    m_zludaOutputTruncated = false;
+    m_zludaProbe.start();
+    m_zludaProbeTimer.start(kZludaProbeTimeoutMs);
+}
+
+void RuntimeManager::handleZludaProbeFinished(int exitCode,
+                                              QProcess::ExitStatus exitStatus)
+{
+    m_zludaProbeTimer.stop();
+    drainZludaProbeOutput();
+    if (m_stopRequested || m_startupAborted || m_zludaProbeStage == ZludaProbeStage::None) {
+        return;
+    }
+
+    const QByteArray output = m_zludaStandardOutput;
+    const QString standardError = QString::fromUtf8(m_zludaStandardError).trimmed();
+    if (m_zludaOutputTruncated) {
+        m_logModel->appendSystemMessage(
+            tr("ZLUDA 探测输出过多，已仅保留末尾 1 MiB。"),
+            QStringLiteral("#9d5d00"));
+    }
+    if (m_zludaProbeStage == ZludaProbeStage::Detection) {
+        m_zludaProbeStage = ZludaProbeStage::None;
+        if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+            m_zludaLastProbeError = standardError.isEmpty()
+                ? tr("退出代码 %1").arg(exitCode)
+                : standardError;
+            if (prepareZludaRuntime()) {
+                QTimer::singleShot(
+                    0, this, &RuntimeManager::startNextZludaBootstrapDetection);
+            }
+            return;
+        }
+
+        const ZludaBootstrap::Detection detection =
+            ZludaBootstrap::parseDetectionOutput(output);
+        if (detection.backend == ZludaBootstrap::BackendKind::Rocm
+            || detection.backend == ZludaBootstrap::BackendKind::Nvidia) {
+            m_logModel->appendSystemMessage(
+                detection.backend == ZludaBootstrap::BackendKind::Rocm
+                    ? tr("检测到原生 ROCm PyTorch，不启用 ZLUDA DLL 引导。")
+                    : tr("检测到 NVIDIA CUDA，不启用 ZLUDA DLL 引导。"));
+            beginDependencyCheck();
+            return;
+        }
+
+        if (!prepareZludaRuntime()) {
+            return;
+        }
+        if (detection.backend == ZludaBootstrap::BackendKind::Zluda) {
+            if (m_zludaRocmCandidates.isEmpty()) {
+                setLastError(tr("No usable HIP SDK runtime was found for ZLUDA."));
+                setStatus(Failed);
+                m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+                return;
+            }
+            m_zludaRocmBin = m_zludaRocmCandidates.takeFirst();
+            finishZludaBootstrap();
+        } else {
+            m_logModel->appendSystemMessage(
+                tr("原始 PyTorch 尚未识别 AMD GPU，正在注入便携 ZLUDA 后重新检测…"),
+                QStringLiteral("#0067c0"));
+            QTimer::singleShot(
+                0, this, &RuntimeManager::startNextZludaBootstrapDetection);
+        }
+        return;
+    }
+
+    if (m_zludaProbeStage == ZludaProbeStage::BootstrappedDetection) {
+        m_zludaProbeStage = ZludaProbeStage::None;
+        const ZludaBootstrap::Detection detection =
+            exitStatus == QProcess::NormalExit && exitCode == 0
+            ? ZludaBootstrap::parseDetectionOutput(output)
+            : ZludaBootstrap::Detection{};
+        if (detection.backend == ZludaBootstrap::BackendKind::Zluda) {
+            finishZludaBootstrap();
+            return;
+        }
+        m_zludaLastProbeError = standardError.isEmpty()
+            ? tr("注入 ZLUDA 后仍未检测到 CUDA 设备（退出代码 %1）").arg(exitCode)
+            : standardError;
+        QTimer::singleShot(
+            0, this, &RuntimeManager::startNextZludaBootstrapDetection);
+        return;
+    }
+
+}
+
+bool RuntimeManager::prepareZludaRuntime()
+{
+    if (m_zludaPreparation.valid) {
+        return true;
+    }
+    LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    m_settings->applyToProcessEnvironment(command.environment);
+    m_zludaPreparation = ZludaBootstrap::prepare(
+        command.program, command.workingDirectory, command.environment);
+    if (!m_zludaPreparation.valid) {
+        setLastError(m_zludaPreparation.error);
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return false;
+    }
+    m_zludaRocmCandidates = m_zludaPreparation.rocmBinCandidates;
+    m_zludaLastProbeError.clear();
+    m_logModel->appendSystemMessage(
+        tr("ZLUDA DLL 来源：%1")
+            .arg(QDir::toNativeSeparators(m_zludaPreparation.sourceDirectory)));
+    return true;
+}
+
+void RuntimeManager::startNextZludaBootstrapDetection()
+{
+    if (m_stopRequested || m_startupAborted) {
+        return;
+    }
+    if (m_zludaRocmCandidates.isEmpty()) {
+        setLastError(tr("便携 ZLUDA 注入后仍未识别 AMD GPU。最后错误：%1")
+                         .arg(m_zludaLastProbeError.isEmpty()
+                                  ? tr("没有可用的 HIP SDK/ROCm 运行时")
+                                  : m_zludaLastProbeError));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return;
+    }
+
+    m_zludaRocmBin = m_zludaRocmCandidates.takeFirst();
+    LaunchCommandBuilder::Result command =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    m_settings->applyToProcessEnvironment(command.environment);
+    ZludaBootstrap::apply(m_zludaPreparation, m_zludaRocmBin, command.environment);
+
+    m_zludaProbeStage = ZludaProbeStage::BootstrappedDetection;
+    m_zludaProbe.setWorkingDirectory(command.workingDirectory);
+    m_zludaProbe.setProcessEnvironment(command.environment);
+    m_zludaProbe.setProgram(command.program);
+    m_zludaProbe.setArguments({
+        QStringLiteral("-c"),
+        ZludaBootstrap::detectionScript()
+    });
+    m_zludaStandardOutput.clear();
+    m_zludaStandardError.clear();
+    m_zludaOutputTruncated = false;
+    m_zludaProbe.start();
+    m_zludaProbeTimer.start(kZludaProbeTimeoutMs);
+}
+
+void RuntimeManager::drainZludaProbeOutput()
+{
+    appendBounded(m_zludaStandardOutput,
+                  m_zludaProbe.readAllStandardOutput(),
+                  &m_zludaOutputTruncated);
+    appendBounded(m_zludaStandardError,
+                  m_zludaProbe.readAllStandardError(),
+                  &m_zludaOutputTruncated);
+}
+
+void RuntimeManager::handleZludaProbeTimeout()
+{
+    if (m_zludaProbeStage == ZludaProbeStage::None
+        || m_zludaProbe.state() == QProcess::NotRunning) {
+        return;
+    }
+    m_zludaProbeStage = ZludaProbeStage::None;
+    m_zludaProbe.kill();
+    setLastError(tr("ZLUDA backend detection timed out; ComfyUI was not started."));
+    setStatus(Failed);
+    m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+}
+
+void RuntimeManager::finishZludaBootstrap()
+{
+    if (m_stopRequested || m_startupAborted) {
+        return;
+    }
+    m_zludaProbeStage = ZludaProbeStage::None;
+    m_zludaEnabled = true;
+    m_logModel->appendSystemMessage(
+        tr("ZLUDA backend detected; using the verified runtime without repeating the compatibility self-check."),
+        QStringLiteral("#0f7b0f"));
+    beginDependencyCheck();
 }
 
 bool RuntimeManager::openCommandPrompt()
@@ -725,6 +1048,10 @@ void RuntimeManager::startNextDependencyInstall()
         "@echo off\r\n"
         "chcp 65001 >nul\r\n"
         "title Minifox - %1\r\n"
+        "echo [Minifox] 正在安装依赖...\r\n"
+        "echo [Minifox] Python: \"%2\"\r\n"
+        "echo [Minifox] Requirements: \"%3\"\r\n"
+        "echo.\r\n"
         "\"%2\" -m pip install -r \"%3\"\r\n"
         "set CODE=%ERRORLEVEL%\r\n"
         "if not \"%CODE%\"==\"0\" (\r\n"
@@ -821,6 +1148,9 @@ void RuntimeManager::launchConfiguredProcess()
     LaunchCommandBuilder::Result command =
         LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
     m_settings->applyToProcessEnvironment(command.environment);
+    if (m_zludaEnabled) {
+        ZludaBootstrap::apply(m_zludaPreparation, m_zludaRocmBin, command.environment);
+    }
     m_logModel->appendSystemMessage(command.preview);
     if (m_settings->proxyMode() == QStringLiteral("manual")) {
         const QString proxyUrl = m_settings->proxyUrl();
@@ -842,6 +1172,8 @@ void RuntimeManager::launchConfiguredProcess()
 
 void RuntimeManager::terminateTrackedProcessTree()
 {
+    const qint64 zludaProbePid = m_zludaProbe.state() == QProcess::NotRunning
+        ? 0 : m_zludaProbe.processId();
     const qint64 dependencyPid = m_dependencyCheck.state() == QProcess::NotRunning
         ? 0 : m_dependencyCheck.processId();
     const qint64 installPid = m_dependencyInstall.state() == QProcess::NotRunning
@@ -853,6 +1185,7 @@ void RuntimeManager::terminateTrackedProcessTree()
     // assignment.  When assignment succeeded, closing/terminating the Job also makes
     // abnormal launcher termination release every descendant and the listening port.
     if (!m_processJob.isAttached()) {
+        forceKillProcessTree(zludaProbePid);
         forceKillProcessTree(dependencyPid);
         forceKillProcessTree(installPid);
         forceKillProcessTree(runtimePid);
@@ -860,6 +1193,11 @@ void RuntimeManager::terminateTrackedProcessTree()
         m_processJob.terminate();
     }
 
+    if (m_zludaProbe.state() != QProcess::NotRunning) {
+        m_zludaProbe.kill();
+        m_zludaProbe.waitForFinished(2000);
+    }
+    m_zludaProbeTimer.stop();
     if (m_dependencyCheck.state() != QProcess::NotRunning) {
         m_dependencyCheck.kill();
         m_dependencyCheck.waitForFinished(2000);

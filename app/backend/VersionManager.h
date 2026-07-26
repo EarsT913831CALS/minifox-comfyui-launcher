@@ -37,6 +37,7 @@ class VersionManager final : public QObject
     Q_PROPERTY(QVariantList stableVersions READ stableVersions NOTIFY stateChanged)
     Q_PROPERTY(QVariantList installedExtensions READ installedExtensions NOTIFY stateChanged)
     Q_PROPERTY(QVariantList availableExtensions READ availableExtensions NOTIFY stateChanged)
+    Q_PROPERTY(QVariantList extensionVersions READ extensionVersions NOTIFY stateChanged)
     Q_PROPERTY(QString repositoryState READ repositoryState NOTIFY stateChanged)
     Q_PROPERTY(QString updateState READ updateState NOTIFY stateChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY stateChanged)
@@ -72,6 +73,7 @@ public:
     QVariantList stableVersions() const;
     QVariantList installedExtensions() const;
     QVariantList availableExtensions() const;
+    QVariantList extensionVersions() const;
     QString repositoryState() const;
     QString updateState() const;
     QString statusMessage() const;
@@ -89,6 +91,7 @@ public:
     Q_INVOKABLE void switchBranch(const QString &branch);
     Q_INVOKABLE void updateExtension(const QString &path);
     Q_INVOKABLE void updateAllExtensions();
+    Q_INVOKABLE void loadExtensionVersions(const QString &path, const QString &currentCommit);
     Q_INVOKABLE void switchExtensionVersion(const QString &path, const QString &commit);
     Q_INVOKABLE void installExtension(const QString &url);
     Q_INVOKABLE void removeExtension(const QString &path);
@@ -100,6 +103,7 @@ signals:
     void refreshCompleted(bool success, const QString &message);
     void operationCompleted(bool success, const QString &message);
     void dependencyInstallCompleted(bool success, const QString &message);
+    void extensionVersionsLoaded(bool success, const QString &message);
 
 private:
     enum class Operation {
@@ -109,7 +113,8 @@ private:
         Fetch,
         ResolveCoreCompareBranch,
         Compare,
-        ValidateCoreUpdate,
+        ResetCoreForUpdate,
+        CleanCoreForUpdate,
         PrepareCoreUpdateFetch,
         ResolveStableUpdateCommit,
         ResolveDevelopmentUpdateBranch,
@@ -120,8 +125,11 @@ private:
         ResolveDevelopmentHistoryBranch,
         LoadCoreHistory,
         LoadStableHistory,
-        ValidateCoreCheckout,
+        ResetCoreForVersion,
+        CleanCoreForVersion,
         CheckoutCore,
+        ResetCoreForBranch,
+        CleanCoreForBranch,
         CheckoutBranch,
         ValidateExtensionUpdate,
         PrepareExtensionUpdateFetch,
@@ -129,6 +137,7 @@ private:
         AttachExtensionUpdateBranch,
         SetExtensionUpdateUpstream,
         UpdateExtension,
+        LoadExtensionHistory,
         ValidateExtensionCheckout,
         CheckoutExtension,
         InstallExtension,
@@ -149,6 +158,7 @@ private:
     void parseStatus(const QString &output);
     void parseCoreHistory(const QString &output);
     void parseStableHistory(const QString &output);
+    void parseExtensionHistory(const QString &output);
     void scanExtensions(bool resetStatus = false);
     void beginExtensionChecks();
     void startExtensionCheckJobs();
@@ -217,11 +227,14 @@ private:
     QVariantList m_stableVersions;
     QVariantList m_installedExtensions;
     QVariantList m_availableExtensions;
+    QVariantList m_extensionVersions;
     QVariantList m_catalogExtensions;
     QString m_operationPath;
     QString m_targetRemoteBranch;
     QString m_developmentRemoteBranch;
     QString m_pendingCommit;
+    QString m_pendingBranch;
+    QString m_extensionHistoryCurrentCommit;
     int m_requestedCoreChannel = 0;
     QStringList m_extensionUpdateQueue;
     QStringList m_extensionCheckQueue;

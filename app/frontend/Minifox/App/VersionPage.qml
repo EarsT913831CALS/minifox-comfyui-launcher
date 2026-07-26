@@ -17,6 +17,7 @@ Pane {
     property string extensionUrl: ""
     property string pendingRemovalPath: ""
     property string pendingExtensionPath: ""
+    property string pendingExtensionName: ""
     readonly property bool englishUi: root.appContext.settings.language === "en_US"
                                       || (root.appContext.settings.language === "system"
                                           && Qt.locale().name.toLowerCase().startsWith("en"))
@@ -72,6 +73,54 @@ Pane {
                                           leftMinimum, total - rightMinimum);
         root[leftProperty] = nextLeft;
         root[rightProperty] = total - nextLeft;
+    }
+
+    function browserUrl(remote) {
+        let value = String(remote || "").trim();
+        if (value.length === 0)
+            return "";
+        if (value.startsWith("git@")) {
+            const separator = value.indexOf(":");
+            if (separator > 4)
+                value = "https://" + value.slice(4, separator) + "/" + value.slice(separator + 1);
+        } else if (value.startsWith("ssh://git@")) {
+            value = "https://" + value.slice(10);
+        } else if (!value.includes("://")) {
+            value = "https://" + value;
+        }
+        if (value.endsWith(".git"))
+            value = value.slice(0, -4);
+        return value;
+    }
+
+    component CtrlRemoteLink: AppLabel {
+        id: remoteLink
+
+        property string remoteUrl: ""
+        property string fallbackText: "—"
+        readonly property string targetUrl: root.browserUrl(remoteUrl)
+
+        text: remoteUrl.length > 0 ? remoteUrl : fallbackText
+        color: targetUrl.length > 0 ? Theme.info : Theme.foregroundSecondary
+        font.family: root.appContext.settings.consoleFontFamily
+        font.underline: targetUrl.length > 0
+        elide: Text.ElideRight
+
+        MouseArea {
+            id: linkMouse
+            anchors.fill: parent
+            enabled: remoteLink.targetUrl.length > 0
+            acceptedButtons: Qt.LeftButton
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: mouse => {
+                if ((mouse.modifiers & Qt.ControlModifier) !== 0)
+                    Qt.openUrlExternally(remoteLink.targetUrl);
+            }
+        }
+
+        ToolTip.visible: linkMouse.containsMouse
+        ToolTip.text: qsTr("按住 Ctrl 并左键点击，在默认浏览器中打开")
     }
 
     component ExtensionHeaderCell: Item {
@@ -227,7 +276,7 @@ Pane {
                     text: root.versions.updating ? qsTr("更新中…") : qsTr("▣  一键更新")
                     visible: root.selectedTab !== 2
                     enabled: root.selectedTab === 0
-                             ? root.versions.canUpdate
+                             ? root.versions.canCheck
                              : !root.versions.busy && root.versions.installedExtensions.length > 0
                     onClicked: {
                         if (root.selectedTab === 0) root.versions.updateComfyUi(root.coreChannel);
@@ -262,10 +311,13 @@ Pane {
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: Theme.spacingLg
-                            rowSpacing: Theme.spacingSm
+                            rowSpacing: Theme.spacingMd
 
                             AppLabel { text: qsTr("远端地址："); color: Theme.foregroundSecondary }
-                            AppLabel { text: root.versions.remoteUrl.length > 0 ? root.versions.remoteUrl : "—"; font.family: root.appContext.settings.consoleFontFamily; Layout.fillWidth: true; elide: Text.ElideRight }
+                            CtrlRemoteLink {
+                                remoteUrl: root.versions.remoteUrl
+                                Layout.fillWidth: true
+                            }
                             AppLabel { text: qsTr("当前分支："); color: Theme.foregroundSecondary }
                             AppLabel {
                                 text: root.versions.branch.length > 0 ? root.versions.branch : "—"
@@ -286,7 +338,7 @@ Pane {
 
                         AppButton {
                             text: qsTr("⚯  切换分支")
-                            enabled: root.versions.canUpdate
+                            enabled: root.versions.canCheck
                             Layout.preferredHeight: 34
                             leftPadding: 12
                             rightPadding: 12
@@ -374,7 +426,7 @@ Pane {
                                         AppLabel { width: parent.width - 110 - 220 - 64 - root.coreActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: coreRow.modelData.subject; elide: Text.ElideRight; font.pointSize: root.tableFontSize }
                                         AppLabel { width: 220; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: coreRow.modelData.date; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
                                         AppLabel { width: 64; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: coreRow.modelData.current ? "✓" : ""; font.pointSize: Theme.bodySize }
-                                        AppButton { width: root.coreActionWidth; height: parent.height; leftPadding: 8; rightPadding: 8; text: qsTr("切换"); enabled: !coreRow.modelData.current && root.versions.canUpdate; font.pointSize: root.tableFontSize; onClicked: root.versions.switchCoreVersion(coreRow.modelData.commit, root.coreChannel) }
+                                        AppButton { width: root.coreActionWidth; height: parent.height; leftPadding: 8; rightPadding: 8; text: qsTr("切换"); enabled: !coreRow.modelData.current && root.versions.canCheck; font.pointSize: root.tableFontSize; onClicked: root.versions.switchCoreVersion(coreRow.modelData.commit, root.coreChannel) }
                                     }
                                 }
                             }
@@ -488,7 +540,7 @@ Pane {
                                         anchors.fill: parent
                                         CheckBox { width: root.extensionEnabledWidth; height: parent.height; checked: extensionRow.modelData.enabled; onToggled: root.versions.setExtensionEnabled(extensionRow.modelData.path, checked) }
                                         AppLabel { width: root.extensionNameWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.name; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
-                                        AppLabel { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.remote || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        CtrlRemoteLink { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; remoteUrl: extensionRow.modelData.remote || ""; font.pointSize: root.tableFontSize }
                                         AppLabel { width: root.extensionBranchWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.branch || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
                                         AppLabel { width: root.extensionCommitWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.commit || "—"; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
                                         AppLabel { width: root.extensionDateWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.date; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
@@ -516,7 +568,10 @@ Pane {
                                             font.pointSize: root.tableFontSize
                                             onClicked: {
                                                 root.pendingExtensionPath = extensionRow.modelData.path;
-                                                extensionCommitField.text = extensionRow.modelData.commit;
+                                                root.pendingExtensionName = extensionRow.modelData.name;
+                                                root.versions.loadExtensionVersions(
+                                                    extensionRow.modelData.path,
+                                                    extensionRow.modelData.commit);
                                                 extensionVersionDialog.open();
                                             }
                                         }
@@ -588,7 +643,7 @@ Pane {
 
                                     Row {
                                         anchors.fill: parent
-                                        AppLabel { width: 300; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: availableRow.modelData.name; color: Theme.info; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
+                                        CtrlRemoteLink { width: 300; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: availableRow.modelData.name; remoteUrl: availableRow.modelData.remote || ""; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
                                         AppLabel { id: descriptionLabel; width: parent.width - 300 - root.availableActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 10; text: availableRow.modelData.description; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
                                         AppButton { width: root.availableActionWidth; height: parent.height; leftPadding: 5; rightPadding: 5; text: availableRow.modelData.installed ? qsTr("已装") : qsTr("安装"); enabled: !availableRow.modelData.installed && !root.versions.busy; font.pointSize: root.tableFontSize; onClicked: root.versions.installExtension(availableRow.modelData.remote) }
                                     }
@@ -673,13 +728,21 @@ Pane {
         }
     }
 
-    Dialog {
+    AppDialog {
         id: branchDialog
         anchors.centerIn: Overlay.overlay
+        width: Math.min(480, root.width - Theme.spacingXl * 2)
         modal: true
         title: qsTr("切换分支")
         standardButtons: Dialog.Ok | Dialog.Cancel
-        onOpened: branchField.text = root.versions.branch
+        acceptText: qsTr("切换")
+        rejectText: qsTr("取消")
+        destructiveAccept: true
+        onOpened: {
+            branchField.text = root.versions.branch;
+            branchField.forceActiveFocus();
+            branchField.selectAll();
+        }
         onAccepted: root.versions.switchBranch(branchField.text)
 
         ButtonGroup { id: routeGroup }
@@ -689,9 +752,21 @@ Pane {
 
             AppTextField {
                 id: branchField
-                Layout.preferredWidth: 380
                 Layout.fillWidth: true
                 placeholderText: qsTr("分支名称")
+            }
+
+            CtrlRemoteLink {
+                Layout.fillWidth: true
+                remoteUrl: root.versions.remoteUrl
+            }
+
+            AppLabel {
+                Layout.fillWidth: true
+                text: qsTr("切换会强制还原已修改和已删除的核心文件，并删除未跟踪文件。被 .gitignore 保护的模型、输出和扩展数据不会删除。")
+                color: Theme.warning
+                wrapMode: Text.WordWrap
+                font.pointSize: root.tableFontSize
             }
 
             AppLabel {
@@ -717,31 +792,126 @@ Pane {
         }
     }
 
-    Dialog {
+    AppDialog {
         id: extensionVersionDialog
         anchors.centerIn: Overlay.overlay
+        width: Math.min(980, root.width - Theme.spacingXl * 2)
+        height: Math.min(640, root.height - Theme.spacingXl * 2)
         modal: true
-        title: qsTr("切换扩展版本")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        onAccepted: root.versions.switchExtensionVersion(root.pendingExtensionPath, extensionCommitField.text)
+        title: qsTr("版本切换 · %1").arg(root.pendingExtensionName)
+        standardButtons: Dialog.Cancel
+        rejectText: qsTr("关闭")
 
-        AppTextField {
-            id: extensionCommitField
-            width: 360
-            placeholderText: qsTr("提交 ID、标签或分支")
+        contentItem: ColumnLayout {
+            spacing: Theme.spacingSm
+
+            AppLabel {
+                Layout.fillWidth: true
+                text: root.versions.busy
+                      ? qsTr("正在读取版本历史…")
+                      : root.versions.extensionVersions.length > 0
+                        ? qsTr("选择要切换到的版本。切换前会检查扩展目录中的未提交更改。")
+                        : root.versions.lastError.length > 0
+                          ? root.versions.lastError
+                          : qsTr("没有可显示的版本历史。")
+                color: Theme.foregroundSecondary
+                wrapMode: Text.WordWrap
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Theme.surfaceRaised
+                border.width: 1
+                border.color: Theme.materialStroke
+                radius: Theme.controlRadius
+                clip: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 38
+                        color: Theme.surfaceSubtle
+
+                        Row {
+                            anchors.fill: parent
+                            AppLabel { width: 110; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("版本 ID"); font.pointSize: root.tableFontSize }
+                            AppLabel { width: parent.width - 110 - 220 - 64 - 84; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("更新内容"); font.pointSize: root.tableFontSize }
+                            AppLabel { width: 220; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: qsTr("日期"); font.pointSize: root.tableFontSize }
+                            AppLabel { width: 64; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: qsTr("当前"); font.pointSize: root.tableFontSize }
+                        }
+                    }
+
+                    ListView {
+                        id: extensionVersionList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root.versions.extensionVersions
+                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+                        delegate: Rectangle {
+                            id: versionRow
+                            required property int index
+                            required property var modelData
+                            width: ListView.view.width
+                            height: 42
+                            color: index % 2 === 0 ? Theme.materialFill : Theme.surfaceRaised
+                            border.width: 1
+                            border.color: Theme.materialStroke
+
+                            Row {
+                                anchors.fill: parent
+                                AppLabel { width: 110; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: versionRow.modelData.shortCommit; color: Theme.info; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                AppLabel { width: parent.width - 110 - 220 - 64 - 84; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: versionRow.modelData.subject; elide: Text.ElideRight; font.pointSize: root.tableFontSize }
+                                AppLabel { width: 220; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: versionRow.modelData.date; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                AppLabel { width: 64; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: versionRow.modelData.current ? "✓" : ""; color: Theme.success; font.pointSize: Theme.subtitleSize }
+                                AppButton {
+                                    width: 84
+                                    height: parent.height
+                                    leftPadding: 6
+                                    rightPadding: 6
+                                    text: versionRow.modelData.current ? qsTr("当前") : qsTr("切换")
+                                    enabled: !versionRow.modelData.current && !root.versions.busy
+                                    font.pointSize: root.tableFontSize
+                                    onClicked: {
+                                        extensionVersionDialog.close();
+                                        root.versions.switchExtensionVersion(
+                                            root.pendingExtensionPath,
+                                            versionRow.modelData.commit);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                BusyIndicator {
+                    anchors.centerIn: parent
+                    running: root.versions.busy
+                    visible: running && root.versions.extensionVersions.length === 0
+                }
+            }
         }
     }
 
-    Dialog {
+    AppDialog {
         id: removeDialog
         anchors.centerIn: Overlay.overlay
+        width: Math.min(480, root.width - Theme.spacingXl * 2)
         modal: true
         title: qsTr("卸载扩展")
         standardButtons: Dialog.Yes | Dialog.No
+        acceptText: qsTr("卸载")
+        rejectText: qsTr("取消")
+        destructiveAccept: true
         onAccepted: root.versions.removeExtension(root.pendingRemovalPath)
 
         AppLabel {
-            width: 420
+            width: removeDialog.availableWidth
             text: qsTr("将永久删除这个扩展目录。确定继续吗？")
             wrapMode: Text.WordWrap
         }

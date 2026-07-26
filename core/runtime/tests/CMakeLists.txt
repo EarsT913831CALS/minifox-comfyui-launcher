@@ -1,5 +1,12 @@
 qt_add_executable(minifox_runtime_tests
+    ../../../app/backend/HardwareManager.cpp
+    ../../../app/backend/HardwareManager.h
     tst_LaunchCommandBuilder.cpp
+)
+
+target_include_directories(minifox_runtime_tests
+    PRIVATE
+        ../../../app/backend
 )
 
 target_link_libraries(minifox_runtime_tests
