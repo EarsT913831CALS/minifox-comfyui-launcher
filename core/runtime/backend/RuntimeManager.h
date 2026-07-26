@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProcessJob.h"
+#include "ZludaBootstrap.h"
 
 #include <QElapsedTimer>
 #include <QObject>
@@ -89,6 +90,13 @@ private:
     void handleProcessStarted();
     void handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void handleProcessError(QProcess::ProcessError error);
+    void beginZludaBootstrap();
+    void handleZludaProbeFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    bool prepareZludaRuntime();
+    void startNextZludaBootstrapDetection();
+    void finishZludaBootstrap();
+    void drainZludaProbeOutput();
+    void handleZludaProbeTimeout();
     void beginDependencyCheck();
     void handleDependencyCheckStarted();
     void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -102,6 +110,7 @@ private:
     ConfigurationManager *m_configuration;
     ApplicationSettings *m_settings;
     QProcess m_process;
+    QProcess m_zludaProbe;
     QProcess m_dependencyCheck;
     QProcess m_dependencyInstall;
     QStringList m_dependencyPendingInstalls;
@@ -109,12 +118,27 @@ private:
     QString m_dependencyBatPath;
     QString m_dependencyCurrentPath;
     bool m_dependencyRecheckPhase = false;
+    enum class ZludaProbeStage {
+        None,
+        Detection,
+        BootstrappedDetection
+    };
+    ZludaProbeStage m_zludaProbeStage = ZludaProbeStage::None;
+    ZludaBootstrap::Preparation m_zludaPreparation;
+    QStringList m_zludaRocmCandidates;
+    QString m_zludaRocmBin;
+    QString m_zludaLastProbeError;
+    QByteArray m_zludaStandardOutput;
+    QByteArray m_zludaStandardError;
+    bool m_zludaOutputTruncated = false;
+    bool m_zludaEnabled = false;
     LogModel *m_logModel;
     QNetworkAccessManager *m_network;
     QPointer<QNetworkReply> m_readinessReply;
     QTimer m_readinessTimer;
     QTimer m_uptimeTimer;
     QTimer m_forceStopTimer;
+    QTimer m_zludaProbeTimer;
     QElapsedTimer m_elapsed;
     ProcessJob m_processJob;
     Status m_status = Stopped;

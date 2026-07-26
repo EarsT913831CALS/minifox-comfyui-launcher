@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ZludaBootstrap.h"
+
 #include <QObject>
 #include <QProcess>
 #include <QTimer>
@@ -45,12 +47,19 @@ private:
     enum class DetectionMode {
         None,
         Python,
+        PythonZluda,
         NvidiaSmi
     };
 
     void startPythonDetection(const QString &pythonPath);
+    void startZludaPythonDetection();
+    void startNextZludaPythonDetection();
     void startNvidiaSmiDetection();
-    void startProcess(DetectionMode mode, const QString &program, const QStringList &arguments);
+    void continueAfterPythonProbe();
+    void startProcess(DetectionMode mode,
+                      const QString &program,
+                      const QStringList &arguments,
+                      const QProcessEnvironment &environment);
     void handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     bool parsePythonResult(const QByteArray &output);
     bool parseNvidiaSmiResult(const QByteArray &output);
@@ -68,5 +77,11 @@ private:
     QString m_driverVersion;
     QString m_lastError;
     QString m_lastPythonPath;
+    ZludaBootstrap::Preparation m_zludaPreparation;
+    QStringList m_zludaRocmCandidates;
+    QString m_zludaLastError;
+    ZludaBootstrap::SystemAdapterKind m_systemAdapterKind =
+        ZludaBootstrap::SystemAdapterKind::Unknown;
+    ZludaBootstrap::BackendKind m_pythonBackend = ZludaBootstrap::BackendKind::Unknown;
     bool m_detecting = false;
 };

@@ -1,5 +1,16 @@
 qt_add_executable(minifox_runtime_tests
+    ../../../app/backend/HardwareManager.cpp
+    ../../../app/backend/HardwareManager.h
     tst_LaunchCommandBuilder.cpp
+)
+
+set_target_properties(minifox_runtime_tests PROPERTIES
+    WIN32_EXECUTABLE FALSE
+)
+
+target_include_directories(minifox_runtime_tests
+    PRIVATE
+        ../../../app/backend
 )
 
 target_link_libraries(minifox_runtime_tests
@@ -15,7 +26,11 @@ target_link_libraries(minifox_runtime_tests
         minifox_runtime_ui
 )
 
-add_test(NAME minifox_runtime_tests COMMAND minifox_runtime_tests)
+add_test(
+    NAME minifox_runtime_tests
+    COMMAND minifox_runtime_tests
+        -o "${CMAKE_BINARY_DIR}/minifox_runtime_tests.txt,txt"
+)
 set_tests_properties(minifox_runtime_tests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     ENVIRONMENT_MODIFICATION

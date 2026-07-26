@@ -70,8 +70,13 @@ try {
             throw "QML lint failed with exit code $LASTEXITCODE."
         }
 
-        & $ctest --preset $Preset
+        $testOutput = Join-Path $buildDirectory "minifox_runtime_tests.txt"
+        Remove-Item -LiteralPath $testOutput -Force -ErrorAction SilentlyContinue
+        & $ctest --preset $Preset --output-on-failure
         if ($LASTEXITCODE -ne 0) {
+            if (Test-Path -LiteralPath $testOutput) {
+                Get-Content -LiteralPath $testOutput | Write-Host
+            }
             throw "Tests failed with exit code $LASTEXITCODE."
         }
     }

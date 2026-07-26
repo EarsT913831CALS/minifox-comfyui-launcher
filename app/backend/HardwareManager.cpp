@@ -1,7 +1,10 @@
 #include "HardwareManager.h"
 
 #include "ConfigurationManager.h"
+#include "LaunchCommandBuilder.h"
+#include "ZludaBootstrap.h"
 
+#include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -21,7 +24,13 @@ HardwareManager::HardwareManager(ConfigurationManager *configuration, QObject *p
             this, &HardwareManager::handleProcessFinished);
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart && m_mode == DetectionMode::Python) {
-            startNvidiaSmiDetection();
+            m_mode = DetectionMode::None;
+            QTimer::singleShot(0, this, &HardwareManager::continueAfterPythonProbe);
+        } else if (error == QProcess::FailedToStart
+                   && m_mode == DetectionMode::PythonZluda) {
+            m_zludaLastError = m_process.errorString();
+            m_mode = DetectionMode::None;
+            QTimer::singleShot(0, this, &HardwareManager::startNextZludaPythonDetection);
         } else if (error == QProcess::FailedToStart) {
             finishWithError(tr("未找到可用的 CUDA 检测工具。"));
         }
@@ -34,7 +43,10 @@ HardwareManager::HardwareManager(ConfigurationManager *configuration, QObject *p
         m_mode = DetectionMode::None;
         m_process.kill();
         if (timedOutMode == DetectionMode::Python) {
-            startNvidiaSmiDetection();
+            QTimer::singleShot(0, this, &HardwareManager::continueAfterPythonProbe);
+        } else if (timedOutMode == DetectionMode::PythonZluda) {
+            m_zludaLastError = tr("ZLUDA PyTorch 检测超时");
+            QTimer::singleShot(0, this, &HardwareManager::startNextZludaPythonDetection);
         } else {
             finishWithError(tr("CUDA 设备检测超时。"));
         }
@@ -46,7 +58,10 @@ HardwareManager::HardwareManager(ConfigurationManager *configuration, QObject *p
             QTimer::singleShot(250, this, &HardwareManager::detect);
         }
     });
-    QTimer::singleShot(0, this, &HardwareManager::detect);
+    // System adapter classification is synchronous and completes before the
+    // QML pages are created. RuntimeManager repeats the same check as a launch
+    // gate, so an immediate one-click start cannot race this UI probe.
+    detect();
 }
 
 bool HardwareManager::detecting() const { return m_detecting; }
@@ -86,14 +101,23 @@ void HardwareManager::detect()
     m_cudaRuntimeVersion.clear();
     m_driverVersion.clear();
     m_lastError.clear();
+    m_zludaPreparation = {};
+    m_zludaRocmCandidates.clear();
+    m_zludaLastError.clear();
+    m_pythonBackend = ZludaBootstrap::BackendKind::Unknown;
+    m_systemAdapterKind =
+        ZludaBootstrap::classifySystemAdapters(ZludaBootstrap::systemAdapterNames());
     m_detecting = true;
     emit detectionChanged();
 
     m_lastPythonPath = m_configuration->pythonPath();
     if (QFileInfo::exists(m_lastPythonPath)) {
         startPythonDetection(m_lastPythonPath);
-    } else {
+    } else if (m_systemAdapterKind == ZludaBootstrap::SystemAdapterKind::NvidiaOnly
+               || m_systemAdapterKind == ZludaBootstrap::SystemAdapterKind::Mixed) {
         startNvidiaSmiDetection();
+    } else {
+        finishWithError(tr("The selected Python environment does not exist."));
     }
 }
 
@@ -133,8 +157,58 @@ void HardwareManager::startPythonDetection(const QString &pythonPath)
         "'capability':'.'.join(map(str,torch.cuda.get_device_capability(i)))}"
         " for i in range(torch.cuda.device_count())];"
         "print(json.dumps({'available':torch.cuda.is_available(),'torch':torch.__version__,"
-        "'cuda':torch.version.cuda,'devices':devices},ensure_ascii=False))");
-    startProcess(DetectionMode::Python, pythonPath, {QStringLiteral("-c"), script});
+        "'cuda':torch.version.cuda,'hip':getattr(torch.version,'hip',None),"
+        "'active':__import__('os').environ.get('MINIFOX_ZLUDA_ACTIVE')=='1',"
+        "'devices':devices},ensure_ascii=False))");
+    QProcessEnvironment environment =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot()).environment;
+    environment.insert(QStringLiteral("PYTHONIOENCODING"), QStringLiteral("utf-8"));
+    startProcess(DetectionMode::Python, pythonPath,
+                 {QStringLiteral("-c"), script}, environment);
+}
+
+void HardwareManager::startZludaPythonDetection()
+{
+    QProcessEnvironment environment =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot()).environment;
+    m_zludaPreparation = ZludaBootstrap::prepare(
+        m_lastPythonPath, m_configuration->comfyRoot(), environment);
+    if (!m_zludaPreparation.valid) {
+        finishWithError(tr("检测到 AMD 显卡，但无法准备便携 ZLUDA：%1")
+                            .arg(m_zludaPreparation.error));
+        return;
+    }
+    m_zludaRocmCandidates = m_zludaPreparation.rocmBinCandidates;
+    startNextZludaPythonDetection();
+}
+
+void HardwareManager::startNextZludaPythonDetection()
+{
+    if (m_zludaRocmCandidates.isEmpty()) {
+        finishWithError(tr("检测到 AMD 显卡，但 ZLUDA/HIP 检测未通过：%1")
+                            .arg(m_zludaLastError.isEmpty()
+                                     ? tr("没有可用的 HIP SDK/ROCm 运行时")
+                                     : m_zludaLastError));
+        return;
+    }
+    const QString rocmBin = m_zludaRocmCandidates.takeFirst();
+    QProcessEnvironment environment =
+        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot()).environment;
+    environment.insert(QStringLiteral("PYTHONIOENCODING"), QStringLiteral("utf-8"));
+    ZludaBootstrap::apply(m_zludaPreparation, rocmBin, environment);
+
+    const QString script = QStringLiteral(
+        "import json,torch;"
+        "devices=[{'index':i,'name':torch.cuda.get_device_name(i),"
+        "'memory':round(torch.cuda.get_device_properties(i).total_memory/1073741824,1),"
+        "'capability':'.'.join(map(str,torch.cuda.get_device_capability(i)))}"
+        " for i in range(torch.cuda.device_count())];"
+        "print(json.dumps({'available':torch.cuda.is_available(),'torch':torch.__version__,"
+        "'cuda':torch.version.cuda,'hip':getattr(torch.version,'hip',None),"
+        "'active':__import__('os').environ.get('MINIFOX_ZLUDA_ACTIVE')=='1',"
+        "'devices':devices},ensure_ascii=False))");
+    startProcess(DetectionMode::PythonZluda, m_lastPythonPath,
+                 {QStringLiteral("-c"), script}, environment);
 }
 
 void HardwareManager::startNvidiaSmiDetection()
@@ -144,24 +218,48 @@ void HardwareManager::startNvidiaSmiDetection()
         finishWithError(tr("未检测到 NVIDIA 驱动或支持 CUDA 的 PyTorch 环境。"));
         return;
     }
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     startProcess(DetectionMode::NvidiaSmi, nvidiaSmi, {
         QStringLiteral("--query-gpu=index,name,memory.total,driver_version"),
         QStringLiteral("--format=csv,noheader,nounits")
-    });
+    }, environment);
+}
+
+void HardwareManager::continueAfterPythonProbe()
+{
+    using Adapter = ZludaBootstrap::SystemAdapterKind;
+    using Backend = ZludaBootstrap::BackendKind;
+
+    if (m_systemAdapterKind == Adapter::AmdOnly) {
+        if (m_pythonBackend == Backend::Rocm) {
+            finishWithError(tr("Native ROCm PyTorch did not report an available AMD device."));
+            return;
+        }
+        if (m_pythonBackend == Backend::Nvidia) {
+            finishWithError(tr("PyTorch reported NVIDIA CUDA on an AMD-only system; ZLUDA was not enabled."));
+            return;
+        }
+        QTimer::singleShot(0, this, &HardwareManager::startZludaPythonDetection);
+        return;
+    }
+
+    // NVIDIA, mixed and unknown adapter configurations never enter ZLUDA.
+    QTimer::singleShot(0, this, &HardwareManager::startNvidiaSmiDetection);
 }
 
 void HardwareManager::startProcess(DetectionMode mode,
                                    const QString &program,
-                                   const QStringList &arguments)
+                                   const QStringList &arguments,
+                                   const QProcessEnvironment &environment)
 {
     m_timeout.stop();
     m_mode = mode;
-    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-    environment.insert(QStringLiteral("PYTHONIOENCODING"), QStringLiteral("utf-8"));
     m_process.setProcessEnvironment(environment);
+    m_process.setWorkingDirectory(m_configuration->comfyRoot());
     m_process.setProgram(program);
     m_process.setArguments(arguments);
     m_process.start();
+    m_timeout.setInterval(mode == DetectionMode::PythonZluda ? 60000 : 15000);
     m_timeout.start();
 }
 
@@ -177,18 +275,29 @@ void HardwareManager::handleProcessFinished(int exitCode, QProcess::ExitStatus e
 
     bool parsed = false;
     if (exitStatus == QProcess::NormalExit && exitCode == 0) {
-        parsed = completedMode == DetectionMode::Python
-            ? parsePythonResult(output)
-            : parseNvidiaSmiResult(output);
+        parsed = completedMode == DetectionMode::NvidiaSmi
+            ? parseNvidiaSmiResult(output)
+            : parsePythonResult(output);
     }
     if (parsed && !m_cudaDevices.isEmpty()) {
+        if (completedMode == DetectionMode::PythonZluda) {
+            m_detectionSource = QStringLiteral("PyTorch · ZLUDA");
+        }
         m_detecting = false;
         m_lastError.clear();
         emit detectionChanged();
         return;
     }
     if (completedMode == DetectionMode::Python) {
-        startNvidiaSmiDetection();
+        QTimer::singleShot(0, this, &HardwareManager::continueAfterPythonProbe);
+        return;
+    }
+    if (completedMode == DetectionMode::PythonZluda) {
+        QString error = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
+        m_zludaLastError = error.isEmpty()
+            ? tr("注入 ZLUDA 后 PyTorch 仍未报告 CUDA 设备")
+            : error;
+        QTimer::singleShot(0, this, &HardwareManager::startNextZludaPythonDetection);
         return;
     }
 
@@ -213,18 +322,33 @@ bool HardwareManager::parsePythonResult(const QByteArray &output)
     const QJsonObject root = document.object();
     m_torchVersion = root.value(QStringLiteral("torch")).toString();
     m_cudaRuntimeVersion = root.value(QStringLiteral("cuda")).toString();
+    const QString hipRuntimeVersion = root.value(QStringLiteral("hip")).toString();
+    QStringList deviceNames;
+    bool hasAmdDevice = false;
     for (const QJsonValue &value : root.value(QStringLiteral("devices")).toArray()) {
         const QJsonObject device = value.toObject();
         const double memory = device.value(QStringLiteral("memory")).toDouble();
+        const QString deviceName = device.value(QStringLiteral("name")).toString();
+        deviceNames.append(deviceName);
+        hasAmdDevice |= deviceName.contains(QStringLiteral("AMD"), Qt::CaseInsensitive)
+            || deviceName.contains(QStringLiteral("Radeon"), Qt::CaseInsensitive);
         m_cudaDevices.append(QVariantMap{
             {QStringLiteral("index"), device.value(QStringLiteral("index")).toInt()},
-            {QStringLiteral("name"), device.value(QStringLiteral("name")).toString()},
+            {QStringLiteral("name"), deviceName},
             {QStringLiteral("memoryGb"), memory},
             {QStringLiteral("memoryText"), QStringLiteral("%1 GB").arg(memory, 0, 'f', 1)},
             {QStringLiteral("capability"), device.value(QStringLiteral("capability")).toString()}
         });
     }
-    m_detectionSource = QStringLiteral("PyTorch");
+    m_pythonBackend = ZludaBootstrap::classifyBackend(
+        m_cudaRuntimeVersion, hipRuntimeVersion, deviceNames);
+    const bool isZluda = root.value(QStringLiteral("active")).toBool()
+        || (hasAmdDevice
+            && !m_cudaRuntimeVersion.isEmpty()
+            && root.value(QStringLiteral("hip")).toString().isEmpty());
+    m_detectionSource = isZluda
+        ? QStringLiteral("PyTorch · ZLUDA")
+        : QStringLiteral("PyTorch");
     return true;
 }
 

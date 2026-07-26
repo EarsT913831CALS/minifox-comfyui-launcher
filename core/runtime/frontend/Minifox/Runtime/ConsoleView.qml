@@ -55,6 +55,7 @@ Rectangle {
         anchors.bottomMargin: progressPanel.visible ? Theme.spacingSm : 1
         clip: true
         contentWidth: availableWidth
+        LayoutMirroring.enabled: false
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
         Component.onCompleted: {
@@ -67,10 +68,55 @@ Rectangle {
         ScrollBar.vertical: ScrollBar {
             id: verticalBar
 
+            parent: consoleScroll
+            anchors.top: consoleScroll.top
+            anchors.right: consoleScroll.right
+            anchors.bottom: consoleScroll.bottom
+            anchors.topMargin: 2
+            anchors.rightMargin: 2
+            anchors.bottomMargin: 2
+            z: 4
             policy: ScrollBar.AsNeeded
+            interactive: true
+            hoverEnabled: true
+            implicitWidth: 12
+            padding: 3
+            minimumSize: Math.min(1.0, 28 / Math.max(1, height))
+            active: root.manualNavigation || pressed || hovered
+            opacity: size < 1.0
+                     ? (root.manualNavigation || pressed || hovered ? 1.0 : 0.55)
+                     : 0.0
+
+            background: Rectangle {
+                color: "transparent"
+            }
+
+            contentItem: Rectangle {
+                implicitWidth: 6
+                radius: width / 2
+                color: root.darkConsole ? "#f2f2f2" : "#1b1b1b"
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: Theme.controlMotionDuration
+                    }
+                }
+            }
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.controlMotionDuration
+                    easing.type: Easing.OutCubic
+                }
+            }
+
             onSizeChanged: {
                 if (root.followTail)
                     root.scheduleScrollToEnd();
+            }
+            onPositionChanged: {
+                if (pressed)
+                    root.parkTextCursorInViewport();
             }
             onPressedChanged: {
                 if (pressed) {

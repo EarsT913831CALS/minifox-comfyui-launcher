@@ -25,6 +25,49 @@
 
 #include <utility>
 
+namespace {
+
+bool isIgnoredCoreWorkingTreeEntry(const QString &statusLine)
+{
+    if (statusLine.size() < 3) {
+        return false;
+    }
+    // QProcess output is trimmed before it reaches this parser. When the first
+    // porcelain entry is an unstaged change (for example " D path"), that
+    // removes its leading index-column space and leaves "D path".
+    const int pathOffset = statusLine.size() >= 3 && statusLine.at(2) == QLatin1Char(' ')
+        ? 3
+        : (statusLine.at(1) == QLatin1Char(' ') ? 2 : -1);
+    if (pathOffset < 0) {
+        return false;
+    }
+    QString path = statusLine.mid(pathOffset).trimmed();
+    const int renameSeparator = path.indexOf(QStringLiteral(" -> "));
+    if (renameSeparator >= 0) {
+        path = path.mid(renameSeparator + 4).trimmed();
+    }
+    if (path.startsWith(QLatin1Char('"')) && path.endsWith(QLatin1Char('"'))) {
+        path = path.mid(1, path.size() - 2);
+    }
+    path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    return path == QStringLiteral("output/_output_images_will_be_put_here");
+}
+
+bool hasMeaningfulCoreWorkingTreeChanges(const QString &output)
+{
+    const QStringList lines = output.split(
+        QRegularExpression(QStringLiteral("[\\r\\n]+")), Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+        if (!line.startsWith(QStringLiteral("##"))
+            && !isIgnoredCoreWorkingTreeEntry(line)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 VersionManager::VersionManager(ConfigurationManager *configuration, QObject *parent)
     : QObject(parent),
       m_configuration(configuration)
@@ -109,6 +152,7 @@ QVariantList VersionManager::coreVersions() const { return m_coreVersions; }
 QVariantList VersionManager::stableVersions() const { return m_stableVersions; }
 QVariantList VersionManager::installedExtensions() const { return m_installedExtensions; }
 QVariantList VersionManager::availableExtensions() const { return m_availableExtensions; }
+QVariantList VersionManager::extensionVersions() const { return m_extensionVersions; }
 QString VersionManager::statusMessage() const { return m_statusMessage; }
 QString VersionManager::lastError() const { return m_lastError; }
 int VersionManager::aheadCount() const { return m_aheadCount; }
@@ -269,59 +313,48 @@ void VersionManager::updateComfyUi(int channel)
     m_pendingCompletionMessage = m_requestedCoreChannel == 0
         ? tr("ComfyUI 稳定版已更新到最新版本。")
         : tr("ComfyUI 开发版已更新到最新版本。");
-    if (!canUpdate()) {
-        if (m_dirty) {
-            setFailure(tr("存在未提交更改。为避免覆盖文件，请先处理这些更改。"));
-        } else {
-            setFailure(tr("当前 ComfyUI 状态不允许更新，请先刷新内核列表。"));
-        }
+    if (!canCheck()) {
+        setFailure(tr("当前 ComfyUI 状态不允许更新，请先刷新内核列表。"));
         return;
     }
     m_lastError.clear();
-    startGit(Operation::ValidateCoreUpdate,
+    startGit(Operation::ResetCoreForUpdate,
              repositoryArguments(m_comfyRoot,
-                 {QStringLiteral("status"), QStringLiteral("--porcelain")}));
+                 {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
 }
 
 void VersionManager::switchCoreVersion(const QString &commit, int channel)
 {
     if (commit.trimmed().isEmpty()) return;
-    if (!canUpdate()) {
-        if (m_dirty) {
-            setFailure(tr("存在未提交更改。为避免覆盖文件，已取消版本切换。"));
-        } else if (!m_busy) {
-            setFailure(tr("当前 ComfyUI 状态不允许切换版本，请先刷新内核列表。"));
-        }
+    if (!canCheck()) {
+        setFailure(tr("当前 ComfyUI 状态不允许切换版本，请先刷新内核列表。"));
         return;
     }
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("核心版本已切换。");
     m_requestedCoreChannel = channel == 1 ? 1 : 0;
     m_pendingCommit = commit.trimmed();
-    startGit(Operation::ValidateCoreCheckout,
+    startGit(Operation::ResetCoreForVersion,
              repositoryArguments(m_comfyRoot,
-                 {QStringLiteral("status"), QStringLiteral("--porcelain")}));
+                 {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
 }
 
 void VersionManager::switchBranch(const QString &branch)
 {
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("分支已切换。");
-    if (!canUpdate()) {
-        if (m_dirty) {
-            setFailure(tr("存在未提交更改。为避免覆盖文件，请先处理这些更改。"));
-        } else {
-            setFailure(tr("当前 ComfyUI 状态不允许切换分支，请先刷新内核列表。"));
-        }
-        return;
-    }
     if (branch.trimmed().isEmpty()) {
         setFailure(tr("请输入有效的分支名称。"));
         return;
     }
-    startGit(Operation::CheckoutBranch,
+    if (!canCheck()) {
+        setFailure(tr("当前 ComfyUI 状态不允许切换分支，请先刷新内核列表。"));
+        return;
+    }
+    m_pendingBranch = branch.trimmed();
+    startGit(Operation::ResetCoreForBranch,
              repositoryArguments(m_comfyRoot,
-                 {QStringLiteral("checkout"), branch.trimmed()}));
+                 {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
 }
 
 void VersionManager::updateExtension(const QString &path)
@@ -369,6 +402,22 @@ void VersionManager::startExtensionUpdate(const QString &path)
     startGit(Operation::ValidateExtensionUpdate,
              repositoryArguments(path,
                  {QStringLiteral("status"), QStringLiteral("--porcelain")}));
+}
+
+void VersionManager::loadExtensionVersions(const QString &path, const QString &currentCommit)
+{
+    if (m_busy || !QFileInfo::exists(QDir(path).filePath(QStringLiteral(".git")))) {
+        return;
+    }
+    m_operationPath = path;
+    m_extensionHistoryCurrentCommit = currentCommit.trimmed();
+    m_extensionVersions.clear();
+    m_lastError.clear();
+    startGit(Operation::LoadExtensionHistory,
+             repositoryArguments(path,
+                 {QStringLiteral("log"), QStringLiteral("--all"), QStringLiteral("-100"),
+                  QStringLiteral("--date=format-local:%Y-%m-%d %H:%M:%S"),
+                  QStringLiteral("--format=%h%x1f%H%x1f%ad%x1f%s%x1e")}));
 }
 
 void VersionManager::switchExtensionVersion(const QString &path, const QString &commit)
@@ -464,7 +513,8 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::Fetch: m_statusMessage = tr("正在检查远程更新…"); break;
     case Operation::ResolveCoreCompareBranch: m_statusMessage = tr("正在匹配远端分支…"); break;
     case Operation::Compare: m_statusMessage = tr("正在比较版本…"); break;
-    case Operation::ValidateCoreUpdate:
+    case Operation::ResetCoreForUpdate:
+    case Operation::CleanCoreForUpdate:
     case Operation::PrepareCoreUpdateFetch:
     case Operation::ResolveStableUpdateCommit:
     case Operation::ResolveDevelopmentUpdateBranch:
@@ -475,8 +525,11 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::ResolveDevelopmentHistoryBranch:
     case Operation::LoadCoreHistory: m_statusMessage = tr("正在读取版本列表…"); break;
     case Operation::LoadStableHistory: m_statusMessage = tr("正在读取稳定版本…"); break;
-    case Operation::ValidateCoreCheckout:
+    case Operation::ResetCoreForVersion:
+    case Operation::CleanCoreForVersion:
     case Operation::CheckoutCore: m_statusMessage = tr("正在切换核心版本…"); break;
+    case Operation::ResetCoreForBranch: m_statusMessage = tr("正在重置核心目录…"); break;
+    case Operation::CleanCoreForBranch: m_statusMessage = tr("正在清理核心目录…"); break;
     case Operation::CheckoutBranch: m_statusMessage = tr("正在切换分支…"); break;
     case Operation::NormalizeBranch: m_statusMessage = tr("正在校正分支…"); break;
     case Operation::ValidateExtensionUpdate:
@@ -485,6 +538,7 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::AttachExtensionUpdateBranch:
     case Operation::SetExtensionUpdateUpstream:
     case Operation::UpdateExtension: m_statusMessage = tr("正在更新扩展…"); break;
+    case Operation::LoadExtensionHistory: m_statusMessage = tr("正在读取扩展版本列表…"); break;
     case Operation::ValidateExtensionCheckout:
     case Operation::CheckoutExtension: m_statusMessage = tr("正在切换扩展版本…"); break;
     case Operation::InstallExtension: m_statusMessage = tr("正在安装扩展…"); break;
@@ -519,7 +573,12 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     const QString error = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
 
     if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-        if (completed == Operation::RefreshStatus) {
+        if (completed == Operation::LoadExtensionHistory) {
+            const QString message =
+                error.isEmpty() ? tr("无法读取扩展版本历史。") : error;
+            setFailure(message);
+            emit extensionVersionsLoaded(false, message);
+        } else if (completed == Operation::RefreshStatus) {
             setFailure(tr("核心版本列表刷新失败：ComfyUI 目录不是 Git 仓库。"));
         } else if (completed == Operation::Fetch && m_fullRefresh) {
             m_lastError = error.isEmpty() ? tr("无法访问远程 Git 仓库。") : error;
@@ -543,11 +602,12 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                      {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--date=format-local:%Y-%m-%d %H:%M:%S"),
                       QStringLiteral("--format=%h%x1f%H%x1f%ad%x1f%s")}));
         break;
-    case Operation::ValidateCoreCheckout:
-        if (!output.isEmpty()) {
-            setFailure(tr("检测到未提交更改，为避免覆盖文件，已取消版本切换。"));
-            break;
-        }
+    case Operation::ResetCoreForVersion:
+        startGit(Operation::CleanCoreForVersion,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
+        break;
+    case Operation::CleanCoreForVersion:
         startGit(Operation::CheckoutCore,
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("checkout"), QStringLiteral("-B"),
@@ -555,6 +615,16 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                           ? QStringLiteral("master")
                           : QStringLiteral("dev"),
                       m_pendingCommit}));
+        break;
+    case Operation::ResetCoreForBranch:
+        startGit(Operation::CleanCoreForBranch,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
+        break;
+    case Operation::CleanCoreForBranch:
+        startGit(Operation::CheckoutBranch,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("checkout"), m_pendingBranch}));
         break;
     case Operation::RefreshLog: {
         const QStringList parts = output.split(QChar(0x1f));
@@ -651,11 +721,12 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         }
         break;
     }
-    case Operation::ValidateCoreUpdate:
-        if (!output.isEmpty()) {
-            setFailure(tr("检测到未提交更改，为避免覆盖文件，已取消更新。"));
-            break;
-        }
+    case Operation::ResetCoreForUpdate:
+        startGit(Operation::CleanCoreForUpdate,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
+        break;
+    case Operation::CleanCoreForUpdate:
         startGit(Operation::PrepareCoreUpdateFetch,
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("fetch"), QStringLiteral("--tags"), QStringLiteral("--quiet")}));
@@ -811,6 +882,13 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                  repositoryArguments(m_operationPath,
                      {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
         break;
+    case Operation::LoadExtensionHistory:
+        parseExtensionHistory(output);
+        m_busy = false;
+        m_statusMessage = tr("扩展版本列表已加载。");
+        emit stateChanged();
+        emit extensionVersionsLoaded(true, m_statusMessage);
+        break;
     case Operation::ValidateExtensionCheckout:
         if (!output.isEmpty()) {
             setFailure(tr("扩展 %1 存在未提交更改，已取消版本切换。")
@@ -830,7 +908,7 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
 void VersionManager::parseStatus(const QString &output)
 {
     const QStringList lines = output.split(QRegularExpression(QStringLiteral("[\\r\\n]+")), Qt::SkipEmptyParts);
-    m_dirty = lines.size() > 1;
+    m_dirty = hasMeaningfulCoreWorkingTreeChanges(output);
     if (lines.isEmpty()) {
         return;
     }
@@ -899,6 +977,30 @@ void VersionManager::parseStableHistory(const QString &output)
         });
     }
     m_stableVersions = versions;
+}
+
+void VersionManager::parseExtensionHistory(const QString &output)
+{
+    QVariantList versions;
+    for (const QString &record : output.split(QChar(0x1e), Qt::SkipEmptyParts)) {
+        const QStringList fields = record.trimmed().split(QChar(0x1f));
+        if (fields.size() < 4) {
+            continue;
+        }
+        const QString shortCommit = fields.at(0);
+        const QString fullCommit = fields.at(1);
+        versions.append(QVariantMap{
+            {QStringLiteral("shortCommit"), shortCommit},
+            {QStringLiteral("commit"), fullCommit},
+            {QStringLiteral("date"), fields.at(2)},
+            {QStringLiteral("subject"), fields.mid(3).join(QStringLiteral(" "))},
+            {QStringLiteral("current"),
+             !m_extensionHistoryCurrentCommit.isEmpty()
+                 && (fullCommit.startsWith(m_extensionHistoryCurrentCommit)
+                     || shortCommit == m_extensionHistoryCurrentCommit)}
+        });
+    }
+    m_extensionVersions = versions;
 }
 
 QStringList VersionManager::networkRouteArguments() const
