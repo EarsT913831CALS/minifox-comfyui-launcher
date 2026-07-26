@@ -70,7 +70,7 @@ try {
             throw "QML lint failed with exit code $LASTEXITCODE."
         }
 
-        & $ctest --preset $Preset
+        & $ctest --preset $Preset --output-on-failure
         if ($LASTEXITCODE -ne 0) {
             throw "Tests failed with exit code $LASTEXITCODE."
         }
