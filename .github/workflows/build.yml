@@ -33,7 +33,14 @@ jobs:
         shell: pwsh
         env:
           MINIFOX_MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
-        run: .\scripts\build.ps1 -Preset ucrt64-debug -RunTests
+          MINIFOX_TAR_EXECUTABLE: C:\Windows\System32\tar.exe
+        run: |
+          if (-not (Test-Path -LiteralPath $env:MINIFOX_TAR_EXECUTABLE -PathType Leaf)) {
+            throw "Windows system tar.exe was not found: $env:MINIFOX_TAR_EXECUTABLE"
+          }
+          Write-Host "Using Windows system tar: $env:MINIFOX_TAR_EXECUTABLE"
+          & $env:MINIFOX_TAR_EXECUTABLE --version
+          .\scripts\build.ps1 -Preset ucrt64-debug -RunTests
 
   static-release:
     runs-on: windows-2022

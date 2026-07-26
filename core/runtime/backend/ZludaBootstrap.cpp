@@ -143,6 +143,11 @@ QString pathZludaSource(const QProcessEnvironment &environment)
 
 QString tarExecutable()
 {
+    const QString configuredTar =
+        qEnvironmentVariable("MINIFOX_TAR_EXECUTABLE").trimmed();
+    if (!configuredTar.isEmpty()) {
+        return QFileInfo(configuredTar).isFile() ? configuredTar : QString();
+    }
     const QString systemRoot = qEnvironmentVariable("SystemRoot", QStringLiteral("C:/Windows"));
     const QString systemTar = QDir(systemRoot).filePath(QStringLiteral("System32/tar.exe"));
     if (QFileInfo::exists(systemTar)) {
