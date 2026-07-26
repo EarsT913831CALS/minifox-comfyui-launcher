@@ -782,7 +782,7 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
     QDir root(temporaryDirectory.path());
     QVERIFY(root.mkpath(QStringLiteral("ComfyUI")));
     QVERIFY(root.mkpath(QStringLiteral("python/Lib/site-packages/torch/lib")));
-    QVERIFY(root.mkpath(QStringLiteral("rocm/bin")));
+    QVERIFY(root.mkpath(QStringLiteral("rocm/bin/rocblas/library")));
 
     const auto writeFile = [](const QString &path, const QByteArray &contents) {
         QFile file(path);
@@ -801,21 +801,25 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
 
     const QString rocmBin = root.filePath(QStringLiteral("rocm/bin"));
     QVERIFY(writeFile(QDir(rocmBin).filePath(QStringLiteral("amdhip64.dll")), QByteArrayLiteral("hip")));
+    const QString tensileLibrary =
+        QDir(rocmBin).filePath(QStringLiteral("rocblas/library"));
+    QVERIFY(writeFile(QDir(tensileLibrary).filePath(
+                          QStringLiteral("TensileLibrary_lazy_gfx903.dat")),
+                      QByteArrayLiteral("gfx903")));
 
     QProcessEnvironment environment;
     environment.insert(QStringLiteral("PYTHONPATH"), QStringLiteral("C:/existing"));
     environment.insert(QStringLiteral("HIP_PATH"), root.filePath(QStringLiteral("rocm")));
-    environment.insert(QStringLiteral("MINIFOX_ZLUDA_GFX_ARCH"), QStringLiteral("gfx1103"));
+    environment.insert(QStringLiteral("MINIFOX_ZLUDA_GFX_ARCH"), QStringLiteral("gfx903"));
 
     const ZludaBootstrap::Preparation preparation = ZludaBootstrap::prepare(
         pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
     QVERIFY2(preparation.valid, qPrintable(preparation.error));
     QCOMPARE(QDir::cleanPath(preparation.sourceDirectory),
              QDir::cleanPath(root.filePath(QStringLiteral(".minifox/packages/zluda"))));
-    QCOMPARE(preparation.gfxArchitecture, QStringLiteral("gfx1103"));
+    QCOMPARE(preparation.gfxArchitecture, QStringLiteral("gfx903"));
     QCOMPARE(QDir::cleanPath(preparation.tensileLibraryDirectory),
-             QDir::cleanPath(root.filePath(
-                 QStringLiteral(".minifox/runtime/rocblas/library"))));
+             QDir::cleanPath(tensileLibrary));
     QCOMPARE(preparation.preloadNames,
              QStringList({QStringLiteral("nvcuda.dll"),
                           QStringLiteral("nvrtc64_112_0.dll"),
@@ -840,10 +844,10 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
     QVERIFY(!bootstrapScript.contains("import torch as"));
     QVERIFY(QFileInfo::exists(
         root.filePath(QStringLiteral(".minifox/packages/zluda.extpack"))));
-    QVERIFY(QFileInfo::exists(
-        root.filePath(QStringLiteral(".minifox/packages/tensile-gfx1103.extpack"))));
-    QVERIFY(!QDir(preparation.tensileLibraryDirectory)
-                 .entryList({QStringLiteral("*gfx1103*")}, QDir::Files).isEmpty());
+    QVERIFY(!QFileInfo::exists(
+        root.filePath(QStringLiteral(".minifox/packages/tensile-gfx903.extpack"))));
+    QVERIFY(QFileInfo::exists(QDir(preparation.tensileLibraryDirectory).filePath(
+        QStringLiteral("TensileLibrary_lazy_gfx903.dat"))));
     QVERIFY(QFileInfo(root.filePath(QStringLiteral(".cache"))).isDir());
     QVERIFY(QFileInfo(preparation.zludaCacheDirectory).isDir());
     QVERIFY(QFileInfo(preparation.tritonCacheDirectory).isDir());
@@ -877,12 +881,6 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
     QCOMPARE(environment.value(QStringLiteral("PYTHONPATH")).split(QDir::listSeparator()).constFirst(),
              preparation.bootstrapDirectory);
 
-    environment.insert(QStringLiteral("MINIFOX_ZLUDA_GFX_ARCH"), QStringLiteral("gfx1200"));
-    const ZludaBootstrap::Preparation unsupported = ZludaBootstrap::prepare(
-        pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
-    QVERIFY(!unsupported.valid);
-    QVERIFY2(unsupported.error.contains(QStringLiteral("gfx1200")),
-             qPrintable(unsupported.error));
 }
 
 void LaunchCommandBuilderTest::zludaLocalIntegrationWhenConfigured()

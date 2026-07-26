@@ -386,111 +386,21 @@ QString detectGfxArchitecture(const QString &rocmBin, QString *error)
     return match.captured(1).toLower();
 }
 
-QString tensilePackageForArchitecture(const QString &architecture)
+QString locateHipTensileLibrary(const QString &rocmBin,
+                                const QString &architecture,
+                                QString *error)
 {
-    if (architecture == QStringLiteral("gfx1010")
-        || architecture == QStringLiteral("gfx1011")
-        || architecture == QStringLiteral("gfx1012")) {
-        return QStringLiteral("tensile-gfx101x.extpack");
-    }
-    if (architecture == QStringLiteral("gfx1031")) {
-        return QStringLiteral("tensile-gfx1031.extpack");
-    }
-    if (architecture == QStringLiteral("gfx1032")) {
-        return QStringLiteral("tensile-gfx1032.extpack");
-    }
-    if (architecture == QStringLiteral("gfx1034")
-        || architecture == QStringLiteral("gfx1035")) {
-        return QStringLiteral("tensile-gfx103x.extpack");
-    }
-    if (architecture == QStringLiteral("gfx1103")) {
-        return QStringLiteral("tensile-gfx1103.extpack");
-    }
-    if (architecture == QStringLiteral("gfx803")
-        || architecture == QStringLiteral("gfx900")) {
-        return QStringLiteral("tensile-gfx8xx-9xx.extpack");
-    }
-    if (architecture == QStringLiteral("gfx906")) {
-        return QStringLiteral("tensile-gfx906.extpack");
-    }
-    if (architecture == QStringLiteral("gfx940")
-        || architecture == QStringLiteral("gfx941")
-        || architecture == QStringLiteral("gfx942")) {
-        return QStringLiteral("tensile-gfx94x.extpack");
-    }
-    return {};
-}
-
-QString prepareEmbeddedTensile(const QString &portableRoot,
-                               const QString &rocmBin,
-                               const QString &architecture,
-                               QString *error)
-{
-    const QString packageName = tensilePackageForArchitecture(architecture);
     const QDir systemLibrary(QDir(rocmBin).filePath(QStringLiteral("rocblas/library")));
-    if (packageName.isEmpty()) {
-        if (!systemLibrary.entryList(
-                {QStringLiteral("*%1*").arg(architecture)}, QDir::Files).isEmpty()) {
-            return systemLibrary.absolutePath();
-        }
+    if (!systemLibrary.exists()
+        || systemLibrary.entryList(QDir::Files | QDir::NoDotAndDotDot).isEmpty()) {
         if (error) {
             *error = QStringLiteral(
-                "当前 AMD 架构 %1 不在内置 Tensile 补丁范围内，且 HIP 中没有对应库。")
-                         .arg(architecture);
+                "HIP 中缺少 rocBLAS/Tensile 库。请把适用于 %1 的架构文件安装到：%2")
+                         .arg(architecture, systemLibrary.absolutePath());
         }
         return {};
     }
-
-    const QString archive = materializeEmbeddedArchive(portableRoot, packageName, error);
-    if (archive.isEmpty()) {
-        return {};
-    }
-    const QString extractedDirectory = QDir(portableRoot).filePath(
-        QStringLiteral(".minifox/packages/tensile/%1").arg(architecture));
-    const QString validationPattern = QStringLiteral("*%1*").arg(architecture);
-    if (!extractEmbeddedArchive(
-            archive, extractedDirectory, validationPattern, error)) {
-        return {};
-    }
-
-    const QString runtimeLibrary =
-        QDir(portableRoot).filePath(QStringLiteral(".minifox/runtime/rocblas/library"));
-    if (!QDir().mkpath(runtimeLibrary)) {
-        if (error) {
-            *error = QStringLiteral("无法创建 Minifox rocBLAS 运行目录：%1")
-                         .arg(runtimeLibrary);
-        }
-        return {};
-    }
-
-    // Aki's patch is an additive overlay: HIP's existing files remain
-    // authoritative and the extpack only supplies missing architecture files.
-    // Recreate that merged view under .minifox instead of modifying HIP itself.
-    const QFileInfoList patchFiles =
-        QDir(extractedDirectory).entryInfoList(QDir::Files, QDir::Name);
-    for (const QFileInfo &patchFile : patchFiles) {
-        if (patchFile.fileName().startsWith(QStringLiteral(".minifox-package"))) {
-            continue;
-        }
-        const QString systemFile = systemLibrary.filePath(patchFile.fileName());
-        const QString sourceFile =
-            QFileInfo::exists(systemFile) ? systemFile : patchFile.absoluteFilePath();
-        const QString destinationFile =
-            QDir(runtimeLibrary).filePath(patchFile.fileName());
-        if (QFileInfo(destinationFile).size() == QFileInfo(sourceFile).size()) {
-            continue;
-        }
-        if (!copyAtomically(sourceFile, destinationFile, error)) {
-            return {};
-        }
-    }
-    if (QDir(runtimeLibrary).entryList({validationPattern}, QDir::Files).isEmpty()) {
-        if (error) {
-            *error = QStringLiteral("Tensile 合并后缺少 %1 对应文件。").arg(architecture);
-        }
-        return {};
-    }
-    return runtimeLibrary;
+    return systemLibrary.absolutePath();
 }
 
 bool writeBootstrapScript(const QString &bootstrapDirectory, QString *error)
@@ -851,8 +761,7 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
     if (result.gfxArchitecture.isEmpty()) {
         return result;
     }
-    result.tensileLibraryDirectory = prepareEmbeddedTensile(
-        portableRoot,
+    result.tensileLibraryDirectory = locateHipTensileLibrary(
         result.rocmBinCandidates.constFirst(),
         result.gfxArchitecture,
         &result.error);

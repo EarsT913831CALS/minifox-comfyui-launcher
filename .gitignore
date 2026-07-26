@@ -7,6 +7,9 @@
 # Portable runtime data (created next to the executable)
 /.minifox/
 
+# GPU-architecture-specific rocBLAS/Tensile patches belong in the user's HIP SDK.
+/assets/zluda/tensile-gfx*.extpack
+
 # CMake / Qt Creator user state
 CMakeUserPresets.json
 CMakeLists.txt.user*
