@@ -4,6 +4,10 @@ qt_add_executable(minifox_runtime_tests
     tst_LaunchCommandBuilder.cpp
 )
 
+set_target_properties(minifox_runtime_tests PROPERTIES
+    WIN32_EXECUTABLE FALSE
+)
+
 target_include_directories(minifox_runtime_tests
     PRIVATE
         ../../../app/backend
