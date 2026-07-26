@@ -20,7 +20,7 @@ ComfyUI-Package/
 
 ## 构建时内置内容
 
-只有通用的 `zluda.extpack` 通过 Qt Resource 编入 Minifox EXE。原始资源位于 `assets/zluda`。
+只有通用的 `zluda.extpack` 通过 Qt Resource 编入 Minifox EXE。它使用 Windows 系统 tar 可直接读取的 ZIP 容器，原始资源位于 `assets/zluda`。
 
 `tensile-gfx*.extpack` 不属于启动器资源，也不会提交到仓库。`gfx1103`、`gfx903` 等不同架构所需的 rocBLAS/Tensile 文件由用户的 HIP SDK 提供，位置为：
 
