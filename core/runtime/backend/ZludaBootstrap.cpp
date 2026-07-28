@@ -201,8 +201,47 @@ QString extractAkiExtpack(const QString &portableRoot,
     return extractedDirectory;
 }
 
+bool filesHaveSameContents(const QString &firstPath, const QString &secondPath)
+{
+    const QFileInfo firstInfo(firstPath);
+    const QFileInfo secondInfo(secondPath);
+    if (!firstInfo.isFile()
+        || !secondInfo.isFile()
+        || firstInfo.size() != secondInfo.size()) {
+        return false;
+    }
+
+    QFile first(firstPath);
+    QFile second(secondPath);
+    if (!first.open(QIODevice::ReadOnly) || !second.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+
+    constexpr qint64 chunkSize = 1024 * 1024;
+    while (true) {
+        const QByteArray firstChunk = first.read(chunkSize);
+        const QByteArray secondChunk = second.read(chunkSize);
+        if (firstChunk != secondChunk) {
+            return false;
+        }
+        if (firstChunk.isEmpty()) {
+            return first.atEnd()
+                && second.atEnd()
+                && first.error() == QFileDevice::NoError
+                && second.error() == QFileDevice::NoError;
+        }
+    }
+}
+
 bool copyAtomically(const QString &source, const QString &destination, QString *error)
 {
+    // A previously prepared ZLUDA DLL may already be mapped into a Python
+    // process. Windows cannot replace that file, but no replacement is needed
+    // when the embedded package contains the exact same bytes.
+    if (filesHaveSameContents(source, destination)) {
+        return true;
+    }
+
     QFile input(source);
     if (!input.open(QIODevice::ReadOnly)) {
         if (error) {

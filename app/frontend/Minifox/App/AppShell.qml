@@ -16,6 +16,9 @@ Control {
     readonly property bool compactNavigation: width < 1000
 
     padding: 0
+    background: Rectangle {
+        color: Theme.pageFill
+    }
     font.family: Theme.uiFontFamily
     font.pointSize: Theme.bodySize
     palette.window: Theme.surface
@@ -117,12 +120,6 @@ Control {
             Layout.fillHeight: true
             Layout.preferredWidth: root.compactNavigation ? 72 : 108
             onPageSelected: index => root.currentPage = index
-        }
-
-        Rectangle {
-            Layout.fillHeight: true
-            Layout.preferredWidth: 1
-            color: Theme.materialStroke
         }
 
         Loader {

@@ -67,7 +67,6 @@ public:
     Q_INVOKABLE void forceStop();
     Q_INVOKABLE void shutdown();
     Q_INVOKABLE bool openCommandPrompt();
-    Q_INVOKABLE bool openWebUi();
     Q_INVOKABLE bool exportLog(const QUrl &fileUrl);
     void retranslate();
 

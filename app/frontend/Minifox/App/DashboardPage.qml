@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Minifox.Shared
 
@@ -13,254 +14,454 @@ Pane {
     signal openRuntime()
     signal launchRequested()
 
-    readonly property bool configurationValid: appContext.configuration.valid
-    readonly property int runtimeStatus: appContext.runtime.status
-    readonly property bool serviceReady: appContext.runtime.serviceReady
-    readonly property string stateTitle: {
-        if (!configurationValid)
-            return qsTr("配置需要完善");
-        if (serviceReady)
-            return qsTr("ComfyUI 已就绪");
-        switch (runtimeStatus) {
-        case 1:
-            return qsTr("正在启动 ComfyUI");
-        case 2:
-            return qsTr("正在等待服务");
-        case 3:
-            return qsTr("正在停止 ComfyUI");
-        case 4:
-            return qsTr("启动失败");
-        default:
-            return qsTr("准备就绪");
-        }
-    }
-    readonly property string stateDescription: {
-        if (!configurationValid)
-            return qsTr("修正启动配置后即可一键启动。");
-        if (serviceReady)
-            return qsTr("服务运行正常，可以打开 WebUI 开始创作。");
-        switch (runtimeStatus) {
-        case 1:
-            return qsTr("进程已经创建，正在读取启动输出。");
-        case 2:
-            return qsTr("ComfyUI 进程正在运行，等待网页服务响应。");
-        case 3:
-            return qsTr("正在安全结束进程及其子进程。");
-        case 4:
-            return appContext.runtime.lastError.length > 0
-                   ? appContext.runtime.lastError
-                   : qsTr("查看控制台了解详细原因，然后重新启动。");
-        default:
-            return qsTr("当前配置已通过检查，随时可以启动。");
-        }
-    }
-    readonly property color stateColor: !configurationValid || runtimeStatus === 4
-                                          ? Theme.error
-                                          : serviceReady
-                                            ? Theme.success
-                                            : runtimeStatus === 0
-                                              ? Theme.accent
-                                              : Theme.info
-    readonly property string primaryText: {
-        if (serviceReady)
-            return qsTr("打开 WebUI");
-        if (runtimeStatus === 4)
-            return qsTr("重新启动");
-        if (runtimeStatus === 1)
-            return qsTr("正在启动");
-        if (runtimeStatus === 2)
-            return qsTr("等待 WebUI");
-        if (runtimeStatus === 3)
-            return qsTr("正在停止");
-        return qsTr("一键启动");
-    }
-    readonly property bool primaryEnabled: configurationValid
-                                            && (serviceReady
-                                            || ((runtimeStatus === 0 || runtimeStatus === 4)
-                                                && appContext.runtime.canStart))
+    property string selectedItemId: ""
+    property real normalCanvasWidth: 0
+    property real normalCanvasHeight: 0
+    readonly property var selectedItem: itemById(selectedItemId)
 
-    padding: Theme.spacingXl
+    function itemById(id) {
+        const items = appContext.skins.homeItems;
+        for (let index = 0; index < items.length; ++index) {
+            if (items[index].id === id)
+                return items[index];
+        }
+        return ({});
+    }
+
+    function selectNew(type) {
+        const id = appContext.skins.addItem(type);
+        if (id.length > 0)
+            selectedItemId = id;
+    }
+
+    function setSelectedProperty(key, value) {
+        let values = {};
+        values[key] = value;
+        setSelectedProperties(values);
+    }
+
+    function setSelectedProperties(values) {
+        if (selectedItemId.length === 0)
+            return;
+        const source = selectedItem.properties || ({});
+        let properties = {};
+        for (const name in source)
+            properties[name] = source[name];
+        for (const name in values)
+            properties[name] = values[name];
+        appContext.skins.updateItem(selectedItemId, {"properties": properties});
+    }
+
+    padding: Theme.spacingLg
+    background: Rectangle { color: "transparent" }
+
+    Shortcut {
+        enabled: root.appContext.skins.editing
+        sequence: StandardKey.Undo
+        onActivated: root.appContext.skins.undo()
+    }
+    Shortcut {
+        enabled: root.appContext.skins.editing
+        sequence: StandardKey.Redo
+        onActivated: root.appContext.skins.redo()
+    }
+    Shortcut {
+        enabled: root.appContext.skins.editing && root.selectedItemId.length > 0
+        sequence: StandardKey.Delete
+        onActivated: root.appContext.skins.removeItem(root.selectedItemId)
+    }
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Theme.spacingLg
+        spacing: Theme.spacingMd
 
-        PageHeader {
-            title: qsTr("一键启动")
-            description: qsTr("确认当前配置，然后启动 ComfyUI。")
-            icon: "\uE768"
+        RowLayout {
             Layout.fillWidth: true
+            spacing: Theme.spacingMd
+
+            PageHeader {
+                title: root.appContext.skins.editing ? qsTr("编辑首页") : qsTr("一键启动")
+                description: root.appContext.skins.editing
+                             ? qsTr("拖动组件并使用八个控制点调整尺寸；完成后保存布局。")
+                             : qsTr("确认当前配置，然后启动 ComfyUI。")
+                icon: root.appContext.skins.editing ? "\uE70F" : "\uE768"
+                Layout.fillWidth: true
+            }
+
+            AppButton {
+                visible: !root.appContext.skins.editing
+                text: qsTr("编辑首页")
+                onClicked: {
+                    root.normalCanvasWidth = homeCanvas.width;
+                    root.normalCanvasHeight = homeCanvas.height;
+                    root.appContext.skins.beginEdit();
+                    root.selectedItemId = "launch-card";
+                }
+            }
         }
 
-        Item {
+        MaterialPanel {
+            visible: root.appContext.skins.editing
+            Layout.fillWidth: true
+            padding: Theme.spacingSm
+            strong: true
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingSm
+
+                AppButton {
+                    text: qsTr("添加组件")
+                    onClicked: addMenu.open()
+
+                    Menu {
+                        id: addMenu
+                        y: parent.height
+
+                        MenuItem { text: qsTr("图片 / 横幅"); onTriggered: root.selectNew("image") }
+                        MenuItem { text: qsTr("快捷文件夹"); onTriggered: root.selectNew("folders") }
+                        MenuItem { text: qsTr("文本 / 公告"); onTriggered: root.selectNew("text") }
+                        MenuItem { text: qsTr("版本信息"); onTriggered: root.selectNew("version") }
+                        MenuItem { text: qsTr("空白材质面板"); onTriggered: root.selectNew("panel") }
+                    }
+                }
+
+                AppButton {
+                    text: qsTr("撤销")
+                    enabled: root.appContext.skins.canUndo
+                    onClicked: root.appContext.skins.undo()
+                }
+                AppButton {
+                    text: qsTr("重做")
+                    enabled: root.appContext.skins.canRedo
+                    onClicked: root.appContext.skins.redo()
+                }
+                AppButton {
+                    text: qsTr("恢复默认")
+                    onClicked: root.appContext.skins.resetHomeLayout()
+                }
+
+                Item { Layout.fillWidth: true }
+
+                AppButton {
+                    text: qsTr("取消")
+                    onClicked: {
+                        root.appContext.skins.cancelEdit();
+                        root.selectedItemId = "";
+                    }
+                }
+                AppButton {
+                    text: qsTr("保存布局")
+                    accented: true
+                    onClicked: {
+                        if (root.appContext.skins.commitEdit())
+                            root.selectedItemId = "";
+                    }
+                }
+            }
+        }
+
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            spacing: Theme.spacingMd
 
-            MaterialPanel {
-                width: Math.min(parent.width, 860)
-                anchors.centerIn: parent
-                padding: Theme.spacingXl
-                strong: true
-                accented: root.configurationValid && root.runtimeStatus === 0
-                cornerRadius: Theme.radiusLarge
+            Item {
+                id: canvasViewport
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    spacing: Theme.spacingLg
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingMd
+                Item {
+                    id: homeCanvas
 
-                        Rectangle {
-                            Layout.preferredWidth: 12
-                            Layout.preferredHeight: 12
-                            radius: 6
-                            color: root.stateColor
-                        }
+                    readonly property real editScale: Math.min(
+                                                          canvasViewport.width
+                                                          / Math.max(1, width),
+                                                          canvasViewport.height
+                                                          / Math.max(1, height))
 
-                        AppLabel {
-                            text: root.stateTitle
-                            font.pointSize: Theme.displaySize
-                            font.weight: Font.DemiBold
-                            Layout.fillWidth: true
-                        }
-
-                        StatusBadge {
-                            text: root.appContext.runtime.statusText
-                            icon: root.serviceReady ? "\uE73E" : "\uE711"
-                            statusColor: root.stateColor
-                        }
+                    width: root.appContext.skins.editing
+                           && root.normalCanvasWidth > 0
+                           ? root.normalCanvasWidth : canvasViewport.width
+                    height: root.appContext.skins.editing
+                            && root.normalCanvasHeight > 0
+                            ? root.normalCanvasHeight : canvasViewport.height
+                    scale: root.appContext.skins.editing ? editScale : 1
+                    transformOrigin: Item.TopLeft
+                    x: root.appContext.skins.editing
+                       ? (canvasViewport.width - width * scale) / 2 : 0
+                    y: root.appContext.skins.editing
+                       ? (canvasViewport.height - height * scale) / 2 : 0
+                    onWidthChanged: {
+                        if (!root.appContext.skins.editing && width > 0)
+                            root.normalCanvasWidth = width;
                     }
-
-                    AppLabel {
-                        text: root.stateDescription
-                        color: Theme.foregroundSecondary
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
+                    onHeightChanged: {
+                        if (!root.appContext.skins.editing && height > 0)
+                            root.normalCanvasHeight = height;
                     }
 
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 1
-                        color: Theme.materialStroke
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingMd
-
-                        AppLabel {
-                            text: qsTr("当前配置")
-                            color: Theme.foregroundSecondary
-                        }
-
-                        AppComboBox {
-                            Layout.fillWidth: true
-                            model: root.appContext.configuration.profileNames
-                            currentIndex: root.appContext.configuration.currentProfileIndex
-                            Accessible.name: qsTr("当前启动配置")
-                            onActivated: index => root.appContext.configuration.currentProfileIndex = index
-                        }
-
-                        AppButton {
-                            text: qsTr("高级选项")
-                            onClicked: root.openConfiguration()
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingSm
-
-                        LaunchInformationRow {
-                            Layout.fillWidth: true
-                            label: qsTr("ComfyUI")
-                            value: root.appContext.configuration.comfyRoot
-                        }
-
-                        LaunchInformationRow {
-                            Layout.fillWidth: true
-                            label: qsTr("Python")
-                            value: root.appContext.configuration.pythonPath
-                        }
-
-                        LaunchInformationRow {
-                            Layout.fillWidth: true
-                            label: qsTr("服务地址")
-                            value: root.appContext.runtime.serviceUrl
-                        }
-
-                        LaunchInformationRow {
-                            Layout.fillWidth: true
-                            label: qsTr("CUDA 设备")
-                            value: root.appContext.hardware.summary
-                        }
-                    }
-
-                    Rectangle {
-                        visible: !root.configurationValid
-                        Layout.fillWidth: true
-                        implicitHeight: validationText.implicitHeight + Theme.spacingMd * 2
-                        radius: Theme.controlRadius
-                        color: Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, Theme.dark ? 0.14 : 0.08)
+                        anchors.fill: parent
+                        visible: root.appContext.skins.editing
+                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b,
+                                       Theme.dark ? 0.035 : 0.025)
                         border.width: 1
-                        border.color: Qt.rgba(Theme.error.r, Theme.error.g, Theme.error.b, 0.34)
-
-                        AppLabel {
-                            id: validationText
-                            anchors.fill: parent
-                            anchors.margins: Theme.spacingMd
-                            text: root.appContext.configuration.validationErrors.join(" · ")
-                            color: Theme.error
-                            wrapMode: Text.WordWrap
-                        }
+                        border.color: Theme.materialStroke
+                        radius: Theme.radius
                     }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingSm
+                    Repeater {
+                        model: root.appContext.skins.homeItems
 
-                        Item {
-                            Layout.fillWidth: true
-                        }
+                        delegate: HomeWidgetFrame {
+                            required property var modelData
 
-                        AppButton {
-                            visible: root.appContext.runtime.canStop
-                            text: qsTr("停止")
-                            destructive: true
-                            onClicked: root.appContext.runtime.stop()
-                        }
-
-                        AppButton {
-                            visible: root.runtimeStatus !== 0 || root.appContext.runtime.logModel.count > 0
-                            text: qsTr("查看控制台")
-                            onClicked: root.openRuntime()
-                        }
-
-                        AppButton {
-                            visible: !root.configurationValid
-                            text: qsTr("完善配置")
-                            onClicked: root.openConfiguration()
-                        }
-
-                        AppButton {
-                            text: root.primaryText
-                            accented: true
-                            prominent: true
-                            enabled: root.primaryEnabled
-                            Accessible.name: root.primaryText
-                            onClicked: {
-                                if (root.serviceReady) {
-                                    root.appContext.runtime.openWebUi();
-                                } else {
-                                    root.launchRequested();
-                                }
-                            }
+                            appContext: root.appContext
+                            canvas: homeCanvas
+                            itemData: modelData
+                            editing: root.appContext.skins.editing
+                            selected: root.selectedItemId === modelData.id
+                            onSelectionRequested: id => root.selectedItemId = id
+                            onOpenConfiguration: root.openConfiguration()
+                            onOpenRuntime: root.openRuntime()
+                            onLaunchRequested: root.launchRequested()
                         }
                     }
                 }
             }
+
+            MaterialPanel {
+                visible: root.appContext.skins.editing
+                Layout.preferredWidth: 292
+                Layout.fillHeight: true
+                padding: Theme.spacingLg
+                strong: true
+
+                ScrollView {
+                    anchors.fill: parent
+                    contentWidth: availableWidth
+
+                    ColumnLayout {
+                        width: parent.width
+                        spacing: Theme.spacingMd
+
+                        AppLabel {
+                            text: qsTr("组件属性")
+                            font.pointSize: Theme.titleSize
+                            font.weight: Font.DemiBold
+                        }
+                        AppLabel {
+                            text: root.selectedItemId.length > 0
+                                  ? root.selectedItem.type
+                                  : qsTr("选择一个组件")
+                            color: Theme.foregroundSecondary
+                        }
+
+                        GridLayout {
+                            visible: root.selectedItemId.length > 0
+                            Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: Theme.spacingSm
+                            rowSpacing: Theme.spacingSm
+
+                            AppLabel { text: "X %" }
+                            AppSpinBox {
+                                Layout.fillWidth: true
+                                from: 0; to: 100
+                                value: Math.round((root.selectedItem.x || 0) * 100)
+                                onValueModified: root.appContext.skins.updateItem(
+                                                     root.selectedItemId, {"x": value / 100})
+                            }
+                            AppLabel { text: "Y %" }
+                            AppSpinBox {
+                                Layout.fillWidth: true
+                                from: 0; to: 100
+                                value: Math.round((root.selectedItem.y || 0) * 100)
+                                onValueModified: root.appContext.skins.updateItem(
+                                                     root.selectedItemId, {"y": value / 100})
+                            }
+                            AppLabel { text: qsTr("宽度 %") }
+                            AppSpinBox {
+                                Layout.fillWidth: true
+                                from: 8; to: 100
+                                value: Math.round((root.selectedItem.w || 0.4) * 100)
+                                onValueModified: root.appContext.skins.updateItem(
+                                                     root.selectedItemId, {"w": value / 100})
+                            }
+                            AppLabel { text: qsTr("高度 %") }
+                            AppSpinBox {
+                                Layout.fillWidth: true
+                                from: 8; to: 100
+                                value: Math.round((root.selectedItem.h || 0.3) * 100)
+                                onValueModified: root.appContext.skins.updateItem(
+                                                     root.selectedItemId, {"h": value / 100})
+                            }
+                            AppLabel { text: qsTr("透明度 %") }
+                            AppSpinBox {
+                                Layout.fillWidth: true
+                                from: 5; to: 100
+                                value: Math.round((root.selectedItem.opacity || 1) * 100)
+                                onValueModified: root.appContext.skins.updateItem(
+                                                     root.selectedItemId, {"opacity": value / 100})
+                            }
+                        }
+
+                        AppSwitch {
+                            visible: root.selectedItem.type === "launch"
+                            text: qsTr("显示详细信息")
+                            checked: root.selectedItem.properties
+                                     && root.selectedItem.properties.detailed !== false
+                            onToggled: root.setSelectedProperty("detailed", checked)
+                        }
+
+                        AppButton {
+                            visible: root.selectedItem.type === "image"
+                            text: qsTr("选择本地图片…")
+                            onClicked: imageDialog.open()
+                        }
+                        AppComboBox {
+                            visible: root.selectedItem.type === "image"
+                            Layout.fillWidth: true
+                            model: [
+                                qsTr("裁切填满"),
+                                qsTr("完整显示"),
+                                qsTr("拉伸"),
+                                qsTr("平铺")
+                            ]
+                            currentIndex: ["cover", "contain", "stretch", "tile"].indexOf(
+                                              root.selectedItem.properties
+                                              ? (root.selectedItem.properties.fillMode || "cover")
+                                              : "cover")
+                            onActivated: index => root.setSelectedProperty(
+                                             "fillMode",
+                                             ["cover", "contain", "stretch", "tile"][index])
+                        }
+                        AppButton {
+                            visible: root.selectedItem.type === "image"
+                                     && (!root.selectedItem.properties
+                                         || (root.selectedItem.properties.fillMode || "cover")
+                                            === "cover")
+                            Layout.fillWidth: true
+                            text: qsTr("调整画面")
+                            onClicked: {
+                                const properties = root.selectedItem.properties || ({});
+                                const source = root.appContext.skins.assetUrl(
+                                                 properties.asset || "");
+                                const targetWidth = Math.min(
+                                    homeCanvas.width,
+                                    Math.max(180, root.selectedItem.w * homeCanvas.width));
+                                const targetHeight = Math.min(
+                                    homeCanvas.height,
+                                    Math.max(120, root.selectedItem.h * homeCanvas.height));
+                                cropDialog.openCrop(
+                                            source,
+                                            properties.focusX === undefined
+                                            ? 0.5 : properties.focusX,
+                                            properties.focusY === undefined
+                                            ? 0.5 : properties.focusY,
+                                            properties.zoom === undefined
+                                            ? 1 : properties.zoom,
+                                            targetWidth,
+                                            targetHeight);
+                            }
+                        }
+                        AppTextField {
+                            visible: root.selectedItem.type === "image"
+                                     || root.selectedItem.type === "text"
+                            Layout.fillWidth: true
+                            placeholderText: qsTr("标题")
+                            text: root.selectedItem.properties
+                                  ? (root.selectedItem.properties.title || "") : ""
+                            onEditingFinished: root.setSelectedProperty("title", text)
+                        }
+                        AppTextArea {
+                            visible: root.selectedItem.type === "text"
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 160
+                            placeholderText: qsTr("支持基础 Markdown 文本")
+                            text: root.selectedItem.properties
+                                  ? (root.selectedItem.properties.text || "") : ""
+                            onActiveFocusChanged: {
+                                if (!activeFocus)
+                                    root.setSelectedProperty("text", text);
+                            }
+                        }
+
+                        RowLayout {
+                            visible: root.selectedItemId.length > 0
+                            Layout.fillWidth: true
+                            spacing: Theme.spacingSm
+
+                            AppButton {
+                                text: qsTr("下移")
+                                onClicked: root.appContext.skins.moveItemLayer(
+                                               root.selectedItemId, -1)
+                            }
+                            AppButton {
+                                text: qsTr("上移")
+                                onClicked: root.appContext.skins.moveItemLayer(
+                                               root.selectedItemId, 1)
+                            }
+                        }
+                        AppButton {
+                            visible: root.selectedItemId.length > 0
+                                     && root.selectedItem.type !== "launch"
+                            Layout.fillWidth: true
+                            text: qsTr("复制组件")
+                            onClicked: root.appContext.skins.duplicateItem(
+                                           root.selectedItemId)
+                        }
+                        AppButton {
+                            visible: root.selectedItemId.length > 0
+                                     && root.selectedItem.type !== "launch"
+                            Layout.fillWidth: true
+                            text: qsTr("删除组件")
+                            destructive: true
+                            onClicked: {
+                                if (root.appContext.skins.removeItem(root.selectedItemId))
+                                    root.selectedItemId = "";
+                            }
+                        }
+                        AppLabel {
+                            visible: root.appContext.skins.lastError.length > 0
+                            Layout.fillWidth: true
+                            text: root.appContext.skins.lastError
+                            color: Theme.error
+                            wrapMode: Text.WordWrap
+                        }
+                        Item { Layout.fillHeight: true }
+                    }
+                }
+            }
+        }
+    }
+
+    ImageCropDialog {
+        id: cropDialog
+
+        onCropAccepted: (focusX, focusY, zoom) =>
+            root.setSelectedProperties({
+                "focusX": focusX,
+                "focusY": focusY,
+                "zoom": zoom
+            })
+    }
+
+    FileDialog {
+        id: imageDialog
+        title: qsTr("选择皮肤图片")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [
+            qsTr("支持的图片 (*.png *.jpg *.jpeg *.webp)"),
+            qsTr("所有文件 (*)")
+        ]
+        onAccepted: {
+            const reference = root.appContext.skins.importImage(selectedFile);
+            if (reference.length > 0)
+                root.setSelectedProperty("asset", reference);
         }
     }
 }

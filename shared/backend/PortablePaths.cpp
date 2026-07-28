@@ -22,6 +22,16 @@ QString PortablePaths::settingsFile()
     return QDir(dataDirectory()).filePath(QStringLiteral("application-settings.json"));
 }
 
+QString PortablePaths::skinsDirectory()
+{
+    return QDir(dataDirectory()).filePath(QStringLiteral("skins"));
+}
+
+QString PortablePaths::iconsDirectory()
+{
+    return QDir(dataDirectory()).filePath(QStringLiteral("icons"));
+}
+
 bool PortablePaths::ensureDataDirectory(QString *errorMessage)
 {
     const QString path = dataDirectory();

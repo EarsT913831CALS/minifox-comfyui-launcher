@@ -37,6 +37,10 @@
 
 #include <algorithm>
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
+
 class LaunchCommandBuilderTest final : public QObject
 {
     Q_OBJECT
@@ -842,6 +846,7 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
     QVERIFY(bootstrapScript.contains("_force_mem_efficient_sdp_off"));
     QVERIFY(bootstrapScript.contains("class _MinifoxTorchLoader"));
     QVERIFY(!bootstrapScript.contains("import torch as"));
+    bootstrapFile.close();
     QVERIFY(QFileInfo::exists(
         root.filePath(QStringLiteral(".minifox/packages/zluda.extpack"))));
     QVERIFY(!QFileInfo::exists(
@@ -853,6 +858,26 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
     QVERIFY(QFileInfo(preparation.tritonCacheDirectory).isDir());
     QVERIFY(QFileInfo(preparation.torchInductorCacheDirectory).isDir());
     QVERIFY(preparation.rocmBinCandidates.contains(QDir::cleanPath(rocmBin)));
+
+#ifdef Q_OS_WIN
+    const QString lockedRuntimeDll =
+        QDir(preparation.runtimeDirectory).filePath(QStringLiteral("nvcuda.dll"));
+    const HANDLE lockedDll = CreateFileW(
+        reinterpret_cast<LPCWSTR>(lockedRuntimeDll.utf16()),
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    QVERIFY(lockedDll != INVALID_HANDLE_VALUE);
+    const ZludaBootstrap::Preparation repeatedPreparation = ZludaBootstrap::prepare(
+        pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
+    CloseHandle(lockedDll);
+    QVERIFY2(repeatedPreparation.valid, qPrintable(repeatedPreparation.error));
+    QCOMPARE(QDir::cleanPath(repeatedPreparation.runtimeDirectory),
+             QDir::cleanPath(preparation.runtimeDirectory));
+#endif
 
     ZludaBootstrap::apply(preparation, rocmBin, environment);
     QCOMPARE(environment.value(QStringLiteral("MINIFOX_ZLUDA_BOOTSTRAP")),

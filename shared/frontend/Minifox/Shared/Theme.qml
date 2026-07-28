@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 
 QtObject {
+    property var skin: ({})
     property string themeMode: "system"
     property bool systemDark: false
     property string uiFontFamily: "Segoe UI"
@@ -13,21 +14,36 @@ QtObject {
 
     readonly property bool dark: themeMode === "dark" || (themeMode === "system" && systemDark)
     readonly property real accentLuminance: 0.2126 * accent.r + 0.7152 * accent.g + 0.0722 * accent.b
+    readonly property var materials: skin && skin.materials ? skin.materials : ({})
+    readonly property var background: skin && skin.background ? skin.background : ({})
+    readonly property string backgroundSource: skin && skin.backgroundSource ? skin.backgroundSource : ""
+    readonly property real backgroundOpacity: background.opacity !== undefined ? background.opacity : 1.0
+    readonly property string backgroundFillMode: background.fillMode || "cover"
+    readonly property real backgroundFocusX: background.focusX !== undefined ? background.focusX : 0.5
+    readonly property real backgroundFocusY: background.focusY !== undefined ? background.focusY : 0.5
+    readonly property real backgroundZoom: background.zoom !== undefined ? background.zoom : 1.0
+    readonly property color backgroundOverlay: background.overlay || "#00000000"
 
-    readonly property color surface: dark ? "#151517" : "#f3f3f6"
-    readonly property color surfaceRaised: dark ? "#242427" : "#ffffff"
-    readonly property color surfaceSubtle: dark ? "#1d1d20" : "#eaeaef"
-    readonly property color sidebar: dark ? "#1b1b1e" : "#e8e8ed"
-    readonly property color materialFill: dark ? Qt.rgba(0.18, 0.18, 0.20, 0.88) : Qt.rgba(1, 1, 1, 0.78)
-    readonly property color materialFillStrong: dark ? Qt.rgba(0.24, 0.24, 0.27, 0.94) : Qt.rgba(1, 1, 1, 0.94)
+    readonly property color surface: skin && skin.surface ? skin.surface : (dark ? "#151517" : "#f3f3f6")
+    readonly property color surfaceRaised: skin && skin.surfaceRaised ? skin.surfaceRaised : (dark ? "#242427" : "#ffffff")
+    readonly property color surfaceSubtle: skin && skin.surfaceSubtle ? skin.surfaceSubtle : (dark ? "#1d1d20" : "#eaeaef")
+    readonly property real pageOpacity: materials.pageOpacity !== undefined ? materials.pageOpacity : 0.94
+    readonly property real panelOpacity: materials.panelOpacity !== undefined ? materials.panelOpacity : 0.94
+    readonly property real sidebarOpacity: materials.sidebarOpacity !== undefined ? materials.sidebarOpacity : 0.96
+    readonly property real titleBarOpacity: materials.titleBarOpacity !== undefined ? materials.titleBarOpacity : 0.98
+    readonly property color pageFill: Qt.rgba(surface.r, surface.g, surface.b, pageOpacity)
+    readonly property color sidebar: Qt.rgba(surfaceSubtle.r, surfaceSubtle.g, surfaceSubtle.b, sidebarOpacity)
+    readonly property color titleBarFill: Qt.rgba(surface.r, surface.g, surface.b, titleBarOpacity)
+    readonly property color materialFill: Qt.rgba(surfaceRaised.r, surfaceRaised.g, surfaceRaised.b, Math.max(0.12, panelOpacity - 0.16))
+    readonly property color materialFillStrong: Qt.rgba(surfaceRaised.r, surfaceRaised.g, surfaceRaised.b, panelOpacity)
     readonly property color materialStroke: dark ? Qt.rgba(1, 1, 1, 0.11) : Qt.rgba(0, 0, 0, 0.09)
     readonly property color materialEdge: dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(1, 1, 1, 0.92)
     readonly property color navigationSelected: dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.72)
     readonly property color navigationHovered: dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(1, 1, 1, 0.48)
     // Keep foreground token names distinct from QML's `on...` handler naming.
-    readonly property color foreground: dark ? "#ffffff" : "#1b1b1b"
-    readonly property color foregroundSecondary: dark ? "#c5c5c5" : "#5d5d5d"
-    readonly property color outline: dark ? "#45454a" : "#d1d1d6"
+    readonly property color foreground: skin && skin.foreground ? skin.foreground : (dark ? "#ffffff" : "#1b1b1b")
+    readonly property color foregroundSecondary: skin && skin.foregroundSecondary ? skin.foregroundSecondary : (dark ? "#c5c5c5" : "#5d5d5d")
+    readonly property color outline: skin && skin.outline ? skin.outline : (dark ? "#45454a" : "#d1d1d6")
     readonly property color shadow: dark ? Qt.rgba(0, 0, 0, 0.50) : Qt.rgba(0.12, 0.12, 0.14, 0.18)
     readonly property color success: dark ? "#6ccb5f" : "#0f7b0f"
     readonly property color warning: dark ? "#fce100" : "#9d5d00"
@@ -65,8 +81,8 @@ QtObject {
     readonly property int spacingMd: 12
     readonly property int spacingLg: 20
     readonly property int spacingXl: 32
-    readonly property int radius: 14
-    readonly property int radiusLarge: 20
+    readonly property int radius: skin && skin.radius !== undefined ? skin.radius : 14
+    readonly property int radiusLarge: skin && skin.radiusLarge !== undefined ? skin.radiusLarge : 20
     readonly property int controlRadius: 10
     readonly property int prominentControlRadius: 13
     readonly property int controlHeight: 40

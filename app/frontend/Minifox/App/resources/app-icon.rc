@@ -1,0 +1,4 @@
+#define IDI_APP_ICON 101
+
+// Keep the rounded-corner light icon as the Explorer/shortcut default.
+IDI_APP_ICON ICON "app-icon-light.ico"

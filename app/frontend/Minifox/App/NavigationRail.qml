@@ -22,6 +22,14 @@ Pane {
     padding: Theme.spacingSm
     background: Rectangle {
         color: Theme.sidebar
+
+        Rectangle {
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 1
+            color: Theme.materialStroke
+        }
     }
 
     ColumnLayout {

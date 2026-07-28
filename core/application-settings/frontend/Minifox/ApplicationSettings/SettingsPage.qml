@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Minifox.Shared
 
@@ -9,12 +10,36 @@ Pane {
     id: root
 
     required property var appContext
+    property int currentSection: 0
     readonly property var themeModeLabels: [qsTr("跟随系统"), qsTr("浅色"), qsTr("深色")]
     readonly property var themeModeValues: ["system", "light", "dark"]
+    readonly property var iconModeLabels: appContext.appIcon.customIconAvailable
+                                                  ? [
+                                                        qsTr("跟随主题"),
+                                                        qsTr("固定亮色"),
+                                                        qsTr("固定暗色"),
+                                                        qsTr("自定义")
+                                                    ]
+                                                  : [
+                                                        qsTr("跟随主题"),
+                                                        qsTr("固定亮色"),
+                                                        qsTr("固定暗色")
+                                                    ]
+    readonly property var iconModeValues: appContext.appIcon.customIconAvailable
+                                                  ? ["theme", "light", "dark", "custom"]
+                                                  : ["theme", "light", "dark"]
     readonly property var languageModeLabels: [qsTr("跟随系统"), qsTr("简体中文"), qsTr("English")]
     readonly property var languageModeValues: ["system", "zh_CN", "en_US"]
     readonly property var accentModeLabels: [qsTr("跟随系统"), qsTr("自定义")]
     readonly property var accentModeValues: ["system", "custom"]
+    readonly property var windowRatioLabels: [
+        qsTr("跟随屏幕可用区域（无黑边）"),
+        qsTr("16:10"),
+        qsTr("16:9"),
+        qsTr("3:2"),
+        qsTr("4:3")
+    ]
+    readonly property var windowRatioValues: ["screen", "16:10", "16:9", "3:2", "4:3"]
     readonly property var proxyModeLabels: [qsTr("使用系统代理"), qsTr("不使用代理"), qsTr("手动设置")]
     readonly property var proxyModeValues: ["system", "none", "manual"]
     readonly property var fontFamilies: Qt.fontFamilies()
@@ -24,7 +49,31 @@ Pane {
         return index >= 0 ? labels[index] : "";
     }
 
+    // Changing the window ratio changes which part of the background image
+    // stays visible. Re-center the cover crop automatically and point the
+    // user at the skin page for fine-tuning.
+    function recenterBackgroundCrop() {
+        const appearance = appContext.skins.effectiveAppearance;
+        const background = appearance.background || ({});
+        if ((appearance.backgroundSource || "").length === 0)
+            return;
+        if ((background.fillMode || "cover") !== "cover")
+            return;
+        appContext.skins.setAppearanceValue("background.focusX", 0.5);
+        appContext.skins.setAppearanceValue("background.focusY", 0.5);
+        appContext.skins.setAppearanceValue("background.zoom", 1.0);
+        cropHint.visible = true;
+        cropHintTimer.restart();
+    }
+
     padding: Theme.spacingLg
+
+    Timer {
+        id: cropHintTimer
+
+        interval: 8000
+        onTriggered: cropHint.visible = false
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -35,6 +84,17 @@ Pane {
             description: qsTr("调整启动器的主题、字体、控制台输出和网络代理。设置保存在程序旁的隐藏目录中。")
             icon: "\uE770"
             Layout.fillWidth: true
+        }
+
+        TabBar {
+            Layout.fillWidth: true
+            currentIndex: root.currentSection
+            onCurrentIndexChanged: root.currentSection = currentIndex
+
+            TabButton { text: qsTr("外观") }
+            TabButton { text: qsTr("皮肤") }
+            TabButton { text: qsTr("控制台") }
+            TabButton { text: qsTr("网络") }
         }
 
         ScrollView {
@@ -48,6 +108,7 @@ Pane {
                 spacing: Theme.spacingMd
 
                 MaterialPanel {
+                    visible: root.currentSection === 0
                     Layout.fillWidth: true
                     padding: Theme.spacingLg
 
@@ -79,6 +140,129 @@ Pane {
                             }
 
                             AppLabel {
+                                text: qsTr("应用图标")
+                                Layout.alignment: Qt.AlignTop
+                                Layout.topMargin: Theme.spacingSm
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.spacingSm
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.spacingMd
+
+                                    ColumnLayout {
+                                        spacing: Theme.spacingXs
+
+                                        AppLabel {
+                                            text: qsTr("当前运行")
+                                            color: Theme.foregroundSecondary
+                                            font.pointSize: Theme.captionSize
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 56
+                                            Layout.preferredHeight: 56
+                                            radius: Theme.controlRadius
+                                            color: Theme.surfaceSubtle
+                                            border.width: 1
+                                            border.color: Theme.outline
+
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: 4
+                                                source: root.appContext.appIcon.activeIconSource
+                                                fillMode: Image.PreserveAspectFit
+                                                smooth: true
+                                                mipmap: true
+                                            }
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        spacing: Theme.spacingXs
+
+                                        AppLabel {
+                                            text: qsTr("下次启动")
+                                            color: Theme.foregroundSecondary
+                                            font.pointSize: Theme.captionSize
+                                        }
+                                        Rectangle {
+                                            Layout.preferredWidth: 56
+                                            Layout.preferredHeight: 56
+                                            radius: Theme.controlRadius
+                                            color: Theme.surfaceSubtle
+                                            border.width: 1
+                                            border.color: root.appContext.appIcon.restartRequired
+                                                          ? Theme.accent : Theme.outline
+
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: 4
+                                                source: root.appContext.appIcon.pendingIconSource
+                                                fillMode: Image.PreserveAspectFit
+                                                smooth: true
+                                                mipmap: true
+                                            }
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Theme.spacingSm
+
+                                        AppComboBox {
+                                            Layout.fillWidth: true
+                                            model: root.iconModeLabels
+                                            currentIndex: root.iconModeValues.indexOf(
+                                                              root.appContext.appIcon.mode)
+                                            displayText: root.labelForValue(
+                                                             root.iconModeLabels,
+                                                             root.iconModeValues,
+                                                             root.appContext.appIcon.mode)
+                                            onActivated: index => root.appContext.appIcon.setMode(
+                                                             root.iconModeValues[index])
+                                        }
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Theme.spacingSm
+
+                                            AppButton {
+                                                Layout.preferredWidth: 148
+                                                text: root.appContext.appIcon.customIconAvailable
+                                                      ? qsTr("更换图片…")
+                                                      : qsTr("选择图片…")
+                                                onClicked: applicationIconDialog.open()
+                                            }
+                                            AppButton {
+                                                text: qsTr("重置")
+                                                enabled: root.appContext.appIcon.mode !== "theme"
+                                                         || root.appContext.appIcon.customIconAvailable
+                                                onClicked: root.appContext.appIcon.reset()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                AppLabel {
+                                    Layout.fillWidth: true
+                                    visible: root.appContext.appIcon.restartRequired
+                                    text: qsTr("应用图标将在下次启动时更改。")
+                                    color: Theme.info
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                AppLabel {
+                                    Layout.fillWidth: true
+                                    visible: root.appContext.appIcon.lastError.length > 0
+                                    text: root.appContext.appIcon.lastError
+                                    color: Theme.error
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            AppLabel {
                                 text: qsTr("语言")
                             }
                             AppComboBox {
@@ -92,12 +276,11 @@ Pane {
                             AppLabel {
                                 text: qsTr("界面字体")
                             }
-                            AppComboBox {
+                            FontFamilyComboBox {
                                 Layout.fillWidth: true
-                                model: root.fontFamilies
-                                currentIndex: root.appContext.settings.fontFamily.length > 0 ? root.fontFamilies.indexOf(root.appContext.settings.fontFamily) : -1
-                                displayText: currentIndex >= 0 ? currentText : root.appContext.settings.fontFamily.length > 0 ? root.appContext.settings.fontFamily : qsTr("系统默认")
-                                onActivated: index => root.appContext.settings.fontFamily = root.fontFamilies[index]
+                                selectedFamily: root.appContext.settings.fontFamily
+                                onFamilySelected: family =>
+                                                  root.appContext.settings.fontFamily = family
                             }
 
                             AppLabel {
@@ -157,12 +340,45 @@ Pane {
                                 checked: root.appContext.settings.reducedMotion
                                 onToggled: root.appContext.settings.reducedMotion = checked
                             }
+
+                            AppLabel {
+                                text: qsTr("窗口画面比例")
+                            }
+                            AppComboBox {
+                                Layout.fillWidth: true
+                                model: root.windowRatioLabels
+                                currentIndex: root.windowRatioValues.indexOf(
+                                                  root.appContext.settings.windowAspectRatio)
+                                displayText: root.labelForValue(
+                                                 root.windowRatioLabels,
+                                                 root.windowRatioValues,
+                                                 root.appContext.settings.windowAspectRatio)
+                                onActivated: index => {
+                                    const value = root.windowRatioValues[index];
+                                    if (value === root.appContext.settings.windowAspectRatio)
+                                        return;
+                                    root.appContext.settings.windowAspectRatio = value;
+                                    root.recenterBackgroundCrop();
+                                }
+                            }
                         }
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: root.appContext.settings.reducedMotion ? qsTr("页面切换动画已关闭。") : qsTr("页面切换时使用短暂淡入动画。")
+                            text: root.appContext.settings.windowAspectRatio === "screen"
+                                  ? qsTr("窗口会采用当前屏幕的可用区域比例，最大化时不会出现用于保持比例的黑边。")
+                                  : qsTr("窗口始终保持所选比例；最大化时会在屏幕工作区内居中扩展到最大尺寸，窗口内部不留黑边。")
                             color: Theme.foregroundSecondary
+                            wrapMode: Text.WordWrap
+                        }
+
+                        AppLabel {
+                            id: cropHint
+
+                            Layout.fillWidth: true
+                            visible: false
+                            text: qsTr("窗口比例已变更，全局背景已自动居中裁剪。如需微调，请到「皮肤」页重新调整画面裁剪位置。")
+                            color: Theme.info
                             wrapMode: Text.WordWrap
                         }
 
@@ -170,13 +386,20 @@ Pane {
                             Layout.fillWidth: true
                             text: qsTr("字体预览：小狐狸正在检查中文字体 ABC 123")
                             color: Theme.foreground
-                            font.family: Theme.uiFontFamily
-                            font.pointSize: Theme.bodySize
+                            font.family: root.appContext.settings.effectiveFontFamily
+                            font.pointSize: root.appContext.settings.fontPointSize
                         }
                     }
                 }
 
+                SkinSettingsPanel {
+                    visible: root.currentSection === 1
+                    Layout.fillWidth: true
+                    appContext: root.appContext
+                }
+
                 MaterialPanel {
+                    visible: root.currentSection === 2
                     Layout.fillWidth: true
                     padding: Theme.spacingLg
 
@@ -256,6 +479,7 @@ Pane {
                 }
 
                 MaterialPanel {
+                    visible: root.currentSection === 3
                     Layout.fillWidth: true
                     padding: Theme.spacingLg
 
@@ -345,6 +569,18 @@ Pane {
                 }
             }
         }
+    }
+
+    FileDialog {
+        id: applicationIconDialog
+
+        title: qsTr("选择自定义应用图标")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [
+            qsTr("支持的图片 (*.png *.jpg *.jpeg *.webp *.ico)"),
+            qsTr("所有文件 (*)")
+        ]
+        onAccepted: root.appContext.appIcon.importCustomIcon(selectedFile)
     }
 
     Loader {

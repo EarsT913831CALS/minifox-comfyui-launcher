@@ -36,12 +36,6 @@ Pane {
             }
 
             AppButton {
-                text: qsTr("打开 WebUI")
-                enabled: root.appContext.runtime.serviceReady
-                onClicked: root.appContext.runtime.openWebUi()
-            }
-
-            AppButton {
                 text: root.appContext.runtime.canStart ? qsTr("启动") : qsTr("停止")
                 accented: root.appContext.runtime.canStart
                 destructive: !root.appContext.runtime.canStart
