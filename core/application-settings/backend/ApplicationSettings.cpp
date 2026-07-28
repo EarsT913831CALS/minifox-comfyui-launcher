@@ -266,6 +266,25 @@ bool ApplicationSettings::effectiveDark() const
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
 }
 
+QString ApplicationSettings::applicationIconMode() const
+{
+    return m_applicationIconMode;
+}
+
+void ApplicationSettings::setApplicationIconMode(const QString &mode)
+{
+    if ((mode != QStringLiteral("theme")
+         && mode != QStringLiteral("light")
+         && mode != QStringLiteral("dark")
+         && mode != QStringLiteral("custom"))
+        || mode == m_applicationIconMode) {
+        return;
+    }
+    m_applicationIconMode = mode;
+    save();
+    emit applicationIconChanged();
+}
+
 QString ApplicationSettings::consoleTheme() const { return m_consoleTheme; }
 
 void ApplicationSettings::setConsoleTheme(const QString &theme)
@@ -338,6 +357,28 @@ void ApplicationSettings::setReducedMotion(bool enabled)
     m_reducedMotion = enabled;
     save();
     emit appearanceChanged();
+}
+
+QString ApplicationSettings::windowAspectRatio() const
+{
+    return m_windowAspectRatio;
+}
+
+void ApplicationSettings::setWindowAspectRatio(const QString &ratio)
+{
+    static const QStringList supported {
+        QStringLiteral("screen"),
+        QStringLiteral("16:10"),
+        QStringLiteral("16:9"),
+        QStringLiteral("3:2"),
+        QStringLiteral("4:3")
+    };
+    if (!supported.contains(ratio) || ratio == m_windowAspectRatio) {
+        return;
+    }
+    m_windowAspectRatio = ratio;
+    save();
+    emit windowChanged();
 }
 
 QString ApplicationSettings::proxyMode() const { return m_proxyMode; }
@@ -451,12 +492,29 @@ void ApplicationSettings::load()
     if (storedAccent.isValid()) {
         m_accentColor = storedAccent.name(QColor::HexRgb);
     }
+    m_applicationIconMode =
+        object.value(QStringLiteral("applicationIconMode")).toString(m_applicationIconMode);
+    if (m_applicationIconMode != QStringLiteral("theme")
+        && m_applicationIconMode != QStringLiteral("light")
+        && m_applicationIconMode != QStringLiteral("dark")
+        && m_applicationIconMode != QStringLiteral("custom")) {
+        m_applicationIconMode = QStringLiteral("theme");
+    }
     m_consoleTheme = object.value(QStringLiteral("consoleTheme")).toString(m_consoleTheme);
     m_consoleFontFamily = object.value(QStringLiteral("consoleFontFamily")).toString(m_consoleFontFamily);
     m_consoleFontSize = object.value(QStringLiteral("consoleFontSize")).toDouble(m_consoleFontSize);
     m_consoleWordWrap = object.value(QStringLiteral("consoleWordWrap")).toBool(m_consoleWordWrap);
     m_showTimestamps = object.value(QStringLiteral("showTimestamps")).toBool(m_showTimestamps);
     m_reducedMotion = object.value(QStringLiteral("reducedMotion")).toBool(m_reducedMotion);
+    m_windowAspectRatio =
+        object.value(QStringLiteral("windowAspectRatio")).toString(m_windowAspectRatio);
+    if (m_windowAspectRatio != QStringLiteral("screen")
+        && m_windowAspectRatio != QStringLiteral("16:10")
+        && m_windowAspectRatio != QStringLiteral("16:9")
+        && m_windowAspectRatio != QStringLiteral("3:2")
+        && m_windowAspectRatio != QStringLiteral("4:3")) {
+        m_windowAspectRatio = QStringLiteral("screen");
+    }
     m_proxyMode = object.value(QStringLiteral("proxyMode")).toString(m_proxyMode);
     m_proxyHost = object.value(QStringLiteral("proxyHost")).toString(m_proxyHost);
     m_proxyPort = object.value(QStringLiteral("proxyPort")).toInt(m_proxyPort);
@@ -477,19 +535,21 @@ bool ApplicationSettings::save()
     }
 
     const QJsonObject object {
-        {QStringLiteral("schemaVersion"), 2},
+        {QStringLiteral("schemaVersion"), 3},
         {QStringLiteral("themeMode"), m_themeMode},
         {QStringLiteral("language"), m_language},
         {QStringLiteral("fontFamily"), m_fontFamily},
         {QStringLiteral("fontPointSize"), m_fontPointSize},
         {QStringLiteral("accentMode"), m_accentMode},
         {QStringLiteral("accentColor"), m_accentColor},
+        {QStringLiteral("applicationIconMode"), m_applicationIconMode},
         {QStringLiteral("consoleTheme"), m_consoleTheme},
         {QStringLiteral("consoleFontFamily"), m_consoleFontFamily},
         {QStringLiteral("consoleFontSize"), m_consoleFontSize},
         {QStringLiteral("consoleWordWrap"), m_consoleWordWrap},
         {QStringLiteral("showTimestamps"), m_showTimestamps},
         {QStringLiteral("reducedMotion"), m_reducedMotion},
+        {QStringLiteral("windowAspectRatio"), m_windowAspectRatio},
         {QStringLiteral("proxyMode"), m_proxyMode},
         {QStringLiteral("proxyHost"), m_proxyHost},
         {QStringLiteral("proxyPort"), m_proxyPort}

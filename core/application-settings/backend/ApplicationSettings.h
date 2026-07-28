@@ -17,12 +17,14 @@ class ApplicationSettings final : public QObject, public QAbstractNativeEventFil
     Q_PROPERTY(QString accentColor READ accentColor WRITE setAccentColor NOTIFY appearanceChanged)
     Q_PROPERTY(QString effectiveAccentColor READ effectiveAccentColor NOTIFY appearanceChanged)
     Q_PROPERTY(bool effectiveDark READ effectiveDark NOTIFY appearanceChanged)
+    Q_PROPERTY(QString applicationIconMode READ applicationIconMode WRITE setApplicationIconMode NOTIFY applicationIconChanged)
     Q_PROPERTY(QString consoleTheme READ consoleTheme WRITE setConsoleTheme NOTIFY outputChanged)
     Q_PROPERTY(QString consoleFontFamily READ consoleFontFamily WRITE setConsoleFontFamily NOTIFY outputChanged)
     Q_PROPERTY(double consoleFontSize READ consoleFontSize WRITE setConsoleFontSize NOTIFY outputChanged)
     Q_PROPERTY(bool consoleWordWrap READ consoleWordWrap WRITE setConsoleWordWrap NOTIFY outputChanged)
     Q_PROPERTY(bool showTimestamps READ showTimestamps WRITE setShowTimestamps NOTIFY outputChanged)
     Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY appearanceChanged)
+    Q_PROPERTY(QString windowAspectRatio READ windowAspectRatio WRITE setWindowAspectRatio NOTIFY windowChanged)
     Q_PROPERTY(QString proxyMode READ proxyMode WRITE setProxyMode NOTIFY proxyChanged)
     Q_PROPERTY(QString proxyHost READ proxyHost WRITE setProxyHost NOTIFY proxyChanged)
     Q_PROPERTY(int proxyPort READ proxyPort WRITE setProxyPort NOTIFY proxyChanged)
@@ -47,6 +49,8 @@ public:
     void setAccentColor(const QString &color);
     QString effectiveAccentColor() const;
     bool effectiveDark() const;
+    QString applicationIconMode() const;
+    void setApplicationIconMode(const QString &mode);
 
     bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result) override;
 
@@ -62,6 +66,8 @@ public:
     void setShowTimestamps(bool enabled);
     bool reducedMotion() const;
     void setReducedMotion(bool enabled);
+    QString windowAspectRatio() const;
+    void setWindowAspectRatio(const QString &ratio);
 
     QString proxyMode() const;
     void setProxyMode(const QString &mode);
@@ -75,8 +81,10 @@ public:
 
 signals:
     void appearanceChanged();
+    void applicationIconChanged();
     void languageChanged();
     void outputChanged();
+    void windowChanged();
     void proxyChanged();
     void lastErrorChanged();
 
@@ -96,12 +104,14 @@ private:
     QString m_accentMode = QStringLiteral("system");
     QString m_accentColor = QStringLiteral("#0067c0");
     QString m_systemAccentColor = QStringLiteral("#0067c0");
+    QString m_applicationIconMode = QStringLiteral("theme");
     QString m_consoleTheme = QStringLiteral("system");
     QString m_consoleFontFamily = QStringLiteral("Cascadia Mono");
     double m_consoleFontSize = 10.0;
     bool m_consoleWordWrap = false;
     bool m_showTimestamps = true;
     bool m_reducedMotion = false;
+    QString m_windowAspectRatio = QStringLiteral("screen");
     QString m_proxyMode = QStringLiteral("system");
     QString m_proxyHost;
     int m_proxyPort = 7890;

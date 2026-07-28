@@ -1,4 +1,6 @@
 qt_add_executable(minifox_launcher WIN32
+    ../../../backend/ApplicationIconManager.cpp
+    ../../../backend/ApplicationIconManager.h
     ../../../backend/AppContext.cpp
     ../../../backend/AppContext.h
     ../../../backend/HardwareManager.cpp
@@ -6,6 +8,15 @@ qt_add_executable(minifox_launcher WIN32
     ../../../backend/main.cpp
     ../../../backend/VersionManager.cpp
     ../../../backend/VersionManager.h
+    resources/app-icon.rc
+)
+
+qt_add_resources(minifox_launcher minifox_app_icon_resources
+    PREFIX "/minifox/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+    FILES
+        resources/app-icon-light.png
+        resources/app-icon-dark.png
 )
 
 qt_add_qml_module(minifox_launcher
@@ -17,8 +28,12 @@ qt_add_qml_module(minifox_launcher
         TARGET minifox_shared_ui
     QML_FILES
         Main.qml
+        AppTitleBar.qml
         AppShell.qml
         DashboardPage.qml
+        LaunchStatusCard.qml
+        HomeWidgetContent.qml
+        HomeWidgetFrame.qml
         LaunchInformationRow.qml
         NavigationDestination.qml
         NavigationRail.qml
@@ -39,6 +54,8 @@ target_link_libraries(minifox_launcher
         minifox_configuration_ui
         minifox_runtime_backend
         minifox_runtime_ui
+        minifox_skin_backend
+        minifox_platform
         minifox_shared_backend
         minifox_shared_ui
 )
@@ -80,6 +97,10 @@ if(MINIFOX_STATIC_RUNTIME)
         EXCLUDE_BY_TYPE imageformats
         EXCLUDE_BY_TYPE qmltooling
         EXCLUDE_BY_TYPE vectorimageformats
+        INCLUDE
+            Qt6::QICOPlugin
+            Qt6::QJpegPlugin
+            Qt6::QWebpPlugin
         INCLUDE_BY_TYPE tls Qt6::QSchannelBackendPlugin
     )
 endif()

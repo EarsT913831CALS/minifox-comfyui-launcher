@@ -19,12 +19,15 @@ qt_add_qml_module(minifox_shared_ui
         AppTextArea.qml
         AppTextField.qml
         AppToolButton.qml
+        AppValueSlider.qml
         ButtonSurface.qml
         IconLabel.qml
+        ImageCropDialog.qml
         MaterialPanel.qml
         PageHeader.qml
         PathField.qml
         StatusBadge.qml
+        SkinImage.qml
 )
 
 target_link_libraries(minifox_shared_ui

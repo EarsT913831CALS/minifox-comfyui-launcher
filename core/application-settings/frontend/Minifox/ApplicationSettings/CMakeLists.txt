@@ -7,7 +7,9 @@ qt_add_qml_module(minifox_settings_ui
         TARGET minifox_shared_ui
     QML_FILES
         AccentColorDialog.qml
+        FontFamilyComboBox.qml
         SettingsPage.qml
+        SkinSettingsPanel.qml
         ConsoleSettingsPreview.qml
 )
 

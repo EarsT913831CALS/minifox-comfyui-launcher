@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
 import Minifox.Shared
 
 ApplicationWindow {
@@ -7,12 +9,26 @@ ApplicationWindow {
 
     required property var appContext
     property bool allowClose: false
+    readonly property real availableAspectRatio: Screen.desktopAvailableHeight > 0
+                                                 ? Screen.desktopAvailableWidth
+                                                   / Screen.desktopAvailableHeight
+                                                 : 1.6
+    readonly property real effectiveAspectRatio: {
+        switch (window.appContext.settings.windowAspectRatio) {
+        case "16:9": return 16 / 9;
+        case "3:2": return 3 / 2;
+        case "4:3": return 4 / 3;
+        case "16:10": return 16 / 10;
+        default: return window.availableAspectRatio;
+        }
+    }
 
-    width: 1280
-    height: 800
-    minimumWidth: 900
-    minimumHeight: 620
+    width: 1440
+    height: 900
+    minimumWidth: Math.max(1024, Math.round(minimumHeight * effectiveAspectRatio))
+    minimumHeight: 700
     visible: true
+    flags: Qt.Window | Qt.FramelessWindowHint
     title: qsTr("Minifox ComfyUI 启动器")
     color: Theme.surface
     palette.window: Theme.surface
@@ -47,6 +63,12 @@ ApplicationWindow {
 
     Binding {
         target: Theme
+        property: "skin"
+        value: window.appContext.skins.effectiveAppearance
+    }
+
+    Binding {
+        target: Theme
         property: "themeMode"
         value: window.appContext.settings.themeMode
     }
@@ -72,7 +94,8 @@ ApplicationWindow {
     Binding {
         target: Theme
         property: "accent"
-        value: window.appContext.settings.effectiveAccentColor
+        value: window.appContext.skins.effectiveAppearance.accent
+               || window.appContext.settings.effectiveAccentColor
     }
 
     Binding {
@@ -81,31 +104,77 @@ ApplicationWindow {
         value: window.appContext.settings.reducedMotion
     }
 
-    AppShell {
-        anchors.fill: parent
-        appContext: window.appContext
+    Binding {
+        target: window.appContext.windowChrome
+        property: "aspectRatio"
+        value: window.effectiveAspectRatio
     }
 
-    AppDialog {
-        id: closeConfirmation
+    Component.onCompleted: window.appContext.windowChrome.attach(window)
 
-        title: qsTr("ComfyUI 正在运行")
-        modal: true
-        standardButtons: Dialog.Yes | Dialog.Cancel
-        acceptText: qsTr("停止并退出")
-        rejectText: qsTr("取消")
-        closePolicy: Popup.CloseOnEscape
+    SkinImage {
+        anchors.fill: parent
+        source: Theme.backgroundSource
+        visible: source.toString().length > 0
+        opacity: Theme.backgroundOpacity
+        fillMode: Theme.backgroundFillMode
+        focusX: Theme.backgroundFocusX
+        focusY: Theme.backgroundFocusY
+        zoom: Theme.backgroundZoom
+    }
 
-        AppLabel {
-            width: closeConfirmation.availableWidth
-            text: qsTr("关闭启动器会停止正在运行的 ComfyUI，并释放其占用的浏览器端口。确定要退出吗？")
-            wrapMode: Text.Wrap
+    Rectangle {
+        anchors.fill: parent
+        color: Theme.backgroundSource.toString().length > 0
+               ? Theme.backgroundOverlay : Theme.surface
+    }
+
+    Item {
+        id: designSurface
+
+        anchors.fill: parent
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            AppTitleBar {
+                window: window
+                appContext: window.appContext
+                Layout.fillWidth: true
+                Layout.preferredHeight: 48
+            }
+
+            AppShell {
+                appContext: window.appContext
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
         }
 
-        onAccepted: {
-            window.allowClose = true;
-            window.appContext.runtime.shutdown();
-            window.close();
+        AppDialog {
+            id: closeConfirmation
+
+            parent: designSurface
+            anchors.centerIn: parent
+            title: qsTr("ComfyUI 正在运行")
+            modal: true
+            standardButtons: Dialog.Yes | Dialog.Cancel
+            acceptText: qsTr("停止并退出")
+            rejectText: qsTr("取消")
+            closePolicy: Popup.CloseOnEscape
+
+            AppLabel {
+                width: closeConfirmation.availableWidth
+                text: qsTr("关闭启动器会停止正在运行的 ComfyUI，并释放其占用的浏览器端口。确定要退出吗？")
+                wrapMode: Text.Wrap
+            }
+
+            onAccepted: {
+                window.allowClose = true;
+                window.appContext.runtime.shutdown();
+                window.close();
+            }
         }
     }
 }

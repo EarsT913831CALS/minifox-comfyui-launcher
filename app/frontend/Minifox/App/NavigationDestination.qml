@@ -13,7 +13,7 @@ AppItemDelegate {
     property bool current: false
     signal destinationSelected(int index)
 
-    implicitHeight: compact ? 56 : 76
+    implicitHeight: compact ? 56 : 82
     highlighted: current
     activeFocusOnTab: true
     Accessible.name: destinationTitle
@@ -59,6 +59,10 @@ AppItemDelegate {
             font.pointSize: Theme.captionSize
             font.weight: control.current ? Font.DemiBold : Font.Normal
             horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.WordWrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
             Layout.fillWidth: true
         }
     }

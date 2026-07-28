@@ -10,7 +10,6 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
-#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -781,20 +780,6 @@ bool RuntimeManager::openCommandPrompt()
                          : tr("无法打开启动命令提示符：%1").arg(launchError));
     } else {
         setLastError({});
-    }
-    return opened;
-}
-
-bool RuntimeManager::openWebUi()
-{
-    const QUrl url(m_serviceUrl);
-    if (!url.isValid()) {
-        setLastError(tr("服务地址无效。"));
-        return false;
-    }
-    const bool opened = QDesktopServices::openUrl(url);
-    if (!opened) {
-        setLastError(tr("无法打开 WebUI。"));
     }
     return opened;
 }

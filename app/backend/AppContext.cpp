@@ -1,10 +1,13 @@
 #include "AppContext.h"
 
+#include "ApplicationIconManager.h"
 #include "ApplicationSettings.h"
 #include "ConfigurationManager.h"
 #include "HardwareManager.h"
 #include "RuntimeManager.h"
+#include "SkinManager.h"
 #include "VersionManager.h"
+#include "WindowChromeController.h"
 
 #include <QCoreApplication>
 #include <QLocale>
@@ -14,18 +17,24 @@ AppContext::AppContext(QObject *parent)
     : QObject(parent),
       m_configuration(new ConfigurationManager({}, this)),
       m_settings(new ApplicationSettings({}, this)),
+      m_appIcon(new ApplicationIconManager(m_settings, this)),
       m_hardware(new HardwareManager(m_configuration, this)),
       m_runtime(new RuntimeManager(m_configuration, m_settings, this)),
+      m_skins(new SkinManager(m_settings, {}, this)),
+      m_windowChrome(new WindowChromeController(this)),
       m_versions(new VersionManager(m_configuration, this))
 {
     connect(m_settings, &ApplicationSettings::languageChanged, this, &AppContext::applyLanguage);
     applyLanguage();
 }
 
+ApplicationIconManager *AppContext::appIcon() const { return m_appIcon; }
 ConfigurationManager *AppContext::configuration() const { return m_configuration; }
 HardwareManager *AppContext::hardware() const { return m_hardware; }
 RuntimeManager *AppContext::runtime() const { return m_runtime; }
 ApplicationSettings *AppContext::settings() const { return m_settings; }
+SkinManager *AppContext::skins() const { return m_skins; }
+WindowChromeController *AppContext::windowChrome() const { return m_windowChrome; }
 VersionManager *AppContext::versions() const { return m_versions; }
 
 void AppContext::setQmlEngine(QQmlEngine *engine)

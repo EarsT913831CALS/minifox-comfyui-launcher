@@ -1,39 +1,135 @@
-# Minifox ComfyUI Launcher
+<div align="center">
+  <img src="app/frontend/Minifox/App/resources/app-icon-light.png" width="160" alt="Minifox ComfyUI Launcher">
+  <h1>Minifox ComfyUI Launcher</h1>
+  <p><strong>A portable, single-file ComfyUI launcher for Windows</strong></p>
+  <p>English · <a href="README.zh-CN.md">简体中文</a></p>
+  <p>
+    <img src="https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0078D4?logo=windows11&logoColor=white" alt="Windows 10/11 x64">
+    <img src="https://img.shields.io/badge/Qt-6.8%2B-41CD52?logo=qt&logoColor=white" alt="Qt 6.8+">
+    <img src="https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white" alt="C++20">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue" alt="GPL-3.0-only"></a>
+  </p>
+</div>
 
-Minifox 是面向 Windows 10/11 的便携式 ComfyUI 启动器，使用 Qt 6、Qt Quick、C++20、QML 和 CMake 开发。
+Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs.
 
-## 功能
+Minifox does not use the Windows registry or modify the ComfyUI source tree. It does not embed or host the ComfyUI web interface. The launcher displays the service address and readiness state, while process control, logs, version management, and runtime setup remain focused on ComfyUI itself.
 
-- 创建、复制、重命名和删除多套 ComfyUI 启动配置
-- 自动保存 Python、ComfyUI 路径、命令行参数、环境变量和应用设置
-- 分类编辑 ComfyUI 参数，支持布尔、三态、枚举、数值、路径及自定义参数
-- 生成完整启动命令，并自动隐藏敏感环境变量
-- 使用 `QProcess` 管理 ComfyUI，显示 PID、运行时间、服务地址和就绪状态
-- 使用 Windows Job Object 管理子进程树
-- 实时显示 stdout/stderr，支持 UTF-8、ANSI 前景色、时间戳、自动换行和日志导出
-- 自动识别 tqdm 风格动态输出，在控制台底部显示独立的 Windows 11 风格进度条
-- Fluent/Windows 11 风格界面，支持系统、浅色、深色主题及系统/自定义强调色
-- 支持界面字体、字号、控制台字体、代理、语言和减少动态效果设置
-- 所有用户数据仅保存在 EXE 旁的隐藏目录 `.minifox`
+## Features
 
-## 支持范围
+- Built-in defaults and multiple ComfyUI launch profiles, arguments, and runtime environments
+- ComfyUI process control, status monitoring, and console output
+- ComfyUI core and extension version management, updates, and rollback
+- Detection of NVIDIA, AMD, hybrid GPU, ROCm, and eligible ZLUDA environments
+- Themes, languages, fonts, application icons, custom skins, and home layouts
 
-- 操作系统：Windows 10/11 x64
-- 编译器：MSYS2 UCRT64 GCC
-- 构建系统：CMake 3.22+ 与 Ninja
-- Qt：6.8 或更高版本，包含 Core、Gui、Network、Qml、Quick、QuickControls2、LinguistTools 和 Test
+## Quick Start
 
-本项目已使用 Qt 6.11.1、GCC 16.1.0、CMake 4.4 和 Ninja 完成验证。
+Place `Minifox ComfyUI Launcher.exe` in the root of a portable ComfyUI package:
 
-## 1. 安装构建依赖
+```text
+ComfyUI-Package/
+├─ Minifox ComfyUI Launcher.exe
+├─ ComfyUI/
+│  └─ main.py
+└─ python/
+   └─ python.exe
+```
 
-安装 [MSYS2](https://www.msys2.org/)，打开“MSYS2 UCRT64”终端并更新系统：
+The launcher detects common portable directory layouts automatically. Python and ComfyUI paths can also be selected manually in a launch profile.
+
+> Minifox launches and manages ComfyUI only. It does not host the ComfyUI web interface or open a browser automatically.
+
+## GPU and ZLUDA
+
+The launcher detects the installed GPUs first, then inspects the PyTorch backend in the portable package:
+
+| Environment | Behavior |
+|---|---|
+| NVIDIA GPU | Uses the original CUDA/PyTorch environment |
+| Hybrid NVIDIA and AMD GPUs | Keeps the NVIDIA CUDA path |
+| AMD GPU with native ROCm PyTorch | Uses ROCm directly |
+| AMD-only GPU with CUDA PyTorch | Prepares ZLUDA automatically |
+
+ZLUDA is not extracted or injected on NVIDIA, hybrid-GPU, or native ROCm environments.
+
+> **Compatibility:** HIP SDK 5.7 has been tested. Anything that uses CK (Composable Kernel) or MIOpen has not been tested and should not be considered supported or stable.
+
+### AMD ZLUDA prerequisites
+
+1. Install the HIP SDK with AMD's official installer and keep the `HIP_PATH` created by the installer.
+2. HIP must contain rocBLAS/Tensile files for the GPU's `gfx` architecture:
+
+   ```text
+   <HIP_PATH>\bin\rocblas\library\
+   ```
+
+3. Use a ComfyUI portable package originally built for NVIDIA/CUDA.
+4. If a workflow requires a custom Triton wheel, install it into the portable package's own Python environment.
+
+Minifox bundles general-purpose ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist. Actual architecture support depends on the contents of the installed HIP SDK.
+
+When the ZLUDA path is selected, the launcher:
+
+- Reads the actual `gcnArchName` returned by HIP
+- Extracts ZLUDA under `.minifox` in the portable package
+- Creates ZLUDA, Triton, and TorchInductor cache directories
+- Injects ZLUDA, HIP, and cache variables into the ComfyUI child process only
+- Applies the Windows HIP extension compatibility layer in memory
+- Avoids unsupported cuDNN and SDP paths while retaining math SDP, Triton, and experimental, unverified HIP/CK extension paths
+
+The launcher does not modify ComfyUI, PyTorch, HIP installation files, or system environment variables. Runtime packages are not extracted again when their version has not changed, and existing caches are reused.
+
+## Version Management
+
+The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, and remote repository.
+
+- Refreshing lists reads remote information without modifying the working tree.
+- Core version switching, branch switching, and one-click updates run `git reset --hard` and `git clean -ffd` first.
+- Extension version switching presents commit descriptions, dates, and the current version without requiring a commit ID.
+- Hold `Ctrl` and left-click a remote repository URL to open it in the default browser.
+
+> **Warning:** Forced switching or updating discards modified files and removes untracked files and directories inside the affected repository. Back up anything that must be preserved.
+
+## Portable Data
+
+The following directories are created beside the executable when needed:
+
+```text
+.minifox/
+├─ application-settings.json
+├─ launch-profiles.json
+├─ icons/
+│  └─ custom.png
+├─ skins/
+├─ packages/
+└─ runtime/
+.cache/
+├─ zluda/
+├─ triton/
+└─ torchinductor/
+```
+
+`.minifox` and `.cache` are marked as hidden directories. Contents under `.cache` are read and written only when ZLUDA is used; NVIDIA, native ROCm, and other non-ZLUDA launch paths do not use this directory.
+
+## Build Requirements
+
+- Windows 10/11 x64
+- MSYS2 UCRT64 GCC with C++20 support
+- CMake 3.25+ and Ninja
+- Qt 6.8+: Core, Gui, Network, Qml, Quick, QuickControls2, LinguistTools, plus Test for test builds only
+
+The project has been verified with Qt 6.11.1, GCC 16.1.0, CMake 4.4.0, and Ninja 1.13.2.
+
+### Install dependencies
+
+Open an **MSYS2 UCRT64** terminal and update the system:
 
 ```bash
 pacman -Syu
 ```
 
-如果终端要求重启，请关闭后重新打开 UCRT64 终端，再安装开发和动态 Qt 依赖：
+If the terminal asks to restart, close it, open a new MSYS2 UCRT64 terminal, and install the toolchain and shared Qt dependencies:
 
 ```bash
 pacman -S --needed \
@@ -45,75 +141,81 @@ pacman -S --needed \
   mingw-w64-ucrt-x86_64-qt6-tools
 ```
 
-如需生成无需 DLL 的单文件 EXE，再安装静态 Qt：
+To build a single executable without separate Qt DLLs, also install static Qt and the static image-format dependencies:
 
 ```bash
-pacman -S --needed mingw-w64-ucrt-x86_64-qt6-static
+pacman -S --needed \
+  mingw-w64-ucrt-x86_64-qt6-static \
+  mingw-w64-ucrt-x86_64-libwebp \
+  mingw-w64-ucrt-x86_64-libtiff
 ```
 
-静态 Qt 的安装体积较大，请预留至少 4 GB 空间。
+Static Qt is large. Keep at least 4 GB of free disk space available.
 
-## 2. 一键构建
+## Build
 
-在 Windows PowerShell 中进入仓库目录。
+Open Windows PowerShell in the repository root.
 
-调试版、QML 检查和单元测试：
+Debug build, QML lint, and unit tests:
 
 ```powershell
 .\scripts\build.ps1 -Preset ucrt64-debug -RunTests
 ```
 
-动态 Release：
+Shared-library Release:
 
 ```powershell
 .\scripts\build.ps1 -Preset ucrt64-release
 ```
 
-单文件静态 Release：
+> The shared-library Release is a development build. It does not copy Qt DLLs, QML modules, or plugins automatically and cannot be distributed as a standalone executable. Use `windeployqt` separately when a shared-library deployment is required.
+
+Single-file static Release:
 
 ```powershell
 .\scripts\build.ps1 -Preset ucrt64-static-release
 ```
 
-静态版最终生成在：
+Static output:
 
 ```text
 build/Release/Minifox ComfyUI Launcher.exe
 ```
 
-如果 MSYS2 不在 `C:\msys64`，可以传入安装目录：
+If MSYS2 is not installed at `C:\msys64`, pass its location explicitly:
 
 ```powershell
 .\scripts\build.ps1 -Preset ucrt64-static-release -Msys2Root "D:\msys64"
 ```
 
-也可以设置环境变量，GitHub Actions 使用的也是这一入口：
+Alternatively, set an environment variable:
 
 ```powershell
 $env:MINIFOX_MSYS2_ROOT = "D:\msys64"
 .\scripts\build.ps1 -Preset ucrt64-debug -RunTests
 ```
 
-若 PowerShell 阻止本地脚本，可仅为当前进程放行：
+If PowerShell blocks local scripts, bypass the execution policy for the current process only:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
-## 3. 手动构建
+### Manual build
 
-`CMakePresets.json` 不包含用户名、盘符或固定 MSYS2 安装路径。请使用目标 Qt 自带的 `qt-cmake` 完成首次配置。
+Use the target Qt installation's `qt-cmake.bat` when configuring a build directory for the first time. The static preset must use the static Qt installation's `qt-cmake.bat`.
 
-动态 Debug：
+Shared-library Debug:
 
 ```powershell
 $env:Path = "<MSYS2>\ucrt64\bin;$env:Path"
 & "<MSYS2>\ucrt64\bin\qt-cmake.bat" --preset ucrt64-debug
 cmake --build --preset ucrt64-debug
+cmake --build --preset ucrt64-debug --target all_qmllint
 ctest --preset ucrt64-debug
 ```
 
-单文件静态 Release：
+Single-file static Release:
 
 ```powershell
 $env:Path = "<MSYS2>\ucrt64\bin;$env:Path"
@@ -121,83 +223,56 @@ $env:Path = "<MSYS2>\ucrt64\bin;$env:Path"
 cmake --build --preset ucrt64-static-release
 ```
 
-首次配置后可以直接重复执行相应的 `cmake --build --preset ...` 进行增量构建。
+| Preset | Purpose | Output |
+|---|---|---|
+| `ucrt64-debug` | Debug, QML lint, and unit tests | `build/debug/` |
+| `ucrt64-release` | Shared-library Release | `build/release/` |
+| `ucrt64-static-release` | Single-file static Release | `build/Release/` |
 
-## 构建预设
-
-| 预设 | 用途 | 测试 | 输出 |
-|---|---|---:|---|
-| `ucrt64-debug` | 开发、调试和检查 | 开启 | `build/debug/` |
-| `ucrt64-release` | 动态链接正式构建 | 关闭 | `build/release/` |
-| `ucrt64-static-release` | 可发布的单文件构建 | 关闭 | `build/Release/` |
-
-所有构建目录、运行数据和测试结果均被 Git 忽略，可以安全删除并重新生成。
-
-## 项目结构
+## Source Layout
 
 ```text
-app/
-├── backend/                         程序入口、依赖注入和模块装配
-└── frontend/
-    ├── Minifox/App/                 主窗口、导航和应用级页面
-    └── translations/                界面翻译
-core/
-├── application-settings/
-│   ├── backend/                     启动器设置、外观和代理
-│   └── frontend/Minifox/ApplicationSettings/
-├── configuration/
-│   ├── backend/                     启动配置和参数目录
-│   └── frontend/Minifox/Configuration/
-└── runtime/
-    ├── backend/                     命令、进程、就绪监控和日志
-    ├── frontend/Minifox/Runtime/
-    └── tests/                       Runtime 单元测试
-shared/
-├── backend/                         无业务语义的通用 C++ 能力
-└── frontend/Minifox/Shared/         主题和通用 QML 控件
-platform/windows/                    Windows 平台实现
-extension-api/                       扩展 API 边界说明
-extensions/                          扩展目录说明
-scripts/                             可复现构建入口
-.github/workflows/                   GitHub Actions 编译验证
+app/                         Application entry point, page composition, and app backend
+core/configuration/          Launch profiles, argument catalog, and advanced options
+core/application-settings/   Theme, language, proxy, and application settings
+core/runtime/                Commands, dependency checks, processes, logs, and console
+core/skin/                   Skins, asset import/export, and home layout
+shared/                      Shared C++ facilities, theme, and QML controls
+platform/windows/            Windows platform implementation
+extension-api/               Extension API boundary
+extensions/                  Extension directory documentation
+assets/zluda/                Bundled general-purpose ZLUDA runtime package
+scripts/                     Reproducible build entry points
+.github/workflows/           GitHub Actions builds and tests
 ```
 
-项目保持垂直业务模块：每个模块在内部拆分 `backend` 与 `frontend`，测试也随模块放置。后端目标不依赖 QML；前端通过独立的 Qt QML 模块公开页面，通用控件统一来自 `Minifox.Shared`。`Minifox.App` 只负责组合页面和注入后端对象，不承载具体业务逻辑。
-
-依赖方向固定为：
+Dependency direction:
 
 ```text
 Minifox.App UI -> Configuration / Runtime / ApplicationSettings UI -> Minifox.Shared UI
 app backend    -> core backends                                  -> shared / platform
 ```
 
-QML 不直接读写配置文件或操作进程，所有业务行为都通过 `appContext` 注入的 C++ 后端完成。
+QML does not read or write configuration files or control processes directly. Pages access the C++ backend through `appContext`.
 
-## 用户数据
+## Continuous Integration
 
-程序首次运行时在 EXE 旁创建：
+GitHub Actions runs the following in a Windows UCRT64 environment:
 
-```text
-.minifox/
-├── application-settings.json
-└── launch-profiles.json
-```
+1. Debug configuration and build
+2. QML lint
+3. C++ unit tests
+4. Single-file static Release build verification
 
-该目录在 Windows 中自动隐藏。程序不使用注册表或系统配置目录；请将 EXE 放在用户拥有写权限的位置。
+CI validates source code only. It does not upload or publish executables, DLLs, installers, or other build artifacts.
 
-## 持续集成
+## Acknowledgements
 
-`.github/workflows/build.yml` 会在 Windows UCRT64 环境中执行：
+- Thanks to the [ZLUDA project and community](https://github.com/vosen/ZLUDA) for their long-term work on running CUDA applications on non-NVIDIA GPUs.
+- Thanks to Bilibili creator [秋葉aaaki](https://space.bilibili.com/12566101) and the Aki Launcher for their integration work, launcher experience, and contributions to the Chinese ComfyUI community.
 
-1. Debug 配置与编译
-2. QML 静态检查
-3. C++ 单元测试
-4. 单文件静态 Release 编译验证
+## License
 
-CI 仅用于验证源码能够成功编译，不上传或发布 EXE、DLL、安装包等二进制构建产物。
+This project is licensed under the [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`).
 
-## 许可证
-
-本项目采用 [GNU General Public License v3.0](LICENSE)（`GPL-3.0-only`）发布。
-
-你可以使用、复制、修改和分发本项目。分发本项目的修改版或基于本项目的衍生作品时，必须遵守 GPLv3，包括向接收者提供相应源码并保留 GPLv3 授权。完整条款见 [LICENSE](LICENSE)。
+You may use, copy, modify, and distribute this project under the terms of GPLv3. Distributions of modified versions or derivative works must comply with GPLv3, including providing the corresponding source code to recipients and preserving the GPLv3 license notice. See [LICENSE](LICENSE) for the full terms.
