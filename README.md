@@ -69,14 +69,7 @@ ZLUDA is not extracted or injected on NVIDIA, hybrid-GPU, or native ROCm environ
 
 Minifox bundles general-purpose ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist. Actual architecture support depends on the contents of the installed HIP SDK.
 
-When the ZLUDA path is selected, the launcher:
-
-- Reads the actual `gcnArchName` returned by HIP
-- Extracts ZLUDA under `.minifox` in the portable package
-- Creates ZLUDA, Triton, and TorchInductor cache directories
-- Injects ZLUDA, HIP, and cache variables into the ComfyUI child process only
-- Applies the Windows HIP extension compatibility layer in memory
-- Avoids unsupported cuDNN and SDP paths while retaining math SDP, Triton, and experimental, unverified HIP/CK extension paths
+Only the general-purpose `assets/zluda/zluda.extpack` is stored in this repository and embedded in the launcher. On an eligible AMD-only environment, Minifox reads the actual `gcnArchName`, extracts the runtime under `.minifox`, prepares caches, and injects the required environment into the ComfyUI child process only.
 
 The launcher does not modify ComfyUI, PyTorch, HIP installation files, or system environment variables. Runtime packages are not extracted again when their version has not changed, and existing caches are reused.
 
@@ -239,8 +232,6 @@ core/runtime/                Commands, dependency checks, processes, logs, and c
 core/skin/                   Skins, asset import/export, and home layout
 shared/                      Shared C++ facilities, theme, and QML controls
 platform/windows/            Windows platform implementation
-extension-api/               Extension API boundary
-extensions/                  Extension directory documentation
 assets/zluda/                Bundled general-purpose ZLUDA runtime package
 scripts/                     Reproducible build entry points
 .github/workflows/           GitHub Actions builds and tests
@@ -254,6 +245,8 @@ app backend    -> core backends                                  -> shared / pla
 ```
 
 QML does not read or write configuration files or control processes directly. Pages access the C++ backend through `appContext`.
+
+Generated build outputs, executables, portable runtime data, and local caches are excluded from version control. The repository keeps only source code, embedded assets, and reproducible build configuration.
 
 ## Continuous Integration
 

@@ -21,7 +21,7 @@ Minifox 不使用注册表，不修改 ComfyUI 源码，也不内置浏览器或
 - 启动、停止并监控 ComfyUI 进程、状态和控制台输出
 - 管理 ComfyUI 内核与扩展的版本、更新和回退
 - 识别 NVIDIA、AMD，CUDA、ROCm 或适用的 ZLUDA 环境
-- 提供较高的个性化功能
+- 提供较高的个性化自由度
 
 ## 直接使用
 
@@ -66,6 +66,8 @@ NVIDIA、混合显卡和原生 ROCm 环境不会释放或注入 ZLUDA。
 4. 如果工作流依赖定制 Triton wheel，应将其安装在整合包自身的 Python 环境中。
 
 Minifox 内置通用 ZLUDA 运行组件，但不内置针对特定 `gfx` 的 rocBLAS/Tensile 补丁，也不维护有限的显卡架构白名单。
+
+仓库只保存并编入启动器通用的 `assets/zluda/zluda.extpack`。在符合条件的纯 AMD 环境中，Minifox 会读取实际的 `gcnArchName`，将运行组件释放到 `.minifox`、准备缓存，并且只向 ComfyUI 子进程注入所需环境。
 
 启动器不会修改 ComfyUI、PyTorch、HIP 安装文件或系统环境变量。已经释放且版本未变化的运行包不会重复解压，已有缓存会继续复用。
 
@@ -228,8 +230,6 @@ core/runtime/                命令、依赖检查、进程、日志和控制台
 core/skin/                   皮肤、资源导入导出和首页布局
 shared/                      通用 C++ 能力、主题和 QML 控件
 platform/windows/            Windows 平台实现
-extension-api/               扩展 API 边界
-extensions/                  扩展目录说明
 assets/zluda/                内置通用 ZLUDA 运行包
 scripts/                     可复现构建入口
 .github/workflows/           GitHub Actions 编译与测试
@@ -243,6 +243,8 @@ app backend    -> core backends                                  -> shared / pla
 ```
 
 QML 不直接读写配置文件或操作进程，页面通过 `appContext` 调用 C++ 后端。
+
+生成的构建目录、可执行文件、便携运行数据和本机缓存均不进入版本控制；仓库只保留源码、内置资源和可复现构建配置。
 
 ## 持续集成
 
