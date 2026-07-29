@@ -11,21 +11,21 @@
   </p>
 </div>
 
-Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs.
+Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs and can be placed directly into an existing ComfyUI portable package.
 
-Minifox does not use the Windows registry or modify the ComfyUI source tree. It does not embed or host the ComfyUI web interface. The launcher displays the service address and readiness state, while process control, logs, version management, and runtime setup remain focused on ComfyUI itself.
+Minifox does not use the Windows registry, modify the ComfyUI source tree, or include a browser or WebUI. The launcher displays the ComfyUI service address and readiness state, but launching, stopping, logs, version management, and runtime environment management always remain focused on the ComfyUI process itself.
 
 ## Features
 
-- Built-in defaults and multiple ComfyUI launch profiles, arguments, and runtime environments
-- ComfyUI process control, status monitoring, and console output
-- ComfyUI core and extension version management, updates, and rollback
-- Detection of NVIDIA, AMD, hybrid GPU, ROCm, and eligible ZLUDA environments
-- Themes, languages, fonts, application icons, custom skins, and home layouts
+- Built-in defaults, with support for managing multiple ComfyUI launch profiles, arguments, and runtime environments
+- Launch, stop, and monitor the ComfyUI process, status, and console output
+- Manage ComfyUI core and extension versions, updates, and rollback
+- Detect NVIDIA, AMD, CUDA, ROCm, and eligible ZLUDA environments
+- A high degree of personalization freedom
 
 ## Quick Start
 
-Place `Minifox ComfyUI Launcher.exe` in the root of a portable ComfyUI package:
+Place `Minifox ComfyUI Launcher.exe` in a ComfyUI portable package directory and run it:
 
 ```text
 ComfyUI-Package/
@@ -38,8 +38,6 @@ ComfyUI-Package/
 
 The launcher detects common portable directory layouts automatically. Python and ComfyUI paths can also be selected manually in a launch profile.
 
-> Minifox launches and manages ComfyUI only. It does not host the ComfyUI web interface or open a browser automatically.
-
 ## GPU and ZLUDA
 
 The launcher detects the installed GPUs first, then inspects the PyTorch backend in the portable package:
@@ -47,7 +45,6 @@ The launcher detects the installed GPUs first, then inspects the PyTorch backend
 | Environment | Behavior |
 |---|---|
 | NVIDIA GPU | Uses the original CUDA/PyTorch environment |
-| Hybrid NVIDIA and AMD GPUs | Keeps the NVIDIA CUDA path |
 | AMD GPU with native ROCm PyTorch | Uses ROCm directly |
 | AMD-only GPU with CUDA PyTorch | Prepares ZLUDA automatically |
 
@@ -67,7 +64,7 @@ ZLUDA is not extracted or injected on NVIDIA, hybrid-GPU, or native ROCm environ
 3. Use a ComfyUI portable package originally built for NVIDIA/CUDA.
 4. If a workflow requires a custom Triton wheel, install it into the portable package's own Python environment.
 
-Minifox bundles general-purpose ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist. Actual architecture support depends on the contents of the installed HIP SDK.
+Minifox bundles general-purpose ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist.
 
 Only the general-purpose `assets/zluda/zluda.extpack` is stored in this repository and embedded in the launcher. On an eligible AMD-only environment, Minifox reads the actual `gcnArchName`, extracts the runtime under `.minifox`, prepares caches, and injects the required environment into the ComfyUI child process only.
 
@@ -78,7 +75,7 @@ The launcher does not modify ComfyUI, PyTorch, HIP installation files, or system
 The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, and remote repository.
 
 - Refreshing lists reads remote information without modifying the working tree.
-- Core version switching, branch switching, and one-click updates run `git reset --hard` and `git clean -ffd` first.
+- Core version switching, branch switching, and one-click updates (to the latest version on the page currently being viewed) run `git reset --hard` and `git clean -ffd` first.
 - Extension version switching presents commit descriptions, dates, and the current version without requiring a commit ID.
 - Hold `Ctrl` and left-click a remote repository URL to open it in the default browser.
 
@@ -116,13 +113,13 @@ The project has been verified with Qt 6.11.1, GCC 16.1.0, CMake 4.4.0, and Ninja
 
 ### Install dependencies
 
-Open an **MSYS2 UCRT64** terminal and update the system:
+Run the following in an **MSYS2 UCRT64** terminal:
 
 ```bash
 pacman -Syu
 ```
 
-If the terminal asks to restart, close it, open a new MSYS2 UCRT64 terminal, and install the toolchain and shared Qt dependencies:
+If the terminal asks to restart, close it, open a new MSYS2 UCRT64 terminal, and install the dynamic Qt build dependencies:
 
 ```bash
 pacman -S --needed \
@@ -134,7 +131,7 @@ pacman -S --needed \
   mingw-w64-ucrt-x86_64-qt6-tools
 ```
 
-To build a single executable without separate Qt DLLs, also install static Qt and the static image-format dependencies:
+To build a single executable without separate Qt DLLs, also install static Qt:
 
 ```bash
 pacman -S --needed \
@@ -155,13 +152,13 @@ Debug build, QML lint, and unit tests:
 .\scripts\build.ps1 -Preset ucrt64-debug -RunTests
 ```
 
-Shared-library Release:
+Dynamic Release:
 
 ```powershell
 .\scripts\build.ps1 -Preset ucrt64-release
 ```
 
-> The shared-library Release is a development build. It does not copy Qt DLLs, QML modules, or plugins automatically and cannot be distributed as a standalone executable. Use `windeployqt` separately when a shared-library deployment is required.
+> The dynamic Release is a development build. It does not copy Qt DLLs, QML modules, or plugins automatically and cannot be distributed as a standalone executable. Use `windeployqt` separately when a dynamic deployment is required.
 
 Single-file static Release:
 
@@ -198,7 +195,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 Use the target Qt installation's `qt-cmake.bat` when configuring a build directory for the first time. The static preset must use the static Qt installation's `qt-cmake.bat`.
 
-Shared-library Debug:
+Dynamic Debug:
 
 ```powershell
 $env:Path = "<MSYS2>\ucrt64\bin;$env:Path"
@@ -219,7 +216,7 @@ cmake --build --preset ucrt64-static-release
 | Preset | Purpose | Output |
 |---|---|---|
 | `ucrt64-debug` | Debug, QML lint, and unit tests | `build/debug/` |
-| `ucrt64-release` | Shared-library Release | `build/release/` |
+| `ucrt64-release` | Dynamically linked Release | `build/release/` |
 | `ucrt64-static-release` | Single-file static Release | `build/Release/` |
 
 ## Source Layout
