@@ -62,6 +62,10 @@ Pane {
             AppButton {
                 text: qsTr("启动命令提示符")
                 onClicked: {
+                    if (!root.appContext.runtime.preflightReady) {
+                        root.appContext.runtime.openCommandPrompt();
+                        return;
+                    }
                     if (!root.appContext.runtime.openCommandPrompt())
                         root.commandPromptErrorRequested = true;
                 }

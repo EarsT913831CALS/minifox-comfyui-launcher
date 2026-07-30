@@ -59,6 +59,8 @@ public:
     static bool shouldProbeAdapters(const QStringList &adapterNames,
                                     const QString &mode = QStringLiteral("auto"));
     static bool shouldProbeSystem(const QString &mode = QStringLiteral("auto"));
+    static bool preloadEmbeddedPackages(const QString &portableRoot,
+                                        QString *error = nullptr);
 
     static Preparation prepare(const QString &pythonPath,
                                const QString &comfyRoot,

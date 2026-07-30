@@ -47,29 +47,6 @@ void appendBounded(QByteArray &buffer, const QByteArray &data, bool *truncated)
     }
 }
 
-bool startVisibleCommandPrompt(const CommandPromptBuilder::Result &command,
-                               QString *errorMessage)
-{
-    QProcess prompt;
-    prompt.setWorkingDirectory(command.workingDirectory);
-    prompt.setProcessEnvironment(command.environment);
-    prompt.setProgram(command.program);
-    prompt.setNativeArguments(command.nativeArguments);
-#ifdef Q_OS_WIN
-    prompt.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments) {
-        arguments->flags &= ~CREATE_NO_WINDOW;
-        arguments->flags |= CREATE_NEW_CONSOLE;
-    });
-#endif
-    if (prompt.startDetached()) {
-        return true;
-    }
-    if (errorMessage) {
-        *errorMessage = prompt.errorString();
-    }
-    return false;
-}
-
 void forceKillProcessTree(qint64 processId)
 {
 #ifdef Q_OS_WIN
@@ -338,6 +315,10 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
             m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
         }
     });
+    m_commandPrompt.setProcessChannelMode(QProcess::ForwardedChannels);
+    connect(&m_commandPrompt, &QProcess::finished, this, [this] {
+        m_commandPromptJob.reset();
+    });
 
     m_readinessTimer.setInterval(800);
     connect(&m_readinessTimer, &QTimer::timeout, this, &RuntimeManager::checkReadiness);
@@ -388,6 +369,11 @@ bool RuntimeManager::canStart() const
         && !m_processJob.isAttached();
 }
 
+bool RuntimeManager::preflightReady() const
+{
+    return m_preflightReady;
+}
+
 bool RuntimeManager::canStop() const
 {
     return active() && m_status != Stopping;
@@ -407,6 +393,7 @@ qint64 RuntimeManager::processId() const { return m_processId; }
 QString RuntimeManager::uptime() const { return m_uptime; }
 bool RuntimeManager::serviceReady() const { return m_serviceReady; }
 QString RuntimeManager::serviceUrl() const { return m_serviceUrl; }
+QString RuntimeManager::acceleratorSummary() const { return m_acceleratorSummary; }
 QString RuntimeManager::commandPreview() const { return m_commandPreview; }
 LogModel *RuntimeManager::logModel() const { return m_logModel; }
 QString RuntimeManager::lastError() const { return m_lastError; }
@@ -420,6 +407,10 @@ void RuntimeManager::retranslate()
 
 void RuntimeManager::start()
 {
+    if (!m_preflightReady) {
+        emit preflightBlocked(tr("正在检测硬件和 PyTorch 环境，请稍后再启动。"));
+        return;
+    }
     if (!canStart()) {
         return;
     }
@@ -448,6 +439,7 @@ void RuntimeManager::start()
     m_zludaStandardError.clear();
     m_zludaOutputTruncated = false;
     m_zludaEnabled = false;
+    m_acceleratorSummary.clear();
     m_lastExitCode = 0;
     m_processId = 0;
     m_uptime = QStringLiteral("00:00:00");
@@ -456,6 +448,15 @@ void RuntimeManager::start()
     setStatus(Starting);
     emit runtimeInfoChanged();
     beginZludaBootstrap();
+}
+
+void RuntimeManager::setPreflightReady(bool ready)
+{
+    if (m_preflightReady == ready) {
+        return;
+    }
+    m_preflightReady = ready;
+    emit statusChanged();
 }
 
 void RuntimeManager::stop()
@@ -516,6 +517,12 @@ void RuntimeManager::shutdown()
     m_readinessTimer.stop();
     m_uptimeTimer.stop();
     cancelReadinessCheck();
+    if (m_commandPrompt.state() != QProcess::NotRunning) {
+        m_commandPromptJob.terminate();
+        m_commandPrompt.kill();
+        m_commandPrompt.waitForFinished(2000);
+    }
+    m_commandPromptJob.reset();
     terminateTrackedProcessTree();
     m_processId = 0;
     m_elapsed.invalidate();
@@ -606,6 +613,7 @@ void RuntimeManager::handleZludaProbeFinished(int exitCode,
             ZludaBootstrap::parseDetectionOutput(output);
         if (detection.backend == ZludaBootstrap::BackendKind::Rocm
             || detection.backend == ZludaBootstrap::BackendKind::Nvidia) {
+            updateAcceleratorSummary(detection.backend, detection);
             m_logModel->appendSystemMessage(
                 detection.backend == ZludaBootstrap::BackendKind::Rocm
                     ? tr("检测到原生 ROCm PyTorch，不启用 ZLUDA DLL 引导。")
@@ -625,6 +633,9 @@ void RuntimeManager::handleZludaProbeFinished(int exitCode,
                 return;
             }
             m_zludaRocmBin = m_zludaRocmCandidates.takeFirst();
+            updateAcceleratorSummary(
+                ZludaBootstrap::BackendKind::Zluda,
+                detection);
             finishZludaBootstrap();
         } else {
             m_logModel->appendSystemMessage(
@@ -643,6 +654,9 @@ void RuntimeManager::handleZludaProbeFinished(int exitCode,
             ? ZludaBootstrap::parseDetectionOutput(output)
             : ZludaBootstrap::Detection{};
         if (detection.backend == ZludaBootstrap::BackendKind::Zluda) {
+            updateAcceleratorSummary(
+                ZludaBootstrap::BackendKind::Zluda,
+                detection);
             finishZludaBootstrap();
             return;
         }
@@ -739,6 +753,36 @@ void RuntimeManager::handleZludaProbeTimeout()
     m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
 }
 
+void RuntimeManager::updateAcceleratorSummary(ZludaBootstrap::BackendKind backend,
+                                              const ZludaBootstrap::Detection &detection)
+{
+    QStringList parts;
+    switch (backend) {
+    case ZludaBootstrap::BackendKind::Zluda:
+        // ZLUDA reports itself in the CUDA device name, for example
+        // "Radeon 780M Graphics [ZLUDA]"; avoid showing the backend twice.
+        break;
+    case ZludaBootstrap::BackendKind::Rocm:
+        parts.append(QStringLiteral("ROCm"));
+        break;
+    case ZludaBootstrap::BackendKind::Nvidia:
+        parts.append(tr("NVIDIA CUDA"));
+        break;
+    default:
+        break;
+    }
+
+    if (!detection.torchVersion.trimmed().isEmpty()) {
+        parts.append(tr("PyTorch %1").arg(detection.torchVersion.trimmed()));
+    }
+    if (!detection.deviceNames.isEmpty()) {
+        parts.append(detection.deviceNames.join(QStringLiteral(", ")));
+    }
+
+    m_acceleratorSummary = parts.join(QStringLiteral(" · "));
+    emit runtimeInfoChanged();
+}
+
 void RuntimeManager::finishZludaBootstrap()
 {
     if (m_stopRequested || m_startupAborted) {
@@ -754,6 +798,15 @@ void RuntimeManager::finishZludaBootstrap()
 
 bool RuntimeManager::openCommandPrompt()
 {
+    if (!m_preflightReady) {
+        emit preflightBlocked(tr("正在检测硬件和 PyTorch 环境，请稍后再启动。"));
+        return false;
+    }
+    if (m_commandPrompt.state() != QProcess::NotRunning) {
+        setLastError(tr("启动命令提示符已经打开。"));
+        return false;
+    }
+
     LaunchCommandBuilder::Result command =
         LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
     if (command.workingDirectory.isEmpty() || !QDir(command.workingDirectory).exists()) {
@@ -772,16 +825,30 @@ bool RuntimeManager::openCommandPrompt()
     const CommandPromptBuilder::Result promptCommand = CommandPromptBuilder::build(
         python.absoluteFilePath(), command.workingDirectory, command.environment);
 
-    QString launchError;
-    const bool opened = startVisibleCommandPrompt(promptCommand, &launchError);
-    if (!opened) {
-        setLastError(launchError.isEmpty()
-                         ? tr("无法打开启动命令提示符。")
-                         : tr("无法打开启动命令提示符：%1").arg(launchError));
-    } else {
-        setLastError({});
+    m_commandPrompt.setWorkingDirectory(promptCommand.workingDirectory);
+    m_commandPrompt.setProcessEnvironment(promptCommand.environment);
+    m_commandPrompt.setProgram(promptCommand.program);
+    m_commandPrompt.setNativeArguments(promptCommand.nativeArguments);
+#ifdef Q_OS_WIN
+    m_commandPrompt.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments) {
+        arguments->flags &= ~CREATE_NO_WINDOW;
+        arguments->flags |= CREATE_NEW_CONSOLE;
+    });
+#endif
+    m_commandPrompt.start();
+    if (!m_commandPrompt.waitForStarted(3000)) {
+        setLastError(tr("无法打开启动命令提示符：%1").arg(m_commandPrompt.errorString()));
+        return false;
     }
-    return opened;
+    if (!m_commandPromptJob.attach(m_commandPrompt.processId())) {
+        const qint64 promptPid = m_commandPrompt.processId();
+        m_commandPrompt.kill();
+        forceKillProcessTree(promptPid);
+        setLastError(tr("无法将启动命令提示符加入安全作业，已关闭该窗口。"));
+        return false;
+    }
+    setLastError({});
+    return true;
 }
 
 bool RuntimeManager::exportLog(const QUrl &fileUrl)

@@ -171,7 +171,9 @@ MaterialPanel {
             LaunchInformationRow {
                 Layout.fillWidth: true
                 label: qsTr("CUDA 设备")
-                value: root.appContext.hardware.summary
+                value: root.appContext.runtime.acceleratorSummary.length > 0
+                       ? root.appContext.runtime.acceleratorSummary
+                       : root.appContext.hardware.summary
             }
         }
 

@@ -44,10 +44,19 @@ void appendUniquePath(QStringList &paths, const QString &candidate)
     }
     QFileInfo info(candidate);
     QString path = info.isDir() ? info.absoluteFilePath() : candidate;
-    if (QFileInfo(QDir(path).filePath(QStringLiteral("bin/amdhip64.dll"))).isFile()) {
+    const auto hasHipRuntime = [](const QString &directory) {
+        const QDir dir(directory);
+        return QFileInfo(dir.filePath(QStringLiteral("amdhip64.dll"))).isFile()
+            || QFileInfo(dir.filePath(QStringLiteral("amdhip64_7.dll"))).isFile();
+    };
+    const auto hasHipInfo = [](const QString &directory) {
+        return QFileInfo(QDir(directory).filePath(QStringLiteral("hipInfo.exe"))).isFile();
+    };
+    if (hasHipRuntime(QDir(path).filePath(QStringLiteral("bin")))
+        && hasHipInfo(QDir(path).filePath(QStringLiteral("bin")))) {
         path = QDir(path).filePath(QStringLiteral("bin"));
     }
-    if (!QFileInfo(QDir(path).filePath(QStringLiteral("amdhip64.dll"))).isFile()) {
+    if (!hasHipRuntime(path) || !hasHipInfo(path)) {
         return;
     }
     path = QDir::cleanPath(path);
@@ -57,6 +66,30 @@ void appendUniquePath(QStringList &paths, const QString &candidate)
         }
     }
     paths.append(path);
+}
+
+QString cacheTagForRocmBin(const QString &rocmBin)
+{
+    const QString rocmRoot = QDir::cleanPath(QDir(rocmBin).absoluteFilePath(QStringLiteral("..")));
+    QString version = QFileInfo(rocmRoot).fileName().trimmed();
+    static const QRegularExpression versionExpression(QStringLiteral(R"(^[0-9]+(?:\.[0-9]+)*)"));
+    if (!versionExpression.match(version).hasMatch()) {
+        if (QFileInfo(QDir(rocmBin).filePath(QStringLiteral("amdhip64_7.dll"))).isFile()) {
+            version = QStringLiteral("7");
+        } else if (QFileInfo(QDir(rocmBin).filePath(QStringLiteral("amdhip64.dll"))).isFile()) {
+            version = QStringLiteral("5");
+        }
+    }
+    version.replace(QRegularExpression(QStringLiteral(R"([^A-Za-z0-9._-])")), QStringLiteral("-"));
+    return version.isEmpty() ? QStringLiteral("hip-unknown") : QStringLiteral("hip-%1").arg(version);
+}
+
+int hipMajorVersionForRocmBin(const QString &rocmBin)
+{
+    const QRegularExpression expression(QStringLiteral(R"(hip-([0-9]+))"),
+                                        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = expression.match(cacheTagForRocmBin(rocmBin));
+    return match.hasMatch() ? match.captured(1).toInt() : 0;
 }
 
 QString pythonEnvironmentRoot(const QString &pythonPath)
@@ -359,15 +392,21 @@ bool extractEmbeddedArchive(const QString &archivePath,
     return true;
 }
 
-QString extractEmbeddedZluda(const QString &portableRoot, QString *error)
+QString extractEmbeddedZluda(const QString &portableRoot,
+                             const QString &rocmBin,
+                             QString *error)
 {
+    const QString packageName = hipMajorVersionForRocmBin(rocmBin) >= 7
+        ? QStringLiteral("zluda-hip71.extpack")
+        : QStringLiteral("zluda-hip57.extpack");
     const QString archive =
-        materializeEmbeddedArchive(portableRoot, QStringLiteral("zluda.extpack"), error);
+        materializeEmbeddedArchive(portableRoot, packageName, error);
     if (archive.isEmpty()) {
         return {};
     }
     const QString destination =
-        QDir(portableRoot).filePath(QStringLiteral(".minifox/packages/zluda"));
+        QDir(portableRoot).filePath(QStringLiteral(".minifox/packages/%1"))
+            .arg(QFileInfo(packageName).completeBaseName());
     if (!extractEmbeddedArchive(archive, destination, QStringLiteral("nvcuda.dll"), error)
         || !hasZludaFiles(destination)) {
         if (error && error->isEmpty()) {
@@ -376,6 +415,21 @@ QString extractEmbeddedZluda(const QString &portableRoot, QString *error)
         return {};
     }
     return destination;
+}
+
+bool preloadEmbeddedZludaPackage(const QString &portableRoot,
+                                 const QString &packageName,
+                                 QString *error)
+{
+    const QString archive = materializeEmbeddedArchive(portableRoot, packageName, error);
+    if (archive.isEmpty()) {
+        return false;
+    }
+    const QString destination =
+        QDir(portableRoot).filePath(QStringLiteral(".minifox/packages/%1"))
+            .arg(QFileInfo(packageName).completeBaseName());
+    return extractEmbeddedArchive(archive, destination, QStringLiteral("nvcuda.dll"), error)
+        && hasZludaFiles(destination);
 }
 
 QString detectGfxArchitecture(const QString &rocmBin, QString *error)
@@ -730,6 +784,29 @@ bool ZludaBootstrap::shouldProbeSystem(const QString &mode)
     return shouldProbeAdapters(systemAdapterNames(), mode);
 }
 
+bool ZludaBootstrap::preloadEmbeddedPackages(const QString &portableRoot,
+                                             QString *error)
+{
+    QString firstError;
+    for (const QString &packageName : {
+             QStringLiteral("zluda-hip57.extpack"),
+             QStringLiteral("zluda-hip71.extpack")
+         }) {
+        QString packageError;
+        if (!preloadEmbeddedZludaPackage(portableRoot, packageName, &packageError)
+            && firstError.isEmpty()) {
+            firstError = packageError;
+        }
+    }
+    if (!firstError.isEmpty()) {
+        if (error) {
+            *error = firstError;
+        }
+        return false;
+    }
+    return true;
+}
+
 ZludaBootstrap::Preparation ZludaBootstrap::prepare(
     const QString &pythonPath,
     const QString &comfyRoot,
@@ -741,23 +818,6 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
         QDir(portableRoot).filePath(QStringLiteral(".minifox/runtime/zluda"));
     result.bootstrapDirectory =
         QDir(portableRoot).filePath(QStringLiteral(".minifox/runtime/python-bootstrap"));
-    result.zludaCacheDirectory =
-        QDir(portableRoot).filePath(QStringLiteral(".cache/zluda"));
-    result.tritonCacheDirectory =
-        QDir(portableRoot).filePath(QStringLiteral(".cache/triton"));
-    result.torchInductorCacheDirectory =
-        QDir(portableRoot).filePath(QStringLiteral(".cache/torchinductor"));
-
-    for (const QString &cacheDirectory : {
-             result.zludaCacheDirectory,
-             result.tritonCacheDirectory,
-             result.torchInductorCacheDirectory
-         }) {
-        if (!QDir().mkpath(cacheDirectory)) {
-            result.error = QStringLiteral("无法创建运行时缓存目录：%1").arg(cacheDirectory);
-            return result;
-        }
-    }
 
     // HIP is the only external prerequisite. Prefer the machine-level HIP_PATH
     // installed by AMD; the remaining probes are compatibility fallbacks.
@@ -786,17 +846,38 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
         return result;
     }
 
+    const QString selectedRocmBin = result.rocmBinCandidates.constFirst();
+    const QString cacheRoot = QDir(portableRoot).filePath(
+        QStringLiteral(".cache/%1").arg(cacheTagForRocmBin(selectedRocmBin)));
+    result.zludaCacheDirectory =
+        QDir(cacheRoot).filePath(QStringLiteral("zluda"));
+    result.tritonCacheDirectory =
+        QDir(cacheRoot).filePath(QStringLiteral("triton"));
+    result.torchInductorCacheDirectory =
+        QDir(cacheRoot).filePath(QStringLiteral("torchinductor"));
+
+    for (const QString &cacheDirectory : {
+             result.zludaCacheDirectory,
+             result.tritonCacheDirectory,
+             result.torchInductorCacheDirectory
+         }) {
+        if (!QDir().mkpath(cacheDirectory)) {
+            result.error = QStringLiteral("无法创建运行时缓存目录：%1").arg(cacheDirectory);
+            return result;
+        }
+    }
+
     result.gfxArchitecture =
         environment.value(QStringLiteral("MINIFOX_ZLUDA_GFX_ARCH")).trimmed().toLower();
     if (result.gfxArchitecture.isEmpty()) {
         result.gfxArchitecture =
-            detectGfxArchitecture(result.rocmBinCandidates.constFirst(), &result.error);
+            detectGfxArchitecture(selectedRocmBin, &result.error);
     }
     if (result.gfxArchitecture.isEmpty()) {
         return result;
     }
     result.tensileLibraryDirectory = locateHipTensileLibrary(
-        result.rocmBinCandidates.constFirst(),
+        selectedRocmBin,
         result.gfxArchitecture,
         &result.error);
     if (!result.error.isEmpty()) {
@@ -811,7 +892,7 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
     if (hasZludaFiles(configuredSource)) {
         source = configuredSource;
     } else {
-        source = extractEmbeddedZluda(portableRoot, &result.error);
+        source = extractEmbeddedZluda(portableRoot, selectedRocmBin, &result.error);
     }
     if (source.isEmpty() && result.error.isEmpty()) {
         // Compatibility with older Minifox/Aki layouts; never preferred over

@@ -21,6 +21,7 @@ class RuntimeManager final : public QObject
     Q_OBJECT
     Q_PROPERTY(Status status READ status NOTIFY statusChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusChanged)
+    Q_PROPERTY(bool preflightReady READ preflightReady NOTIFY statusChanged)
     Q_PROPERTY(bool canStart READ canStart NOTIFY statusChanged)
     Q_PROPERTY(bool canStop READ canStop NOTIFY statusChanged)
     Q_PROPERTY(bool active READ active NOTIFY statusChanged)
@@ -28,6 +29,7 @@ class RuntimeManager final : public QObject
     Q_PROPERTY(QString uptime READ uptime NOTIFY runtimeInfoChanged)
     Q_PROPERTY(bool serviceReady READ serviceReady NOTIFY serviceReadyChanged)
     Q_PROPERTY(QString serviceUrl READ serviceUrl NOTIFY commandPreviewChanged)
+    Q_PROPERTY(QString acceleratorSummary READ acceleratorSummary NOTIFY runtimeInfoChanged)
     Q_PROPERTY(QString commandPreview READ commandPreview NOTIFY commandPreviewChanged)
     Q_PROPERTY(LogModel *logModel READ logModel CONSTANT)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -50,6 +52,7 @@ public:
 
     Status status() const;
     QString statusText() const;
+    bool preflightReady() const;
     bool canStart() const;
     bool canStop() const;
     bool active() const;
@@ -57,6 +60,7 @@ public:
     QString uptime() const;
     bool serviceReady() const;
     QString serviceUrl() const;
+    QString acceleratorSummary() const;
     QString commandPreview() const;
     LogModel *logModel() const;
     QString lastError() const;
@@ -68,6 +72,7 @@ public:
     Q_INVOKABLE void shutdown();
     Q_INVOKABLE bool openCommandPrompt();
     Q_INVOKABLE bool exportLog(const QUrl &fileUrl);
+    void setPreflightReady(bool ready);
     void retranslate();
 
 signals:
@@ -76,6 +81,7 @@ signals:
     void serviceReadyChanged();
     void commandPreviewChanged();
     void lastErrorChanged();
+    void preflightBlocked(const QString &message);
 
 private:
     void setStatus(Status status);
@@ -96,6 +102,8 @@ private:
     void finishZludaBootstrap();
     void drainZludaProbeOutput();
     void handleZludaProbeTimeout();
+    void updateAcceleratorSummary(ZludaBootstrap::BackendKind backend,
+                                  const ZludaBootstrap::Detection &detection = {});
     void beginDependencyCheck();
     void handleDependencyCheckStarted();
     void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -112,6 +120,7 @@ private:
     QProcess m_zludaProbe;
     QProcess m_dependencyCheck;
     QProcess m_dependencyInstall;
+    QProcess m_commandPrompt;
     QStringList m_dependencyPendingInstalls;
     QStringList m_dependencyRecheckPaths;
     QString m_dependencyBatPath;
@@ -140,14 +149,17 @@ private:
     QTimer m_zludaProbeTimer;
     QElapsedTimer m_elapsed;
     ProcessJob m_processJob;
+    ProcessJob m_commandPromptJob;
     Status m_status = Stopped;
     qint64 m_processId = 0;
     QString m_uptime = QStringLiteral("00:00:00");
     bool m_serviceReady = false;
     QString m_serviceUrl;
+    QString m_acceleratorSummary;
     QString m_commandPreview;
     QString m_lastError;
     int m_lastExitCode = 0;
     bool m_stopRequested = false;
     bool m_startupAborted = false;
+    bool m_preflightReady = true;
 };
