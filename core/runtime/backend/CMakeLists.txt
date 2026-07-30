@@ -12,7 +12,8 @@ qt_add_library(minifox_runtime_backend STATIC
 )
 
 set(minifox_zluda_package_files
-    ${PROJECT_SOURCE_DIR}/assets/zluda/zluda.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/zluda-hip57.extpack
+    ${PROJECT_SOURCE_DIR}/assets/zluda/zluda-hip71.extpack
 )
 
 qt_add_resources(minifox_runtime_backend minifox_zluda_packages

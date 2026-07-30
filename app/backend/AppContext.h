@@ -10,6 +10,8 @@
 #include "WindowChromeController.h"
 
 #include <QObject>
+#include <QPointer>
+#include <QThread>
 #include <QTranslator>
 
 class QQmlEngine;
@@ -28,6 +30,7 @@ class AppContext final : public QObject
 
 public:
     explicit AppContext(QObject *parent = nullptr);
+    ~AppContext() override;
 
     ApplicationIconManager *appIcon() const;
     ConfigurationManager *configuration() const;
@@ -50,6 +53,7 @@ private:
     SkinManager *m_skins;
     WindowChromeController *m_windowChrome;
     VersionManager *m_versions;
+    QPointer<QThread> m_zludaPreloadThread;
     QQmlEngine *m_qmlEngine = nullptr;
     QTranslator m_translator;
 };

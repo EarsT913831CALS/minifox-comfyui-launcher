@@ -4,14 +4,18 @@
 #include "ApplicationSettings.h"
 #include "ConfigurationManager.h"
 #include "HardwareManager.h"
+#include "PortablePaths.h"
 #include "RuntimeManager.h"
 #include "SkinManager.h"
 #include "VersionManager.h"
 #include "WindowChromeController.h"
+#include "ZludaBootstrap.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QLocale>
 #include <QQmlEngine>
+#include <QThread>
 
 AppContext::AppContext(QObject *parent)
     : QObject(parent),
@@ -24,8 +28,38 @@ AppContext::AppContext(QObject *parent)
       m_windowChrome(new WindowChromeController(this)),
       m_versions(new VersionManager(m_configuration, this))
 {
+    QString portableError;
+    if (!PortablePaths::ensureDataDirectory(&portableError)) {
+        qWarning().noquote() << portableError;
+    }
+    const QString applicationDirectory = QCoreApplication::applicationDirPath();
+    m_zludaPreloadThread = QThread::create([applicationDirectory] {
+        QString preloadError;
+        if (!ZludaBootstrap::preloadEmbeddedPackages(applicationDirectory, &preloadError)) {
+            qWarning().noquote() << preloadError;
+        }
+    });
+    connect(m_zludaPreloadThread, &QThread::finished,
+            m_zludaPreloadThread, &QObject::deleteLater);
+    m_zludaPreloadThread->start();
+
+    const auto syncRuntimePreflight = [this] {
+        m_runtime->setPreflightReady(!m_hardware->detecting());
+    };
+    connect(m_hardware, &HardwareManager::detectionChanged,
+            m_runtime, syncRuntimePreflight);
+    syncRuntimePreflight();
+
     connect(m_settings, &ApplicationSettings::languageChanged, this, &AppContext::applyLanguage);
     applyLanguage();
+}
+
+AppContext::~AppContext()
+{
+    if (m_zludaPreloadThread && m_zludaPreloadThread->isRunning()) {
+        m_zludaPreloadThread->requestInterruption();
+        m_zludaPreloadThread->wait();
+    }
 }
 
 ApplicationIconManager *AppContext::appIcon() const { return m_appIcon; }

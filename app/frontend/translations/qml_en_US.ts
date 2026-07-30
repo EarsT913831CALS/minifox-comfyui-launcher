@@ -725,6 +725,11 @@
         <translation>CUDA device detection timed out.</translation>
     </message>
     <message>
+        <location filename="../../backend/HardwareManager.cpp" line="48"/>
+        <source>硬件和 PyTorch 检测超时。</source>
+        <translation>Hardware and PyTorch detection timed out.</translation>
+    </message>
+    <message>
         <location filename="../../backend/HardwareManager.cpp" line="79"/>
         <source>正在检测 CUDA 设备…</source>
         <translation>Detecting CUDA devices…</translation>
@@ -773,6 +778,11 @@
         <location filename="../../backend/HardwareManager.cpp" line="239"/>
         <source>PyTorch reported NVIDIA CUDA on an AMD-only system; ZLUDA was not enabled.</source>
         <translation>PyTorch reported NVIDIA CUDA on an AMD-only system; ZLUDA was not enabled.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/HardwareManager.cpp" line="247"/>
+        <source>检测到 AMD 显卡；ZLUDA 将在启动 ComfyUI 时检查。</source>
+        <translation>AMD GPU detected; ZLUDA will be checked when ComfyUI starts.</translation>
     </message>
     <message>
         <location filename="../../backend/HardwareManager.cpp" line="298"/>
@@ -1051,6 +1061,11 @@
         <source>关闭启动器会停止正在运行的 ComfyUI，并释放其占用的浏览器端口。确定要退出吗？</source>
         <translation>Closing the launcher will stop ComfyUI and release its browser port. Are you sure you want to exit?</translation>
     </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="234"/>
+        <source>硬件和 PyTorch 检测失败：%1</source>
+        <translation>Hardware and PyTorch detection failed: %1</translation>
+    </message>
 </context>
 <context>
     <name>NavigationRail</name>
@@ -1261,6 +1276,31 @@
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="433"/>
         <source>正在启动配置“%1”…</source>
         <translation>Starting profile “%1”…</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="430"/>
+        <source>正在检测硬件和 PyTorch 环境，请稍后再启动。</source>
+        <translation>Detecting hardware and the PyTorch environment. Please start again in a moment.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="771"/>
+        <source>NVIDIA CUDA</source>
+        <translation>NVIDIA CUDA</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="778"/>
+        <source>PyTorch %1</source>
+        <translation>PyTorch %1</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="785"/>
+        <source>启动命令提示符已经打开。</source>
+        <translation>The launch command prompt is already open.</translation>
+    </message>
+    <message>
+        <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="827"/>
+        <source>无法将启动命令提示符加入安全作业，已关闭该窗口。</source>
+        <translation>Could not add the launch command prompt to the protected job, so the window was closed.</translation>
     </message>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="1143"/>
@@ -2716,6 +2756,11 @@
         <location filename="../../backend/VersionManager.cpp" line="1669"/>
         <source>无法创建 %1 的依赖安装脚本。</source>
         <translation>The dependency installation script for %1 could not be created.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="1687"/>
+        <source>无法将 %1 的依赖安装窗口加入安全作业。</source>
+        <translation>Could not add the dependency installation window for %1 to the protected job.</translation>
     </message>
     <message>
         <location filename="../../backend/VersionManager.cpp" line="1705"/>

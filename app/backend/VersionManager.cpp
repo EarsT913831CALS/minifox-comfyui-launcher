@@ -1683,12 +1683,23 @@ void VersionManager::handleDependencyCheckFinished(int exitCode, QProcess::ExitS
         QStringLiteral("cmd"), QStringLiteral("/c"),
         QDir::toNativeSeparators(m_dependencyBatPath)});
     m_dependencyProcess.start();
+    if (!m_dependencyProcess.waitForStarted(3000)
+        || !m_dependencyJob.attach(m_dependencyProcess.processId())) {
+        if (m_dependencyProcess.state() != QProcess::NotRunning) {
+            m_dependencyProcess.kill();
+        }
+        m_dependencyJob.reset();
+        m_dependencyInstallPhase = false;
+        emit dependencyInstallCompleted(false, tr("无法将 %1 的依赖安装窗口加入安全作业。").arg(name));
+        startNextDependencyCheck();
+    }
 }
 
 void VersionManager::handleDependencyInstallFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitCode);
     Q_UNUSED(exitStatus);
+    m_dependencyJob.reset();
     m_dependencyInstallPhase = false;
     const QString name = QFileInfo(m_dependencyDir).fileName();
     int code = -1;

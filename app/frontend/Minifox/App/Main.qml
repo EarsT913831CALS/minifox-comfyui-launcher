@@ -22,6 +22,7 @@ ApplicationWindow {
         default: return window.availableAspectRatio;
         }
     }
+    property string toastMessage: ""
 
     width: 1440
     height: 900
@@ -110,7 +111,22 @@ ApplicationWindow {
         value: window.effectiveAspectRatio
     }
 
-    Component.onCompleted: window.appContext.windowChrome.attach(window)
+    Component.onCompleted: {
+        window.appContext.windowChrome.attach(window);
+        if (!window.appContext.hardware.detecting
+            && window.appContext.hardware.lastError.length > 0) {
+            window.showToast(qsTr("硬件和 PyTorch 检测失败：%1")
+                             .arg(window.appContext.hardware.lastError));
+        }
+    }
+
+    function showToast(message) {
+        if (!message || message.length === 0)
+            return;
+        toastMessage = message;
+        preflightToast.open();
+        toastTimer.restart();
+    }
 
     SkinImage {
         anchors.fill: parent
@@ -174,6 +190,65 @@ ApplicationWindow {
                 window.allowClose = true;
                 window.appContext.runtime.shutdown();
                 window.close();
+            }
+        }
+
+        Popup {
+            id: preflightToast
+
+            parent: designSurface
+            x: Math.max(Theme.spacingLg, designSurface.width - width - Theme.spacingLg)
+            y: Math.max(Theme.spacingLg, designSurface.height - height - Theme.spacingLg)
+            width: Math.min(520, Math.max(320, designSurface.width - Theme.spacingLg * 2))
+            modal: false
+            focus: false
+            padding: Theme.spacingMd
+            closePolicy: Popup.NoAutoClose
+
+            background: Rectangle {
+                radius: Theme.radius
+                color: Theme.surfaceRaised
+                border.width: 1
+                border.color: Theme.outline
+            }
+
+            contentItem: AppLabel {
+                text: window.toastMessage
+                color: Theme.foreground
+                wrapMode: Text.Wrap
+            }
+        }
+
+        Timer {
+            id: toastTimer
+
+            interval: 3500
+            repeat: false
+            onTriggered: preflightToast.close()
+        }
+
+        Connections {
+            target: window.appContext.runtime
+
+            function onPreflightBlocked(message) {
+                window.showToast(message);
+            }
+        }
+
+        Connections {
+            target: window.appContext.hardware
+
+            property bool wasDetecting: window.appContext.hardware.detecting
+
+            function onDetectionChanged() {
+                if (window.appContext.hardware.detecting) {
+                    wasDetecting = true;
+                    return;
+                }
+                if (wasDetecting && window.appContext.hardware.lastError.length > 0)
+                    window.showToast(qsTr("硬件和 PyTorch 检测失败：%1")
+                                     .arg(window.appContext.hardware.lastError));
+                wasDetecting = false;
             }
         }
     }

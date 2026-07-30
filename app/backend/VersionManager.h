@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ProcessJob.h"
+
 #include <QObject>
 #include <QNetworkAccessManager>
 #include <QPointer>
@@ -197,6 +199,7 @@ private:
     QProcess m_process;
     QTimer m_gitTimeout;
     QProcess m_dependencyProcess;
+    ProcessJob m_dependencyJob;
     QTimer m_dependencyTimeout;
     QStringList m_dependencyQueue;
     QString m_dependencyDir;

@@ -37,13 +37,13 @@ HardwareManager::HardwareManager(ConfigurationManager *configuration, QObject *p
     });
 
     m_timeout.setSingleShot(true);
-    m_timeout.setInterval(15000);
+    m_timeout.setInterval(30000);
     connect(&m_timeout, &QTimer::timeout, this, [this] {
         const DetectionMode timedOutMode = m_mode;
         m_mode = DetectionMode::None;
         m_process.kill();
         if (timedOutMode == DetectionMode::Python) {
-            QTimer::singleShot(0, this, &HardwareManager::continueAfterPythonProbe);
+            finishWithError(tr("硬件和 PyTorch 检测超时。"));
         } else if (timedOutMode == DetectionMode::PythonZluda) {
             m_zludaLastError = tr("ZLUDA PyTorch 检测超时");
             QTimer::singleShot(0, this, &HardwareManager::startNextZludaPythonDetection);
@@ -239,7 +239,14 @@ void HardwareManager::continueAfterPythonProbe()
             finishWithError(tr("PyTorch reported NVIDIA CUDA on an AMD-only system; ZLUDA was not enabled."));
             return;
         }
-        QTimer::singleShot(0, this, &HardwareManager::startZludaPythonDetection);
+        // Keep launcher startup responsive: the UI preflight only verifies the
+        // selected Python and system adapter class. Portable ZLUDA injection is
+        // still validated by RuntimeManager immediately before ComfyUI starts,
+        // where failures can be reported in the launch log.
+        m_detectionSource = tr("检测到 AMD 显卡；ZLUDA 将在启动 ComfyUI 时检查。");
+        m_detecting = false;
+        m_lastError.clear();
+        emit detectionChanged();
         return;
     }
 
@@ -259,7 +266,7 @@ void HardwareManager::startProcess(DetectionMode mode,
     m_process.setProgram(program);
     m_process.setArguments(arguments);
     m_process.start();
-    m_timeout.setInterval(mode == DetectionMode::PythonZluda ? 60000 : 15000);
+    m_timeout.setInterval(30000);
     m_timeout.start();
 }
 

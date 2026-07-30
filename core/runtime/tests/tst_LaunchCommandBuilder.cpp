@@ -71,7 +71,7 @@ private slots:
     void zludaRuntimePreparationStagesAliases();
     void zludaLocalIntegrationWhenConfigured();
     void zludaRuntimeManagerIntegrationWhenConfigured();
-    void hardwareManagerDetectsPortableZludaWhenConfigured();
+    void hardwareManagerDefersPortableZludaUntilLaunch();
     void runtimeShutdownReleasesChildPort();
     void profilesPersistWithoutLeavingTheTestDirectory();
     void tqdmProgressIsSeparatedFromConsoleLog();
@@ -805,6 +805,7 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
 
     const QString rocmBin = root.filePath(QStringLiteral("rocm/bin"));
     QVERIFY(writeFile(QDir(rocmBin).filePath(QStringLiteral("amdhip64.dll")), QByteArrayLiteral("hip")));
+    QVERIFY(writeFile(QDir(rocmBin).filePath(QStringLiteral("hipInfo.exe")), QByteArrayLiteral("hipinfo")));
     const QString tensileLibrary =
         QDir(rocmBin).filePath(QStringLiteral("rocblas/library"));
     QVERIFY(writeFile(QDir(tensileLibrary).filePath(
@@ -820,7 +821,7 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
         pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
     QVERIFY2(preparation.valid, qPrintable(preparation.error));
     QCOMPARE(QDir::cleanPath(preparation.sourceDirectory),
-             QDir::cleanPath(root.filePath(QStringLiteral(".minifox/packages/zluda"))));
+             QDir::cleanPath(root.filePath(QStringLiteral(".minifox/packages/zluda-hip57"))));
     QCOMPARE(preparation.gfxArchitecture, QStringLiteral("gfx903"));
     QCOMPARE(QDir::cleanPath(preparation.tensileLibraryDirectory),
              QDir::cleanPath(tensileLibrary));
@@ -848,7 +849,7 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
     QVERIFY(!bootstrapScript.contains("import torch as"));
     bootstrapFile.close();
     QVERIFY(QFileInfo::exists(
-        root.filePath(QStringLiteral(".minifox/packages/zluda.extpack"))));
+        root.filePath(QStringLiteral(".minifox/packages/zluda-hip57"))));
     QVERIFY(!QFileInfo::exists(
         root.filePath(QStringLiteral(".minifox/packages/tensile-gfx903.extpack"))));
     QVERIFY(QFileInfo::exists(QDir(preparation.tensileLibraryDirectory).filePath(
@@ -997,7 +998,7 @@ void LaunchCommandBuilderTest::zludaRuntimeManagerIntegrationWhenConfigured()
     runtime.shutdown();
 }
 
-void LaunchCommandBuilderTest::hardwareManagerDetectsPortableZludaWhenConfigured()
+void LaunchCommandBuilderTest::hardwareManagerDefersPortableZludaUntilLaunch()
 {
     const QString pythonPath = qEnvironmentVariable("MINIFOX_TEST_ZLUDA_PYTHON");
     const QString rocmPath = qEnvironmentVariable("MINIFOX_TEST_ROCM_PATH");
@@ -1019,17 +1020,13 @@ void LaunchCommandBuilderTest::hardwareManagerDetectsPortableZludaWhenConfigured
         environmentIndex, QStringLiteral("HIP_PATH"), rocmPath, true);
 
     HardwareManager hardware(&configuration);
-    QTRY_VERIFY_WITH_TIMEOUT(hardware.hasCuda() || !hardware.lastError().isEmpty(), 60000);
-    QVERIFY2(hardware.hasCuda(), qPrintable(hardware.lastError()));
-    QVERIFY2(hardware.detectionSource().contains(QStringLiteral("ZLUDA")),
+    QTRY_VERIFY_WITH_TIMEOUT(!hardware.detecting(), 60000);
+    QVERIFY2(hardware.lastError().isEmpty(), qPrintable(hardware.lastError()));
+    QVERIFY2(hardware.detectionSource().contains(QStringLiteral("ZLUDA 将在启动 ComfyUI 时检查")),
              qPrintable(QStringLiteral("source=%1 torch=%2 cuda=%3")
                             .arg(hardware.detectionSource(),
                                  hardware.torchVersion(),
                                  hardware.cudaRuntimeVersion())));
-    QVERIFY(!hardware.cudaDevices().isEmpty());
-    QVERIFY(hardware.cudaDevices().constFirst().toMap()
-                .value(QStringLiteral("name")).toString()
-                .contains(QStringLiteral("AMD"), Qt::CaseInsensitive));
 }
 
 void LaunchCommandBuilderTest::runtimeBlocksMissingDependencies()
