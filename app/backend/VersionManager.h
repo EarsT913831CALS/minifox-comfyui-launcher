@@ -90,7 +90,7 @@ public:
     Q_INVOKABLE void checkForUpdates();
     Q_INVOKABLE void updateComfyUi(int channel);
     Q_INVOKABLE void switchCoreVersion(const QString &commit, int channel);
-    Q_INVOKABLE void switchBranch(const QString &branch);
+    Q_INVOKABLE void switchBranch(const QString &branch, int repositorySource);
     Q_INVOKABLE void updateExtension(const QString &path);
     Q_INVOKABLE void updateAllExtensions();
     Q_INVOKABLE void loadExtensionVersions(const QString &path, const QString &currentCommit);
@@ -132,6 +132,8 @@ private:
         CheckoutCore,
         ResetCoreForBranch,
         CleanCoreForBranch,
+        SetCoreBranchRemote,
+        FetchCoreBranchRemote,
         CheckoutBranch,
         ValidateExtensionUpdate,
         PrepareExtensionUpdateFetch,
@@ -237,6 +239,7 @@ private:
     QString m_developmentRemoteBranch;
     QString m_pendingCommit;
     QString m_pendingBranch;
+    QString m_pendingBranchRemoteUrl;
     QString m_extensionHistoryCurrentCommit;
     int m_requestedCoreChannel = 0;
     QStringList m_extensionUpdateQueue;
