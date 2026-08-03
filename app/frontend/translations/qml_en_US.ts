@@ -2969,40 +2969,19 @@
         <translation>Extension URL</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="736"/>
-        <source>切换分支</source>
-        <translation>Switch Branch</translation>
+        <location filename="../Minifox/App/VersionPage.qml" line="350"/>
+        <source>Comfy-Org/ComfyUI · master（官方）</source>
+        <translation>Comfy-Org/ComfyUI · master (Official)</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="739"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="909"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="351"/>
+        <source>IndexMirror/ComfyUI · master（国内镜像）</source>
+        <translation>IndexMirror/ComfyUI · master (China mirror)</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="871"/>
         <source>取消</source>
         <translation>Cancel</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="756"/>
-        <source>分支名称</source>
-        <translation>Branch name</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="766"/>
-        <source>切换会强制还原已修改和已删除的核心文件，并删除未跟踪文件。被 .gitignore 保护的模型、输出和扩展数据不会删除。</source>
-        <translation>Switching forcibly restores modified and deleted core files and removes untracked files. Models, output, and extension data protected by .gitignore are not deleted.</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="773"/>
-        <source>网络路线：</source>
-        <translation>Network route:</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="779"/>
-        <source>官方源（GitHub 直连）</source>
-        <translation>Official source (direct GitHub connection)</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="787"/>
-        <source>国内代理加速（敬请期待）</source>
-        <translation>China mirror acceleration (coming soon)</translation>
     </message>
     <message>
         <location filename="../Minifox/App/VersionPage.qml" line="801"/>

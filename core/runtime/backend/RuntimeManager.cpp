@@ -77,6 +77,22 @@ void forceKillProcessTree(qint64 processId)
 #endif
 }
 
+#ifdef Q_OS_WIN
+void configureInteractiveConsole(QProcess::CreateProcessArguments *arguments)
+{
+    arguments->flags &= ~CREATE_NO_WINDOW;
+    arguments->flags |= CREATE_NEW_CONSOLE;
+    if (arguments->startupInfo) {
+        // A GUI launcher has no interactive standard input. Let Windows create
+        // normal CONIN$/CONOUT$ handles for the newly-created console.
+        arguments->startupInfo->dwFlags &= ~STARTF_USESTDHANDLES;
+        arguments->startupInfo->hStdInput = nullptr;
+        arguments->startupInfo->hStdOutput = nullptr;
+        arguments->startupInfo->hStdError = nullptr;
+    }
+}
+#endif
+
 // Offline requirements checker: inspects only the selected interpreter's installed
 // metadata.  It never contacts an index and never installs or changes a package.
 // Every positional argument is one requirements.txt; each gets its own result entry
@@ -830,10 +846,7 @@ bool RuntimeManager::openCommandPrompt()
     m_commandPrompt.setProgram(promptCommand.program);
     m_commandPrompt.setNativeArguments(promptCommand.nativeArguments);
 #ifdef Q_OS_WIN
-    m_commandPrompt.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments) {
-        arguments->flags &= ~CREATE_NO_WINDOW;
-        arguments->flags |= CREATE_NEW_CONSOLE;
-    });
+    m_commandPrompt.setCreateProcessArgumentsModifier(configureInteractiveConsole);
 #endif
     m_commandPrompt.start();
     if (!m_commandPrompt.waitForStarted(3000)) {
@@ -1132,11 +1145,7 @@ void RuntimeManager::startNextDependencyInstall()
     m_dependencyInstall.setArguments({QStringLiteral("/c"),
                                       QDir::toNativeSeparators(m_dependencyBatPath)});
 #ifdef Q_OS_WIN
-    m_dependencyInstall.setCreateProcessArgumentsModifier(
-        [](QProcess::CreateProcessArguments *arguments) {
-            arguments->flags &= ~CREATE_NO_WINDOW;
-            arguments->flags |= CREATE_NEW_CONSOLE;
-        });
+    m_dependencyInstall.setCreateProcessArgumentsModifier(configureInteractiveConsole);
 #endif
     m_logModel->appendSystemMessage(
         tr("正在安装 %1 的依赖（安装窗口关闭后继续）…").arg(name),

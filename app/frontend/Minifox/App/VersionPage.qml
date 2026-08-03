@@ -12,6 +12,9 @@ Pane {
     readonly property var versions: appContext.versions
     property int selectedTab: 0
     property int coreChannel: 0
+    property int branchRepositorySource: String(versions.remoteUrl).toLowerCase().indexOf(
+                                             "cnb.cool/indexmirror/comfyui") >= 0 ? 1 : 0
+    property bool branchSwitchPending: false
     property string installedSearch: ""
     property string availableSearch: ""
     property string extensionUrl: ""
@@ -185,6 +188,10 @@ Pane {
             refreshNotice.success = success;
             refreshNotice.message = message;
             refreshNotice.open();
+            if (root.branchSwitchPending) {
+                if (success) root.coreChannel = 0;
+                root.branchSwitchPending = false;
+            }
             if (success && root.selectedTab === 2) root.extensionUrl = "";
         }
 
@@ -336,14 +343,34 @@ Pane {
                             }
                         }
 
-                        AppButton {
-                            text: qsTr("⚯  切换分支")
-                            enabled: root.versions.canCheck
-                            Layout.preferredHeight: 34
-                            leftPadding: 12
-                            rightPadding: 12
-                            font.pointSize: root.tableFontSize
-                            onClicked: branchDialog.open()
+                        ColumnLayout {
+                            Layout.preferredWidth: Math.min(420, Math.max(320, root.width * 0.3))
+                            spacing: Theme.spacingMd
+
+                            AppComboBox {
+                                Layout.fillWidth: true
+                                model: [
+                                    qsTr("Comfy-Org/ComfyUI · master（官方）"),
+                                    qsTr("IndexMirror/ComfyUI · master（国内镜像）")
+                                ]
+                                currentIndex: root.branchRepositorySource
+                                onActivated: index => root.branchRepositorySource = index
+                            }
+
+                            AppButton {
+                                text: qsTr("⚯  切换分支")
+                                enabled: root.versions.canCheck
+                                Layout.alignment: Qt.AlignRight
+                                Layout.preferredHeight: 34
+                                leftPadding: 12
+                                rightPadding: 12
+                                font.pointSize: root.tableFontSize
+                                onClicked: {
+                                    root.branchSwitchPending = true;
+                                    root.versions.switchBranch(
+                                        "master", root.branchRepositorySource);
+                                }
+                            }
                         }
                     }
 
@@ -725,70 +752,6 @@ Pane {
             id: refreshNoticeTimer
             interval: 5000
             onTriggered: refreshNotice.close()
-        }
-    }
-
-    AppDialog {
-        id: branchDialog
-        anchors.centerIn: Overlay.overlay
-        width: Math.min(480, root.width - Theme.spacingXl * 2)
-        modal: true
-        title: qsTr("切换分支")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        acceptText: qsTr("切换")
-        rejectText: qsTr("取消")
-        destructiveAccept: true
-        onOpened: {
-            branchField.text = root.versions.branch;
-            branchField.forceActiveFocus();
-            branchField.selectAll();
-        }
-        onAccepted: root.versions.switchBranch(branchField.text)
-
-        ButtonGroup { id: routeGroup }
-
-        contentItem: ColumnLayout {
-            spacing: Theme.spacingMd
-
-            AppTextField {
-                id: branchField
-                Layout.fillWidth: true
-                placeholderText: qsTr("分支名称")
-            }
-
-            CtrlRemoteLink {
-                Layout.fillWidth: true
-                remoteUrl: root.versions.remoteUrl
-            }
-
-            AppLabel {
-                Layout.fillWidth: true
-                text: qsTr("切换会强制还原已修改和已删除的核心文件，并删除未跟踪文件。被 .gitignore 保护的模型、输出和扩展数据不会删除。")
-                color: Theme.warning
-                wrapMode: Text.WordWrap
-                font.pointSize: root.tableFontSize
-            }
-
-            AppLabel {
-                text: qsTr("网络路线：")
-                color: Theme.foregroundSecondary
-                font.pointSize: root.tableFontSize
-            }
-
-            RadioButton {
-                text: qsTr("官方源（GitHub 直连）")
-                checked: true
-                ButtonGroup.group: routeGroup
-                font.pointSize: root.tableFontSize
-                onToggled: if (checked) root.versions.networkRoute = 0
-            }
-
-            RadioButton {
-                text: qsTr("国内代理加速（敬请期待）")
-                enabled: false
-                ButtonGroup.group: routeGroup
-                font.pointSize: root.tableFontSize
-            }
         }
     }
 

@@ -27,6 +27,9 @@
 
 namespace {
 
+constexpr auto kOfficialComfyUiRemote = "https://github.com/Comfy-Org/ComfyUI.git";
+constexpr auto kCnbComfyUiRemote = "https://cnb.cool/IndexMirror/ComfyUI.git";
+
 bool isIgnoredCoreWorkingTreeEntry(const QString &statusLine)
 {
     if (statusLine.size() < 3) {
@@ -339,7 +342,7 @@ void VersionManager::switchCoreVersion(const QString &commit, int channel)
                  {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
 }
 
-void VersionManager::switchBranch(const QString &branch)
+void VersionManager::switchBranch(const QString &branch, int repositorySource)
 {
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("分支已切换。");
@@ -352,6 +355,9 @@ void VersionManager::switchBranch(const QString &branch)
         return;
     }
     m_pendingBranch = branch.trimmed();
+    m_pendingBranchRemoteUrl = repositorySource == 1
+        ? QString::fromLatin1(kCnbComfyUiRemote)
+        : QString::fromLatin1(kOfficialComfyUiRemote);
     startGit(Operation::ResetCoreForBranch,
              repositoryArguments(m_comfyRoot,
                  {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
@@ -530,6 +536,8 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::CheckoutCore: m_statusMessage = tr("正在切换核心版本…"); break;
     case Operation::ResetCoreForBranch: m_statusMessage = tr("正在重置核心目录…"); break;
     case Operation::CleanCoreForBranch: m_statusMessage = tr("正在清理核心目录…"); break;
+    case Operation::SetCoreBranchRemote:
+    case Operation::FetchCoreBranchRemote:
     case Operation::CheckoutBranch: m_statusMessage = tr("正在切换分支…"); break;
     case Operation::NormalizeBranch: m_statusMessage = tr("正在校正分支…"); break;
     case Operation::ValidateExtensionUpdate:
@@ -547,6 +555,7 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     emit stateChanged();
     if (operation == Operation::Fetch
         || operation == Operation::PrepareCoreUpdateFetch
+        || operation == Operation::FetchCoreBranchRemote
         || operation == Operation::PrepareExtensionUpdateFetch) {
         m_gitTimeout.start(30000);
     } else {
@@ -622,9 +631,24 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                      {QStringLiteral("clean"), QStringLiteral("-ffd")}));
         break;
     case Operation::CleanCoreForBranch:
+        startGit(Operation::SetCoreBranchRemote,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("remote"), QStringLiteral("set-url"),
+                      QStringLiteral("origin"), m_pendingBranchRemoteUrl}));
+        break;
+    case Operation::SetCoreBranchRemote:
+        startGit(Operation::FetchCoreBranchRemote,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("fetch"), QStringLiteral("--tags"),
+                      QStringLiteral("--prune"), QStringLiteral("--quiet"),
+                      QStringLiteral("origin")}));
+        break;
+    case Operation::FetchCoreBranchRemote:
         startGit(Operation::CheckoutBranch,
                  repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("checkout"), m_pendingBranch}));
+                     {QStringLiteral("checkout"), QStringLiteral("--track"),
+                      QStringLiteral("-B"), m_pendingBranch,
+                      QStringLiteral("origin/") + m_pendingBranch}));
         break;
     case Operation::RefreshLog: {
         const QStringList parts = output.split(QChar(0x1f));
