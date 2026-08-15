@@ -1637,7 +1637,10 @@ void LaunchCommandBuilderTest::attentionOptionsUseRequestedOrderAndFlags()
                                   QStringLiteral("pytorch"), QStringLiteral("sage"),
                                   QStringLiteral("quad"), QStringLiteral("flash"),
                                   QStringLiteral("split")}));
-    QCOMPARE(labels, QStringList({QStringLiteral("默认（自动选择）"),
+    const QString defaultLabel = QLocale().language() == QLocale::English
+        ? QStringLiteral("Default (automatic selection)")
+        : QStringLiteral("默认（自动选择）");
+    QCOMPARE(labels, QStringList({defaultLabel,
                                   QStringLiteral("Comfy-Kitchen Attention"),
                                   QStringLiteral("SDP Attention"),
                                   QStringLiteral("Sage Attention"),
