@@ -126,6 +126,7 @@ MaterialPanel {
 
                     AppButton {
                         text: qsTr("使用此设备")
+                        compact: true
                         onClicked: root.hardware.useDevice(deviceDelegate.modelData.index)
                     }
                 }
@@ -157,6 +158,7 @@ MaterialPanel {
 
             AppButton {
                 text: qsTr("重新检测")
+                compact: true
                 enabled: !root.hardware.detecting
                 onClicked: root.hardware.detect()
             }
@@ -165,6 +167,7 @@ MaterialPanel {
                 visible: root.hardware.cudaDevices.length > 1
                 text: qsTr("使用全部设备")
                 accented: true
+                compact: true
                 onClicked: root.hardware.applyAllDevices()
             }
         }

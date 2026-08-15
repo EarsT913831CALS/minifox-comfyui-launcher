@@ -14,11 +14,43 @@
 #include <QJsonParseError>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
+#include <QTextBoundaryFinder>
 #include <QUrl>
 #include <QUuid>
 
 namespace {
+
+int graphemeCount(const QString &text)
+{
+    QTextBoundaryFinder finder(QTextBoundaryFinder::Grapheme, text);
+    finder.toStart();
+    int count = 0;
+    while (finder.toNextBoundary() >= 0) {
+        ++count;
+    }
+    return count;
+}
+
+QString leftGraphemes(const QString &text, int maximumCharacters)
+{
+    if (text.isEmpty() || maximumCharacters <= 0) {
+        return {};
+    }
+
+    QTextBoundaryFinder finder(QTextBoundaryFinder::Grapheme, text);
+    finder.toStart();
+    int boundary = 0;
+    for (int count = 0; count < maximumCharacters; ++count) {
+        const int next = finder.toNextBoundary();
+        if (next < 0) {
+            return text;
+        }
+        boundary = next;
+    }
+    return finder.toNextBoundary() < 0 ? text : text.left(boundary);
+}
 
 QString existingBundledPython(const QString &comfyRoot)
 {
@@ -88,6 +120,21 @@ ConfigurationManager::ConfigurationManager(const QString &storagePath, QObject *
     validate();
 }
 
+QString ConfigurationManager::limitedProfileName(const QString &name, int maximumCharacters)
+{
+    const QString trimmed = name.trimmed();
+    return leftGraphemes(trimmed, maximumCharacters);
+}
+
+QString ConfigurationManager::profileNameWithSuffix(const QString &baseName,
+                                                    const QString &suffix)
+{
+    const QString limitedSuffix = leftGraphemes(suffix, MaximumProfileNameCharacters);
+    const int baseLimit = qMax(0, MaximumProfileNameCharacters
+                                    - graphemeCount(limitedSuffix));
+    return leftGraphemes(baseName.trimmed(), baseLimit) + limitedSuffix;
+}
+
 QStringList ConfigurationManager::profileNames() const
 {
     QStringList names;
@@ -96,6 +143,21 @@ QStringList ConfigurationManager::profileNames() const
         names.append(profile.name);
     }
     return names;
+}
+
+QVariantList ConfigurationManager::profileEntries() const
+{
+    QVariantList entries;
+    entries.reserve(m_profiles.size());
+    for (int index = 0; index < m_profiles.size(); ++index) {
+        const auto &profile = m_profiles.at(index);
+        entries.append(QVariantMap{
+            {QStringLiteral("id"), profile.id},
+            {QStringLiteral("name"), profile.name},
+            {QStringLiteral("current"), index == m_currentProfileIndex}
+        });
+    }
+    return entries;
 }
 
 int ConfigurationManager::currentProfileIndex() const
@@ -123,11 +185,11 @@ QString ConfigurationManager::currentProfileName() const
 
 void ConfigurationManager::setCurrentProfileName(const QString &name)
 {
-    const QString trimmedName = name.trimmed();
-    if (trimmedName.isEmpty() || trimmedName == currentProfile().name) {
+    const QString limitedName = limitedProfileName(name);
+    if (limitedName.isEmpty() || limitedName == currentProfile().name) {
         return;
     }
-    currentProfile().name = trimmedName;
+    currentProfile().name = limitedName;
     save();
     emit profilesChanged();
     emit currentProfileChanged();
@@ -269,9 +331,9 @@ void ConfigurationManager::setParameterValue(const QString &key, const QVariant 
 
 void ConfigurationManager::addProfile(const QString &name)
 {
-    const QString profileName = name.trimmed().isEmpty()
+    const QString profileName = limitedProfileName(name.trimmed().isEmpty()
         ? tr("新配置 %1").arg(m_profiles.size() + 1)
-        : name.trimmed();
+        : name);
     m_profiles.append(makeDefaultProfile(profileName));
     m_currentProfileIndex = m_profiles.size() - 1;
     ++m_parameterRevision;
@@ -286,7 +348,7 @@ void ConfigurationManager::duplicateCurrentProfile()
 {
     Profile copy = currentProfile();
     copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    copy.name = tr("%1 - 副本").arg(copy.name);
+    copy.name = profileNameWithSuffix(copy.name, tr(" - 副本"));
     m_profiles.append(copy);
     m_currentProfileIndex = m_profiles.size() - 1;
     ++m_parameterRevision;
@@ -297,14 +359,31 @@ void ConfigurationManager::duplicateCurrentProfile()
     emit parameterRevisionChanged();
 }
 
-bool ConfigurationManager::removeCurrentProfile()
+bool ConfigurationManager::removeProfiles(const QStringList &profileIds)
 {
-    if (m_profiles.size() <= 1) {
-        setLastError(tr("至少需要保留一个启动配置。"));
+    QSet<QString> requested(profileIds.cbegin(), profileIds.cend());
+    const QString currentId = currentProfile().id;
+    requested.remove(currentId);
+    if (requested.isEmpty()) {
+        setLastError(tr("当前使用的启动配置不能删除。"));
         return false;
     }
-    m_profiles.removeAt(m_currentProfileIndex);
-    m_currentProfileIndex = qMin(m_currentProfileIndex, m_profiles.size() - 1);
+
+    const qsizetype previousCount = m_profiles.size();
+    m_profiles.removeIf([&requested](const Profile &profile) {
+        return requested.contains(profile.id);
+    });
+    if (m_profiles.size() == previousCount) {
+        setLastError(tr("没有可删除的启动配置。"));
+        return false;
+    }
+
+    for (int index = 0; index < m_profiles.size(); ++index) {
+        if (m_profiles.at(index).id == currentId) {
+            m_currentProfileIndex = index;
+            break;
+        }
+    }
     ++m_parameterRevision;
     save();
     validate();
@@ -362,6 +441,23 @@ QVariantMap ConfigurationManager::currentProfileSnapshot() const
     };
 }
 
+QString ConfigurationManager::profileIdAt(int index) const
+{
+    return index >= 0 && index < m_profiles.size() ? m_profiles.at(index).id : QString{};
+}
+
+void ConfigurationManager::reloadFromDisk()
+{
+    m_profiles.clear();
+    m_currentProfileIndex = 0;
+    load();
+    validate();
+    ++m_parameterRevision;
+    emit profilesChanged();
+    emit currentProfileChanged();
+    emit parameterRevisionChanged();
+}
+
 ConfigurationManager::Profile &ConfigurationManager::currentProfile()
 {
     Q_ASSERT(!m_profiles.isEmpty());
@@ -379,7 +475,7 @@ ConfigurationManager::Profile ConfigurationManager::makeDefaultProfile(const QSt
     const QString comfyRoot = findDefaultComfyRoot();
     return {
         QUuid::createUuid().toString(QUuid::WithoutBraces),
-        name,
+        limitedProfileName(name),
         findDefaultPython(comfyRoot),
         comfyRoot,
         QString(),
@@ -417,13 +513,16 @@ void ConfigurationManager::load()
     const int schemaVersion = root.value(QStringLiteral("schemaVersion")).toInt(1);
     const bool migrationRequired = schemaVersion < 2;
     bool bundledPythonRepaired = false;
+    bool profileNamesNormalized = false;
     const QJsonArray profiles = root.value(QStringLiteral("profiles")).toArray();
     const QString currentId = root.value(QStringLiteral("currentProfileId")).toString();
     for (const auto &value : profiles) {
         const QJsonObject object = value.toObject();
         Profile profile;
         profile.id = object.value(QStringLiteral("id")).toString();
-        profile.name = object.value(QStringLiteral("name")).toString();
+        const QString storedName = object.value(QStringLiteral("name")).toString();
+        profile.name = limitedProfileName(storedName);
+        profileNamesNormalized = profileNamesNormalized || profile.name != storedName;
         profile.pythonPath = object.value(QStringLiteral("pythonPath")).toString();
         profile.comfyRoot = object.value(QStringLiteral("comfyRoot")).toString();
         profile.customArguments = object.value(QStringLiteral("customArguments")).toString();
@@ -468,7 +567,7 @@ void ConfigurationManager::load()
         m_currentProfileIndex = 0;
     }
 
-    if (migrationRequired || bundledPythonRepaired) {
+    if (migrationRequired || bundledPythonRepaired || profileNamesNormalized) {
         save();
     }
 }

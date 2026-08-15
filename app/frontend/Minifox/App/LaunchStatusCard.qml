@@ -87,6 +87,7 @@ MaterialPanel {
 
         RowLayout {
             Layout.fillWidth: true
+            Layout.topMargin: -Theme.spacingSm
             spacing: Theme.spacingMd
 
             Rectangle {
@@ -115,6 +116,7 @@ MaterialPanel {
             color: Theme.foregroundSecondary
             wrapMode: Text.WordWrap
             Layout.fillWidth: true
+            Layout.bottomMargin: Theme.spacingSm
         }
 
         Rectangle {
@@ -139,7 +141,7 @@ MaterialPanel {
                 model: root.appContext.configuration.profileNames
                 currentIndex: root.appContext.configuration.currentProfileIndex
                 Accessible.name: qsTr("当前启动配置")
-                onActivated: index => root.appContext.configuration.currentProfileIndex = index
+                onActivated: index => root.appContext.configurationPackages.switchProfile(index)
             }
 
             AppButton {

@@ -13,15 +13,15 @@
 
 Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs and can be placed directly into an existing ComfyUI portable package.
 
-Minifox does not use the Windows registry, modify the ComfyUI source tree, or include a browser or WebUI. The launcher displays the ComfyUI service address and readiness state, but launching, stopping, logs, version management, and runtime environment management always remain focused on the ComfyUI process itself.
+Minifox does not use the Windows registry, modify the ComfyUI source tree, or include a browser or WebUI.
 
 ## Features
 
 - Built-in defaults, with support for managing multiple ComfyUI launch profiles, arguments, and runtime environments
 - Launch, stop, and monitor the ComfyUI process, status, and console output
 - Manage ComfyUI core and extension versions, updates, and rollback
-- Detect NVIDIA, AMD, CUDA, ROCm, and eligible ZLUDA environments
-- A high degree of personalization freedom
+- Detect CUDA, ROCm, and eligible ZLUDA environments
+- Provide a high degree of freedom to personalize the home page
 
 ## Quick Start
 
@@ -44,13 +44,14 @@ The launcher detects the installed GPUs first, then inspects the PyTorch backend
 
 | Environment | Behavior |
 |---|---|
-| NVIDIA GPU | Uses the original CUDA/PyTorch environment |
-| AMD GPU with native ROCm PyTorch | Uses ROCm directly |
+| CUDA or ROCm | Uses native PyTorch |
 | AMD-only GPU with CUDA PyTorch | Prepares ZLUDA automatically |
 
-ZLUDA is not extracted or injected on NVIDIA, hybrid-GPU, or native ROCm environments.
+ZLUDA injection has the lowest priority.
 
-> **Compatibility:** HIP SDK 5.7 has been tested. Anything that uses CK (Composable Kernel) or MIOpen has not been tested and should not be considered supported or stable.
+> **Compatibility:** HIP SDK 5.7 + ZLUDA has been tested. Anything that uses CK (Composable Kernel) or MIOpen has not been tested and should not be considered supported or stable.
+
+> **Additional recommendation:** HIP SDK 7.1 + ZLUDA is supported, but its memory usage is less stable than the HIP SDK 5.7 combination. Native PyTorch (either a stable release or ROCm Preview 7.14 and later) is strongly recommended for AMD GPUs. If you use ZLUDA, use a compatible Triton wheel with it.
 
 ### AMD ZLUDA prerequisites
 
@@ -61,10 +62,9 @@ ZLUDA is not extracted or injected on NVIDIA, hybrid-GPU, or native ROCm environ
    <HIP_PATH>\bin\rocblas\library\
    ```
 
-3. Use a ComfyUI portable package originally built for NVIDIA/CUDA.
-4. If a workflow requires a custom Triton wheel, install it into the portable package's own Python environment.
+3. Use a ComfyUI portable package originally intended for NVIDIA GPUs.
 
-Minifox bundles general-purpose ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist.
+Minifox bundles HIP SDK 5.7 and HIP SDK 7.1 ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist.
 
 Only the general-purpose `assets/zluda/zluda.extpack` is stored in this repository and embedded in the launcher. On an eligible AMD-only environment, Minifox reads the actual `gcnArchName`, extracts the runtime under `.minifox`, prepares caches, and injects the required environment into the ComfyUI child process only.
 

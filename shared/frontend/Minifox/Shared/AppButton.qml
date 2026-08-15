@@ -5,25 +5,30 @@ Fluent.Button {
     id: control
 
     property bool accented: false
+    property bool compact: false
     property bool destructive: false
     property bool prominent: false
     readonly property int motionDuration: Theme.controlMotionDuration
 
     hoverEnabled: true
     activeFocusOnTab: true
-    implicitWidth: prominent
+    implicitWidth: compact
+                   ? Math.max(72, implicitContentWidth + leftPadding + rightPadding)
+                   : prominent
                    ? Math.max(196, implicitContentWidth + leftPadding + rightPadding)
                    : Math.max(96, implicitContentWidth + leftPadding + rightPadding)
-    implicitHeight: prominent ? Theme.prominentControlHeight : Theme.controlHeight
-    leftPadding: prominent ? 22 : 16
-    rightPadding: prominent ? 22 : 16
-    topPadding: 7
-    bottomPadding: 7
+    implicitHeight: compact ? 34
+                            : prominent ? Theme.prominentControlHeight : Theme.controlHeight
+    leftPadding: compact ? 12 : prominent ? 22 : 16
+    rightPadding: compact ? 12 : prominent ? 22 : 16
+    topPadding: compact ? 5 : 7
+    bottomPadding: compact ? 5 : 7
     spacing: Theme.spacingSm
     scale: !enabled ? 1.0 : down && hovered ? 0.97 : 1.0
     transformOrigin: Item.Center
     font.family: Theme.uiFontFamily
-    font.pointSize: prominent ? Theme.subtitleSize : Theme.bodySize
+    font.pointSize: compact ? Math.max(9, Theme.bodySize * 0.92)
+                            : prominent ? Theme.subtitleSize : Theme.bodySize
     palette.window: Theme.surface
     palette.windowText: Theme.foreground
     palette.text: Theme.foreground

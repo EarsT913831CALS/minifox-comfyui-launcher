@@ -119,16 +119,61 @@ Item {
             strong: true
             padding: Theme.spacingLg
 
-            function folderPath(kind) {
-                const base = root.appContext.configuration.comfyRoot;
-                if (kind === "root") return base;
-                if (kind === "custom_nodes") return base + "/custom_nodes";
-                if (kind === "input") return base + "/input";
-                return base + "/output";
+            readonly property var folderEntries: {
+                const configured = root.properties.folders;
+                return configured && configured.length > 0
+                       ? configured.slice(0, 8)
+                       : [
+                           {"kind": "root", "path": "${COMFYUI}"},
+                           {"kind": "custom_nodes", "path": "${COMFYUI}/custom_nodes"},
+                           {"kind": "input", "path": "${COMFYUI}/input"},
+                           {"kind": "output", "path": "${COMFYUI}/output"}
+                       ];
             }
 
-            function openFolder(kind) {
-                Qt.openUrlExternally("file:///" + folderPath(kind).replace(/\\/g, "/"));
+            function folderTitle(entry, index) {
+                if (entry.title && entry.title.length > 0)
+                    return entry.title;
+                if (entry.kind === "root") return qsTr("根目录");
+                if (entry.kind === "custom_nodes") return "custom_nodes";
+                if (entry.kind === "input") return "input";
+                if (entry.kind === "output") return "output";
+                return qsTr("文件夹 %1").arg(index + 1);
+            }
+
+            function requiredHeight(columns) {
+                const rows = Math.ceil(folderEntries.length / columns);
+                return 92 + rows * Theme.controlHeight
+                       + Math.max(0, rows - 1) * Theme.spacingSm;
+            }
+
+            function columnCount(pixelWidth, pixelHeight) {
+                if (folderEntries.length <= 1 || pixelWidth < 360)
+                    return 1;
+                return pixelWidth > 480 || pixelHeight < requiredHeight(1)
+                       ? 2 : 1;
+            }
+
+            function resolvedFolderPath(entry) {
+                let path = entry.path || "";
+                const comfyRoot = root.appContext.configuration.comfyRoot || "";
+                path = path.replace(/^\$\{COMFYUI\}/, comfyRoot);
+                if (path.length > 0
+                        && !/^[A-Za-z]:[\\/]/.test(path)
+                        && !path.startsWith("/")
+                        && !path.startsWith("file:")) {
+                    path = comfyRoot + "/" + path;
+                }
+                return path;
+            }
+
+            function openFolder(entry) {
+                const path = resolvedFolderPath(entry);
+                if (path.length === 0)
+                    return;
+                const url = path.startsWith("file:")
+                            ? path : "file:///" + path.replace(/\\/g, "/");
+                Qt.openUrlExternally(url);
             }
 
             ColumnLayout {
@@ -144,24 +189,22 @@ Item {
                 GridLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    columns: width > 480 ? 2 : 1
+                    columns: foldersPanel.columnCount(foldersPanel.width,
+                                                      foldersPanel.height)
                     columnSpacing: Theme.spacingSm
                     rowSpacing: Theme.spacingSm
 
                     Repeater {
-                        model: [
-                            { key: "root", title: qsTr("根目录"), icon: "\uE8B7" },
-                            { key: "custom_nodes", title: "custom_nodes", icon: "\uE8F1" },
-                            { key: "input", title: "input", icon: "\uE8B5" },
-                            { key: "output", title: "output", icon: "\uE8B5" }
-                        ]
+                        model: foldersPanel.folderEntries
 
                         AppButton {
+                            required property int index
                             required property var modelData
                             Layout.fillWidth: true
-                            text: modelData.title
+                            text: foldersPanel.folderTitle(modelData, index)
+                            enabled: foldersPanel.resolvedFolderPath(modelData).length > 0
                             icon.name: ""
-                            onClicked: foldersPanel.openFolder(modelData.key)
+                            onClicked: foldersPanel.openFolder(modelData)
                         }
                     }
                 }

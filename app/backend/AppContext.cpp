@@ -2,6 +2,7 @@
 
 #include "ApplicationIconManager.h"
 #include "ApplicationSettings.h"
+#include "ConfigurationPackageManager.h"
 #include "ConfigurationManager.h"
 #include "HardwareManager.h"
 #include "PortablePaths.h"
@@ -20,6 +21,7 @@
 AppContext::AppContext(QObject *parent)
     : QObject(parent),
       m_configuration(new ConfigurationManager({}, this)),
+      m_configurationPackages(new ConfigurationPackageManager(m_configuration, this)),
       m_settings(new ApplicationSettings({}, this)),
       m_appIcon(new ApplicationIconManager(m_settings, this)),
       m_hardware(new HardwareManager(m_configuration, this)),
@@ -64,6 +66,10 @@ AppContext::~AppContext()
 
 ApplicationIconManager *AppContext::appIcon() const { return m_appIcon; }
 ConfigurationManager *AppContext::configuration() const { return m_configuration; }
+ConfigurationPackageManager *AppContext::configurationPackages() const
+{
+    return m_configurationPackages;
+}
 HardwareManager *AppContext::hardware() const { return m_hardware; }
 RuntimeManager *AppContext::runtime() const { return m_runtime; }
 ApplicationSettings *AppContext::settings() const { return m_settings; }

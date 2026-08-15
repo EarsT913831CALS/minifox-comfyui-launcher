@@ -20,7 +20,7 @@ RowLayout {
 
     ColumnLayout {
         Layout.fillWidth: true
-        spacing: Theme.spacingXs
+        spacing: Theme.spacingSm
 
         AppLabel {
             text: root.title
@@ -34,6 +34,8 @@ RowLayout {
             text: root.description
             color: Theme.foregroundSecondary
             font.pointSize: Theme.bodySize
+            lineHeight: 1.18
+            lineHeightMode: Text.ProportionalHeight
             wrapMode: Text.Wrap
             Layout.fillWidth: true
         }

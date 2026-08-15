@@ -78,6 +78,9 @@ private slots:
     void carriageReturnLineEndingsRemainNormalLogLines();
     void consoleDisplayTextSupportsDocumentSelection();
     void consoleViewRefreshesWhenLogCountChanges();
+    void attentionOptionsUseRequestedOrderAndFlags();
+    void profileNamesAreLimitedAndSuffixesFit();
+    void currentProfileIsProtectedFromBatchDeletion();
     void catalogDefaultOptionsAreDescriptive();
     void englishCatalogContainsNoChineseLabels();
 };
@@ -537,9 +540,18 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
     QCOMPARE(restored.customArguments(), QStringLiteral("--custom value"));
     QCOMPARE(restored.environmentEntries().at(0).toMap().value(QStringLiteral("name")).toString(),
              QStringLiteral("CUSTOM_ENV"));
-    QVERIFY(restored.removeCurrentProfile());
+    QString inactiveProfileId;
+    for (const QVariant &entry : restored.profileEntries()) {
+        const QVariantMap profile = entry.toMap();
+        if (!profile.value(QStringLiteral("current")).toBool()) {
+            inactiveProfileId = profile.value(QStringLiteral("id")).toString();
+            break;
+        }
+    }
+    QVERIFY(!inactiveProfileId.isEmpty());
+    QVERIFY(restored.removeProfiles({inactiveProfileId}));
     QCOMPARE(restored.profileNames().size(), 1);
-    QVERIFY(!restored.removeCurrentProfile());
+    QCOMPARE(restored.currentProfileName(), QStringLiteral("GPU profile"));
 }
 
 void LaunchCommandBuilderTest::environmentEntriesAreValidatedAndLegacyDefaultsMigrated()
@@ -1594,6 +1606,122 @@ void LaunchCommandBuilderTest::englishCatalogContainsNoChineseLabels()
         }
     }
     QLocale::setDefault(previousLocale);
+}
+
+void LaunchCommandBuilderTest::attentionOptionsUseRequestedOrderAndFlags()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ConfigurationManager manager(directory.filePath(QStringLiteral("profiles.json")));
+
+    QVariantMap attention;
+    for (const QVariant &entry : manager.parametersForCategory(QStringLiteral("performance"))) {
+        const QVariantMap parameter = entry.toMap();
+        if (parameter.value(QStringLiteral("key")).toString() == QStringLiteral("attention")) {
+            attention = parameter;
+            break;
+        }
+    }
+    QVERIFY(!attention.isEmpty());
+
+    QStringList values;
+    QStringList labels;
+    QStringList flags;
+    for (const QVariant &entry : attention.value(QStringLiteral("options")).toList()) {
+        const QVariantMap option = entry.toMap();
+        values.append(option.value(QStringLiteral("value")).toString());
+        labels.append(option.value(QStringLiteral("label")).toString());
+        flags.append(option.value(QStringLiteral("argument")).toString());
+    }
+    QCOMPARE(values, QStringList({QString(), QStringLiteral("ck"),
+                                  QStringLiteral("pytorch"), QStringLiteral("sage"),
+                                  QStringLiteral("quad"), QStringLiteral("flash"),
+                                  QStringLiteral("split")}));
+    QCOMPARE(labels, QStringList({QStringLiteral("默认（自动选择）"),
+                                  QStringLiteral("Comfy-Kitchen Attention"),
+                                  QStringLiteral("SDP Attention"),
+                                  QStringLiteral("Sage Attention"),
+                                  QStringLiteral("SubQ Attention"),
+                                  QStringLiteral("FlashAttention"),
+                                  QStringLiteral("Split Attention")}));
+    QCOMPARE(flags, QStringList({QString(), QStringLiteral("--use-ck-attention"),
+                                 QStringLiteral("--use-pytorch-cross-attention"),
+                                 QStringLiteral("--use-sage-attention"),
+                                 QStringLiteral("--use-quad-cross-attention"),
+                                 QStringLiteral("--use-flash-attention"),
+                                 QStringLiteral("--use-split-cross-attention")}));
+
+    for (int index = 0; index < values.size(); ++index) {
+        const QVariantMap profile{
+            {QStringLiteral("pythonPath"), QStringLiteral("C:/Python/python.exe")},
+            {QStringLiteral("comfyRoot"), QStringLiteral("C:/ComfyUI")},
+            {QStringLiteral("parameters"),
+             QVariantMap{{QStringLiteral("attention"), values.at(index)}}},
+            {QStringLiteral("environment"), QVariantList{}}
+        };
+        const auto result = LaunchCommandBuilder::build(profile);
+        if (flags.at(index).isEmpty()) {
+            QCOMPARE(result.arguments, QStringList{QStringLiteral("main.py")});
+        } else {
+            QVERIFY(result.arguments.contains(flags.at(index)));
+        }
+    }
+}
+
+void LaunchCommandBuilderTest::profileNamesAreLimitedAndSuffixesFit()
+{
+    const QString longName = QStringLiteral("一二三四五六七八九十甲乙丙丁戊己庚辛壬癸");
+    const QString limited = ConfigurationManager::limitedProfileName(longName);
+    QCOMPARE(limited, QStringLiteral("一二三四五六七八九十甲乙丙丁戊己庚辛"));
+
+    const QString duplicate = ConfigurationManager::profileNameWithSuffix(
+        longName, QStringLiteral(" (2)"));
+    QVERIFY(duplicate.endsWith(QStringLiteral(" (2)")));
+    QCOMPARE(ConfigurationManager::limitedProfileName(duplicate), duplicate);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ConfigurationManager manager(directory.filePath(QStringLiteral("profiles.json")));
+    manager.setCurrentProfileName(longName);
+    QCOMPARE(manager.currentProfileName(), limited);
+    manager.duplicateCurrentProfile();
+    QVERIFY(manager.currentProfileName().endsWith(QStringLiteral(" - 副本")));
+    QCOMPARE(ConfigurationManager::limitedProfileName(manager.currentProfileName()),
+             manager.currentProfileName());
+}
+
+void LaunchCommandBuilderTest::currentProfileIsProtectedFromBatchDeletion()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    ConfigurationManager manager(directory.filePath(QStringLiteral("profiles.json")));
+    manager.addProfile(QStringLiteral("Second"));
+    manager.addProfile(QStringLiteral("Current"));
+
+    QString currentId;
+    QStringList inactiveIds;
+    for (const QVariant &entry : manager.profileEntries()) {
+        const QVariantMap profile = entry.toMap();
+        if (profile.value(QStringLiteral("current")).toBool()) {
+            currentId = profile.value(QStringLiteral("id")).toString();
+        } else {
+            inactiveIds.append(profile.value(QStringLiteral("id")).toString());
+        }
+    }
+    QVERIFY(!currentId.isEmpty());
+    QCOMPARE(inactiveIds.size(), 2);
+
+    QVERIFY(!manager.removeProfiles({currentId}));
+    QCOMPARE(manager.profileNames().size(), 3);
+    QCOMPARE(manager.currentProfileName(), QStringLiteral("Current"));
+
+    QStringList mixedSelection = inactiveIds;
+    mixedSelection.append(currentId);
+    QVERIFY(manager.removeProfiles(mixedSelection));
+    QCOMPARE(manager.profileNames(), QStringList{QStringLiteral("Current")});
+    QCOMPARE(manager.currentProfileName(), QStringLiteral("Current"));
+    QCOMPARE(manager.profileEntries().constFirst().toMap()
+                 .value(QStringLiteral("id")).toString(), currentId);
 }
 
 void LaunchCommandBuilderTest::catalogDefaultOptionsAreDescriptive()

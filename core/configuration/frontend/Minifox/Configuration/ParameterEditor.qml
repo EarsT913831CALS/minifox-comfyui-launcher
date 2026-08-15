@@ -235,6 +235,7 @@ MaterialPanel {
 
         PathField {
             appContext: root.appContext
+            compactButton: true
             pathValue: root.parameter.value
             folderMode: true
             onPathEdited: value => root.appContext.configuration.setParameterValue(root.parameter.key, value)
@@ -246,6 +247,7 @@ MaterialPanel {
 
         PathField {
             appContext: root.appContext
+            compactButton: true
             pathValue: root.parameter.value
             onPathEdited: value => root.appContext.configuration.setParameterValue(root.parameter.key, value)
         }

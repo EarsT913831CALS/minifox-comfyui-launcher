@@ -21,6 +21,7 @@ private slots:
     void exportsAndImportsPortablePackage();
     void rejectsDamagedPackage();
     void migratesLegacyBackgroundMaterials();
+    void folderItemsAreLimitedAndKeepCustomPaths();
 };
 
 void SkinManagerTest::createsEditsAndPersistsSkin()
@@ -81,6 +82,53 @@ void SkinManagerTest::createsEditsAndPersistsSkin()
     QCOMPARE(restored.homeItems().size(), 3);
     QVERIFY(restored.removeSkin(id));
     QCOMPARE(restored.activeSkinId(), QStringLiteral("builtin.default"));
+}
+
+void SkinManagerTest::folderItemsAreLimitedAndKeepCustomPaths()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    ApplicationSettings settings(temporary.filePath(QStringLiteral("settings.json")));
+    SkinManager manager(&settings, temporary.filePath(QStringLiteral("skins")));
+    QVERIFY(!manager.createSkin(QStringLiteral("Folders")).isEmpty());
+
+    manager.beginEdit();
+    const QString folderId = manager.addItem(QStringLiteral("folders"));
+    QVERIFY(!folderId.isEmpty());
+
+    QVariantList folders;
+    for (int index = 0; index < 10; ++index) {
+        folders.append(QVariantMap{
+            {QStringLiteral("title"), QStringLiteral("文件夹 %1").arg(index + 1)},
+            {QStringLiteral("path"), QStringLiteral("D:/Folder%1").arg(index + 1)}
+        });
+    }
+    QVERIFY(manager.updateItem(folderId, {
+        {QStringLiteral("properties"), QVariantMap{
+            {QStringLiteral("folders"), folders}
+        }}
+    }));
+
+    QVariantMap folderItem;
+    for (const QVariant &entry : manager.homeItems()) {
+        const QVariantMap item = entry.toMap();
+        if (item.value(QStringLiteral("id")).toString() == folderId) {
+            folderItem = item;
+            break;
+        }
+    }
+    QVERIFY(!folderItem.isEmpty());
+    const QVariantList normalizedFolders = folderItem.value(QStringLiteral("properties"))
+                                               .toMap()
+                                               .value(QStringLiteral("folders"))
+                                               .toList();
+    QCOMPARE(normalizedFolders.size(), 8);
+    QCOMPARE(normalizedFolders.constFirst().toMap()
+                 .value(QStringLiteral("path")).toString(),
+             QStringLiteral("D:/Folder1"));
+    QCOMPARE(normalizedFolders.constLast().toMap()
+                 .value(QStringLiteral("path")).toString(),
+             QStringLiteral("D:/Folder8"));
 }
 
 void SkinManagerTest::copiesAndDeduplicatesImageAssets()

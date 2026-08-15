@@ -96,6 +96,7 @@ ColumnLayout {
                         id: removeButton
                         text: "\uE74D"
                         destructive: true
+                        compact: true
                         font.family: Theme.iconFontFamily
                         Accessible.name: qsTr("删除环境变量")
                         KeyNavigation.left: valueInput
@@ -118,6 +119,7 @@ ColumnLayout {
 
     AppButton {
         text: qsTr("添加环境变量")
+        compact: true
         Layout.alignment: Qt.AlignLeft
         onClicked: {
             const index = root.appContext.configuration.addEnvironmentEntry();

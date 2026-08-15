@@ -13,15 +13,15 @@
 
 Minifox 是面向 Windows 10/11 x64 的便携式 ComfyUI 启动器，专门用于配置、启动和管理 ComfyUI。程序使用 Qt 6、Qt Quick、C++20、QML 和 CMake 开发，可构建为无需附带 Qt DLL 的单文件 EXE，直接放入现有 ComfyUI 整合包使用。
 
-Minifox 不使用注册表，不修改 ComfyUI 源码，也不内置浏览器或 WebUI。启动器会显示 ComfyUI 服务地址和就绪状态，但启动、停止、日志、版本及运行环境管理始终围绕 ComfyUI 进程本身。
+Minifox 不使用注册表，不修改 ComfyUI 源码，也不内置浏览器或 WebUI。
 
 ## 主要功能
 
 - 内置默认设置，也可管理多套 ComfyUI 启动配置、参数和运行环境
 - 启动、停止并监控 ComfyUI 进程、状态和控制台输出
 - 管理 ComfyUI 内核与扩展的版本、更新和回退
-- 识别 NVIDIA、AMD，CUDA、ROCm 或适用的 ZLUDA 环境
-- 提供较高的个性化自由度
+- 识别 CUDA、ROCm 或适用的 ZLUDA 环境
+- 对首页提供较高的个性化自由度
 
 ## 直接使用
 
@@ -45,13 +45,14 @@ ComfyUI-Package/
 
 | 环境 | 行为 |
 |---|---|
-| NVIDIA 显卡 | 使用原始 CUDA/PyTorch |
-| AMD 显卡与原生 ROCm PyTorch | 直接使用 ROCm |
+| CUDA 或 ROCM | 使用原生PyTorch |
 | 仅 AMD 显卡与 CUDA PyTorch | 自动准备 ZLUDA |
 
-NVIDIA、混合显卡和原生 ROCm 环境不会释放或注入 ZLUDA。
+ZLUDA注入是最低优先级。
 
-> **兼容性说明：** HIP SDK 5.7 已通过测试。任何使用 CK（Composable Kernel）或 MIOpen 的内容均未测试，不应视为已受支持或稳定可用。
+> **兼容性说明：** HIP SDK 5.7 + ZLUDA 已通过测试。任何使用 CK (Composable Kernel) 或 MIOpen 的内容均未测试，不应视为已受支持或稳定可用。
+
+> **另附建议：** HIP SDK 7.1 + ZLUDA 的组合受支持但不如 HIP SDK 5.7 组占用稳定。强烈推荐 AMD 显卡使用原生 Pytorch (正式版或 Rocm Preview 7.14 及之后版本) 。如用 ZLUDA 请配合适配的 Triton Wheel 使用。
 
 ### AMD ZLUDA 前置条件
 
@@ -62,10 +63,9 @@ NVIDIA、混合显卡和原生 ROCm 环境不会释放或注入 ZLUDA。
    <HIP_PATH>\bin\rocblas\library\
    ```
 
-3. 使用原本面向 NVIDIA/CUDA 的 ComfyUI 整合包。
-4. 如果工作流依赖定制 Triton wheel，应将其安装在整合包自身的 Python 环境中。
+3. 使用原本面向 NVIDIA显卡 的 ComfyUI 整合包。
 
-Minifox 内置通用 ZLUDA 运行组件，但不内置针对特定 `gfx` 的 rocBLAS/Tensile 补丁，也不维护有限的显卡架构白名单。
+Minifox 内置 HIP SDK 5.7 和 HIP SDK 7.1 ZLUDA 运行组件，但不内置针对特定 `gfx` 的 rocBLAS/Tensile 补丁，也不维护有限的显卡架构白名单。
 
 仓库只保存并编入启动器通用的 `assets/zluda/zluda.extpack`。在符合条件的纯 AMD 环境中，Minifox 会读取实际的 `gcnArchName`，将运行组件释放到 `.minifox`、准备缓存，并且只向 ComfyUI 子进程注入所需环境。
 

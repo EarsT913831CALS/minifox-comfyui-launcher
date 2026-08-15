@@ -19,6 +19,11 @@ Pane {
         spacing: Theme.spacingMd
 
         RowLayout {
+            id: headerRow
+
+            readonly property real actionButtonWidth: Math.max(exportLogButton.implicitWidth,
+                                                                runtimeActionButton.implicitWidth)
+
             Layout.fillWidth: true
             spacing: Theme.spacingMd
 
@@ -30,13 +35,21 @@ Pane {
             }
 
             AppButton {
+                id: exportLogButton
+
                 text: qsTr("导出日志")
+                Layout.preferredWidth: headerRow.actionButtonWidth
+                Layout.preferredHeight: Theme.controlHeight
                 enabled: root.appContext.runtime.logModel.count > 0
                 onClicked: root.exportRequested = true
             }
 
             AppButton {
+                id: runtimeActionButton
+
                 text: root.appContext.runtime.canStart ? qsTr("启动") : qsTr("停止")
+                Layout.preferredWidth: headerRow.actionButtonWidth
+                Layout.preferredHeight: Theme.controlHeight
                 accented: root.appContext.runtime.canStart
                 destructive: !root.appContext.runtime.canStart
                 enabled: root.appContext.runtime.canStart ? root.appContext.configuration.valid : root.appContext.runtime.canStop

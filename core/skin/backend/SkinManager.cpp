@@ -25,6 +25,7 @@ constexpr auto kBuiltinId = "builtin.default";
 constexpr int kSkinSchemaVersion = 2;
 constexpr qsizetype kMaximumPackageBytes = 256 * 1024 * 1024;
 constexpr qsizetype kMaximumPackageEntries = 1024;
+constexpr qsizetype kMaximumHomeFolders = 8;
 
 QString cleanLocalPath(const QUrl &url)
 {
@@ -47,6 +48,28 @@ QString safeName(QString name, const QString &fallback)
 {
     name = name.trimmed();
     return name.isEmpty() ? fallback : name.left(64);
+}
+
+QJsonArray defaultHomeFolders()
+{
+    return {
+        QJsonObject{
+            {QStringLiteral("kind"), QStringLiteral("root")},
+            {QStringLiteral("path"), QStringLiteral("${COMFYUI}")}
+        },
+        QJsonObject{
+            {QStringLiteral("kind"), QStringLiteral("custom_nodes")},
+            {QStringLiteral("path"), QStringLiteral("${COMFYUI}/custom_nodes")}
+        },
+        QJsonObject{
+            {QStringLiteral("kind"), QStringLiteral("input")},
+            {QStringLiteral("path"), QStringLiteral("${COMFYUI}/input")}
+        },
+        QJsonObject{
+            {QStringLiteral("kind"), QStringLiteral("output")},
+            {QStringLiteral("path"), QStringLiteral("${COMFYUI}/output")}
+        }
+    };
 }
 
 quint32 crc32Bytes(const QByteArray &bytes)
@@ -798,6 +821,10 @@ QString SkinManager::addItem(const QString &type)
             {QStringLiteral("focusY"), 0.5},
             {QStringLiteral("zoom"), 1.0}
         });
+    } else if (type == QStringLiteral("folders")) {
+        item.insert(QStringLiteral("properties"), QJsonObject{
+            {QStringLiteral("folders"), defaultHomeFolders()}
+        });
     }
     items.append(normalizedItem(item));
     home.insert(QStringLiteral("items"), items);
@@ -1167,6 +1194,41 @@ QJsonObject SkinManager::normalizedItem(const QJsonObject &item)
         properties.insert(QStringLiteral("zoom"),
                           boundedNumber(properties.value(QStringLiteral("zoom")),
                                         1.0, 1.0, 4.0));
+        result.insert(QStringLiteral("properties"), properties);
+    } else if (result.value(QStringLiteral("type")).toString()
+               == QStringLiteral("folders")) {
+        QJsonObject properties = result.value(QStringLiteral("properties")).toObject();
+        QJsonArray folders = properties.value(QStringLiteral("folders")).toArray();
+        if (folders.isEmpty()) {
+            folders = defaultHomeFolders();
+        }
+
+        QJsonArray normalizedFolders;
+        const qsizetype count = qMin(folders.size(), kMaximumHomeFolders);
+        for (qsizetype index = 0; index < count; ++index) {
+            if (!folders.at(index).isObject()) {
+                continue;
+            }
+            const QJsonObject source = folders.at(index).toObject();
+            QJsonObject folder{
+                {QStringLiteral("title"),
+                 source.value(QStringLiteral("title")).toString().trimmed().left(64)},
+                {QStringLiteral("path"),
+                 source.value(QStringLiteral("path")).toString().trimmed().left(2048)}
+            };
+            const QString kind = source.value(QStringLiteral("kind")).toString();
+            if (kind == QStringLiteral("root")
+                || kind == QStringLiteral("custom_nodes")
+                || kind == QStringLiteral("input")
+                || kind == QStringLiteral("output")) {
+                folder.insert(QStringLiteral("kind"), kind);
+            }
+            normalizedFolders.append(folder);
+        }
+        if (normalizedFolders.isEmpty()) {
+            normalizedFolders.append(defaultHomeFolders().first());
+        }
+        properties.insert(QStringLiteral("folders"), normalizedFolders);
         result.insert(QStringLiteral("properties"), properties);
     }
     return result;

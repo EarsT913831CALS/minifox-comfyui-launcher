@@ -8,6 +8,7 @@ class ConfigurationManager final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QStringList profileNames READ profileNames NOTIFY profilesChanged)
+    Q_PROPERTY(QVariantList profileEntries READ profileEntries NOTIFY profilesChanged)
     Q_PROPERTY(int currentProfileIndex READ currentProfileIndex WRITE setCurrentProfileIndex NOTIFY currentProfileChanged)
     Q_PROPERTY(QString currentProfileName READ currentProfileName WRITE setCurrentProfileName NOTIFY currentProfileChanged)
     Q_PROPERTY(QString pythonPath READ pythonPath WRITE setPythonPath NOTIFY currentProfileChanged)
@@ -21,9 +22,17 @@ class ConfigurationManager final : public QObject
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 
 public:
+    static constexpr int MaximumProfileNameCharacters = 18;
+
     explicit ConfigurationManager(const QString &storagePath = {}, QObject *parent = nullptr);
 
+    static QString limitedProfileName(
+        const QString &name,
+        int maximumCharacters = MaximumProfileNameCharacters);
+    static QString profileNameWithSuffix(const QString &baseName, const QString &suffix);
+
     QStringList profileNames() const;
+    QVariantList profileEntries() const;
     int currentProfileIndex() const;
     void setCurrentProfileIndex(int index);
 
@@ -49,13 +58,15 @@ public:
 
     Q_INVOKABLE void addProfile(const QString &name = {});
     Q_INVOKABLE void duplicateCurrentProfile();
-    Q_INVOKABLE bool removeCurrentProfile();
+    bool removeProfiles(const QStringList &profileIds);
 
     Q_INVOKABLE int addEnvironmentEntry();
     Q_INVOKABLE void updateEnvironmentEntry(int index, const QString &name, const QString &value, bool enabled);
     Q_INVOKABLE void removeEnvironmentEntry(int index);
 
     QVariantMap currentProfileSnapshot() const;
+    QString profileIdAt(int index) const;
+    Q_INVOKABLE void reloadFromDisk();
     void retranslate();
 
 signals:

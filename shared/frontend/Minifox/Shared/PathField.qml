@@ -10,6 +10,7 @@ RowLayout {
     property string pathValue
     property bool folderMode: false
     property bool executableMode: false
+    property bool compactButton: false
     property bool dialogRequested: false
     signal pathEdited(string value)
 
@@ -18,6 +19,7 @@ RowLayout {
     AppTextField {
         id: pathInput
         Layout.fillWidth: true
+        Layout.minimumWidth: 0
         text: root.pathValue
         placeholderText: root.folderMode ? qsTr("选择文件夹") : qsTr("选择文件")
         font.family: root.appContext.settings.consoleFontFamily
@@ -28,6 +30,8 @@ RowLayout {
 
     AppButton {
         text: qsTr("浏览…")
+        compact: root.compactButton
+        Layout.alignment: Qt.AlignVCenter
         Accessible.name: root.folderMode ? qsTr("浏览文件夹") : qsTr("浏览文件")
         onClicked: root.dialogRequested = true
     }

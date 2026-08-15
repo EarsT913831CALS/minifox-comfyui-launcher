@@ -2,6 +2,7 @@
 
 #include "ApplicationIconManager.h"
 #include "ApplicationSettings.h"
+#include "ConfigurationPackageManager.h"
 #include "ConfigurationManager.h"
 #include "HardwareManager.h"
 #include "RuntimeManager.h"
@@ -21,6 +22,7 @@ class AppContext final : public QObject
     Q_OBJECT
     Q_PROPERTY(ApplicationIconManager *appIcon READ appIcon CONSTANT)
     Q_PROPERTY(ConfigurationManager *configuration READ configuration CONSTANT)
+    Q_PROPERTY(ConfigurationPackageManager *configurationPackages READ configurationPackages CONSTANT)
     Q_PROPERTY(HardwareManager *hardware READ hardware CONSTANT)
     Q_PROPERTY(RuntimeManager *runtime READ runtime CONSTANT)
     Q_PROPERTY(ApplicationSettings *settings READ settings CONSTANT)
@@ -34,6 +36,7 @@ public:
 
     ApplicationIconManager *appIcon() const;
     ConfigurationManager *configuration() const;
+    ConfigurationPackageManager *configurationPackages() const;
     HardwareManager *hardware() const;
     RuntimeManager *runtime() const;
     ApplicationSettings *settings() const;
@@ -46,6 +49,7 @@ private:
     void applyLanguage();
 
     ConfigurationManager *m_configuration;
+    ConfigurationPackageManager *m_configurationPackages;
     ApplicationSettings *m_settings;
     ApplicationIconManager *m_appIcon;
     HardwareManager *m_hardware;

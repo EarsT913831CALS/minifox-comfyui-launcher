@@ -132,10 +132,10 @@ Rectangle {
             objectName: "consoleText"
 
             width: consoleScroll.availableWidth
-            leftPadding: Theme.spacingSm
-            rightPadding: Theme.spacingSm
-            topPadding: Theme.spacingXs
-            bottomPadding: Theme.spacingXs
+            leftPadding: Theme.spacingMd
+            rightPadding: Theme.spacingMd
+            topPadding: Theme.spacingSm
+            bottomPadding: Theme.spacingSm
             text: ""
             readOnly: true
             selectByMouse: true

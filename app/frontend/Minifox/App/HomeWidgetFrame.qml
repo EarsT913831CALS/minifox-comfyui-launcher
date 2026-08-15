@@ -12,12 +12,54 @@ Item {
     required property bool editing
     property bool selected: false
     signal selectionRequested(string id)
+    signal alignmentGuidesRequested(string owner, var vertical, var horizontal, var spacing)
+    signal alignmentGuidesClearRequested(string owner)
     signal openConfiguration()
     signal openRuntime()
     signal launchRequested()
 
-    readonly property real minimumWidgetWidth: itemData.type === "launch" ? 520 : 180
-    readonly property real minimumWidgetHeight: itemData.type === "launch" ? 320 : 120
+    readonly property real minimumWidgetWidth: minimumWidthFor(itemData)
+    readonly property real minimumWidgetHeight: minimumHeightFor(
+                                                    itemData,
+                                                    width,
+                                                    itemData.h * canvas.height)
+    readonly property real snapDistance: 7 / Math.max(0.05, Math.abs(canvas.scale))
+    readonly property bool interactionActive: moveArea.drag.active || resizeActive
+    property bool resizeActive: false
+
+    function folderCount(data) {
+        const properties = data && data.properties ? data.properties : ({});
+        const folders = properties.folders;
+        return folders && folders.length > 0
+               ? Math.max(1, Math.min(8, folders.length)) : 4;
+    }
+
+    function folderRequiredHeight(count, columns) {
+        const rows = Math.ceil(count / columns);
+        return 92 + rows * Theme.controlHeight
+               + Math.max(0, rows - 1) * Theme.spacingSm;
+    }
+
+    function folderColumnsForSize(pixelWidth, pixelHeight, count) {
+        if (count <= 1 || pixelWidth < 360)
+            return 1;
+        const oneColumnHeight = folderRequiredHeight(count, 1);
+        return pixelWidth > 480 || pixelHeight < oneColumnHeight ? 2 : 1;
+    }
+
+    function minimumWidthFor(data) {
+        return data.type === "launch" ? 520 : 180;
+    }
+
+    function minimumHeightFor(data, pixelWidth, pixelHeight) {
+        if (data.type === "launch")
+            return 320;
+        if (data.type !== "folders")
+            return 120;
+        const count = folderCount(data);
+        const columns = folderColumnsForSize(pixelWidth, pixelHeight, count);
+        return Math.max(120, folderRequiredHeight(count, columns));
+    }
 
     x: Math.max(0, Math.min(canvas.width - width, itemData.x * canvas.width))
     y: Math.max(0, Math.min(canvas.height - height, itemData.y * canvas.height))
@@ -33,6 +75,380 @@ Item {
             "w": Math.max(0.08, Math.min(1, width / canvas.width)),
             "h": Math.max(0.08, Math.min(1, height / canvas.height))
         });
+    }
+
+    function itemGeometry(data) {
+        const minimumWidth = minimumWidthFor(data);
+        const itemWidth = Math.min(
+            canvas.width,
+            Math.max(minimumWidth,
+                     (data.w === undefined ? 0.4 : data.w) * canvas.width));
+        const requestedHeight = (data.h === undefined ? 0.3 : data.h) * canvas.height;
+        const minimumHeight = minimumHeightFor(data, itemWidth, requestedHeight);
+        const itemHeight = Math.min(
+            canvas.height,
+            Math.max(minimumHeight,
+                     requestedHeight));
+        return {
+            "x": Math.max(0, Math.min(canvas.width - itemWidth,
+                                       (data.x || 0) * canvas.width)),
+            "y": Math.max(0, Math.min(canvas.height - itemHeight,
+                                       (data.y || 0) * canvas.height)),
+            "width": itemWidth,
+            "height": itemHeight
+        };
+    }
+
+    function alignmentTargets(horizontal) {
+        let targets = [];
+        const items = appContext.skins.homeItems;
+        for (let index = 0; index < items.length; ++index) {
+            const data = items[index];
+            if (data.id === itemData.id)
+                continue;
+            const geometry = itemGeometry(data);
+            if (horizontal) {
+                targets.push(geometry.x);
+                targets.push(geometry.x + geometry.width / 2);
+                targets.push(geometry.x + geometry.width);
+            } else {
+                targets.push(geometry.y);
+                targets.push(geometry.y + geometry.height / 2);
+                targets.push(geometry.y + geometry.height);
+            }
+        }
+        return targets;
+    }
+
+    function peerGeometries() {
+        let peers = [];
+        const items = appContext.skins.homeItems;
+        for (let index = 0; index < items.length; ++index) {
+            const data = items[index];
+            if (data.id === itemData.id)
+                continue;
+            const geometry = itemGeometry(data);
+            geometry.id = data.id;
+            peers.push(geometry);
+        }
+        return peers;
+    }
+
+    function closestAlignment(anchors, targets) {
+        let result = {"matched": false, "delta": 0, "line": 0};
+        let closestDistance = snapDistance + 0.001;
+        for (const anchor of anchors) {
+            for (const target of targets) {
+                const distance = Math.abs(target - anchor);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    result = {
+                        "matched": true,
+                        "delta": target - anchor,
+                        "line": target
+                    };
+                }
+            }
+        }
+        return result;
+    }
+
+    function horizontalSpacingAlignment(proposedX, proposedY) {
+        let best = {"matched": false, "delta": 0, "guides": []};
+        let closestDistance = snapDistance + 0.001;
+        const peers = peerGeometries();
+        for (let firstIndex = 0; firstIndex < peers.length; ++firstIndex) {
+            for (let secondIndex = firstIndex + 1;
+                 secondIndex < peers.length; ++secondIndex) {
+                let left = peers[firstIndex];
+                let right = peers[secondIndex];
+                if (left.x > right.x) {
+                    const swap = left;
+                    left = right;
+                    right = swap;
+                }
+                const leftRight = left.x + left.width;
+                if (leftRight > right.x)
+                    continue;
+                const bandTop = Math.max(proposedY, left.y, right.y);
+                const bandBottom = Math.min(proposedY + height,
+                                            left.y + left.height,
+                                            right.y + right.height);
+                if (bandBottom <= bandTop)
+                    continue;
+                const coordinate = (bandTop + bandBottom) / 2;
+                const fixedGap = right.x - leftRight;
+                const candidates = [
+                    {
+                        "position": (leftRight + right.x - width) / 2,
+                        "minimum": leftRight,
+                        "maximum": right.x - width,
+                        "guides": function(position) {
+                            const gap = position - leftRight;
+                            return [
+                                {"orientation": "horizontal", "from": leftRight,
+                                 "to": position, "coordinate": coordinate,
+                                 "distance": gap},
+                                {"orientation": "horizontal", "from": position + width,
+                                 "to": right.x, "coordinate": coordinate,
+                                 "distance": gap}
+                            ];
+                        }
+                    },
+                    {
+                        "position": right.x + right.width + fixedGap,
+                        "minimum": right.x + right.width,
+                        "maximum": canvas.width - width,
+                        "guides": function(position) {
+                            return [
+                                {"orientation": "horizontal", "from": leftRight,
+                                 "to": right.x, "coordinate": coordinate,
+                                 "distance": fixedGap},
+                                {"orientation": "horizontal",
+                                 "from": right.x + right.width, "to": position,
+                                 "coordinate": coordinate, "distance": fixedGap}
+                            ];
+                        }
+                    },
+                    {
+                        "position": left.x - fixedGap - width,
+                        "minimum": 0,
+                        "maximum": left.x - width,
+                        "guides": function(position) {
+                            return [
+                                {"orientation": "horizontal", "from": position + width,
+                                 "to": left.x, "coordinate": coordinate,
+                                 "distance": fixedGap},
+                                {"orientation": "horizontal", "from": leftRight,
+                                 "to": right.x, "coordinate": coordinate,
+                                 "distance": fixedGap}
+                            ];
+                        }
+                    }
+                ];
+                for (const candidate of candidates) {
+                    if (candidate.position < candidate.minimum
+                            || candidate.position > candidate.maximum)
+                        continue;
+                    const distance = Math.abs(candidate.position - proposedX);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        best = {
+                            "matched": true,
+                            "delta": candidate.position - proposedX,
+                            "guides": candidate.guides(candidate.position)
+                        };
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    function verticalSpacingAlignment(proposedX, proposedY) {
+        let best = {"matched": false, "delta": 0, "guides": []};
+        let closestDistance = snapDistance + 0.001;
+        const peers = peerGeometries();
+        for (let firstIndex = 0; firstIndex < peers.length; ++firstIndex) {
+            for (let secondIndex = firstIndex + 1;
+                 secondIndex < peers.length; ++secondIndex) {
+                let top = peers[firstIndex];
+                let bottom = peers[secondIndex];
+                if (top.y > bottom.y) {
+                    const swap = top;
+                    top = bottom;
+                    bottom = swap;
+                }
+                const topBottom = top.y + top.height;
+                if (topBottom > bottom.y)
+                    continue;
+                const bandLeft = Math.max(proposedX, top.x, bottom.x);
+                const bandRight = Math.min(proposedX + width,
+                                           top.x + top.width,
+                                           bottom.x + bottom.width);
+                if (bandRight <= bandLeft)
+                    continue;
+                const coordinate = (bandLeft + bandRight) / 2;
+                const fixedGap = bottom.y - topBottom;
+                const candidates = [
+                    {
+                        "position": (topBottom + bottom.y - height) / 2,
+                        "minimum": topBottom,
+                        "maximum": bottom.y - height,
+                        "guides": function(position) {
+                            const gap = position - topBottom;
+                            return [
+                                {"orientation": "vertical", "from": topBottom,
+                                 "to": position, "coordinate": coordinate,
+                                 "distance": gap},
+                                {"orientation": "vertical", "from": position + height,
+                                 "to": bottom.y, "coordinate": coordinate,
+                                 "distance": gap}
+                            ];
+                        }
+                    },
+                    {
+                        "position": bottom.y + bottom.height + fixedGap,
+                        "minimum": bottom.y + bottom.height,
+                        "maximum": canvas.height - height,
+                        "guides": function(position) {
+                            return [
+                                {"orientation": "vertical", "from": topBottom,
+                                 "to": bottom.y, "coordinate": coordinate,
+                                 "distance": fixedGap},
+                                {"orientation": "vertical",
+                                 "from": bottom.y + bottom.height, "to": position,
+                                 "coordinate": coordinate, "distance": fixedGap}
+                            ];
+                        }
+                    },
+                    {
+                        "position": top.y - fixedGap - height,
+                        "minimum": 0,
+                        "maximum": top.y - height,
+                        "guides": function(position) {
+                            return [
+                                {"orientation": "vertical", "from": position + height,
+                                 "to": top.y, "coordinate": coordinate,
+                                 "distance": fixedGap},
+                                {"orientation": "vertical", "from": topBottom,
+                                 "to": bottom.y, "coordinate": coordinate,
+                                 "distance": fixedGap}
+                            ];
+                        }
+                    }
+                ];
+                for (const candidate of candidates) {
+                    if (candidate.position < candidate.minimum
+                            || candidate.position > candidate.maximum)
+                        continue;
+                    const distance = Math.abs(candidate.position - proposedY);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        best = {
+                            "matched": true,
+                            "delta": candidate.position - proposedY,
+                            "guides": candidate.guides(candidate.position)
+                        };
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    function snapMove(proposedX, proposedY) {
+        let snappedX = Math.max(0, Math.min(canvas.width - width, proposedX));
+        let snappedY = Math.max(0, Math.min(canvas.height - height, proposedY));
+        const vertical = closestAlignment(
+            [snappedX, snappedX + width / 2, snappedX + width],
+            alignmentTargets(true));
+        const horizontal = closestAlignment(
+            [snappedY, snappedY + height / 2, snappedY + height],
+            alignmentTargets(false));
+        const horizontalSpacing = horizontalSpacingAlignment(snappedX, snappedY);
+        const verticalSpacing = verticalSpacingAlignment(snappedX, snappedY);
+        let verticalGuides = [];
+        let horizontalGuides = [];
+        let spacingGuides = [];
+        if (horizontalSpacing.matched
+                && (!vertical.matched
+                    || Math.abs(horizontalSpacing.delta) < Math.abs(vertical.delta))) {
+            snappedX = Math.max(0, Math.min(canvas.width - width,
+                                           snappedX + horizontalSpacing.delta));
+            spacingGuides = spacingGuides.concat(horizontalSpacing.guides);
+        } else if (vertical.matched) {
+            snappedX = Math.max(0, Math.min(canvas.width - width,
+                                           snappedX + vertical.delta));
+            verticalGuides = [vertical.line];
+        }
+        if (verticalSpacing.matched
+                && (!horizontal.matched
+                    || Math.abs(verticalSpacing.delta) < Math.abs(horizontal.delta))) {
+            snappedY = Math.max(0, Math.min(canvas.height - height,
+                                           snappedY + verticalSpacing.delta));
+            spacingGuides = spacingGuides.concat(verticalSpacing.guides);
+        } else if (horizontal.matched) {
+            snappedY = Math.max(0, Math.min(canvas.height - height,
+                                           snappedY + horizontal.delta));
+            horizontalGuides = [horizontal.line];
+        }
+        return {
+            "x": snappedX,
+            "y": snappedY,
+            "verticalGuides": verticalGuides,
+            "horizontalGuides": horizontalGuides,
+            "spacingGuides": spacingGuides
+        };
+    }
+
+    function snapResize(geometry, horizontalDirection, verticalDirection) {
+        let result = {
+            "x": geometry.x,
+            "y": geometry.y,
+            "width": geometry.width,
+            "height": geometry.height,
+            "verticalGuides": [],
+            "horizontalGuides": [],
+            "spacingGuides": []
+        };
+        if (horizontalDirection !== 0) {
+            const edge = horizontalDirection < 0
+                         ? result.x : result.x + result.width;
+            const alignment = closestAlignment([edge], alignmentTargets(true));
+            if (alignment.matched) {
+                if (horizontalDirection < 0) {
+                    const fixedRight = result.x + result.width;
+                    const candidateWidth = fixedRight - alignment.line;
+                    if (alignment.line >= 0 && candidateWidth >= minimumWidgetWidth) {
+                        result.x = alignment.line;
+                        result.width = candidateWidth;
+                        result.verticalGuides = [alignment.line];
+                    }
+                } else {
+                    const candidateWidth = alignment.line - result.x;
+                    if (alignment.line <= canvas.width
+                            && candidateWidth >= minimumWidgetWidth) {
+                        result.width = candidateWidth;
+                        result.verticalGuides = [alignment.line];
+                    }
+                }
+            }
+        }
+        if (verticalDirection !== 0) {
+            const requiredHeight = minimumHeightFor(
+                                       itemData, result.width, result.height);
+            const edge = verticalDirection < 0
+                         ? result.y : result.y + result.height;
+            const alignment = closestAlignment([edge], alignmentTargets(false));
+            if (alignment.matched) {
+                if (verticalDirection < 0) {
+                    const fixedBottom = result.y + result.height;
+                    const candidateHeight = fixedBottom - alignment.line;
+                    if (alignment.line >= 0 && candidateHeight >= requiredHeight) {
+                        result.y = alignment.line;
+                        result.height = candidateHeight;
+                        result.horizontalGuides = [alignment.line];
+                    }
+                } else {
+                    const candidateHeight = alignment.line - result.y;
+                    if (alignment.line <= canvas.height
+                            && candidateHeight >= requiredHeight) {
+                        result.height = candidateHeight;
+                        result.horizontalGuides = [alignment.line];
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    function publishGuides(vertical, horizontal, spacing) {
+        alignmentGuidesRequested(itemData.id, vertical, horizontal, spacing);
+    }
+
+    function clearGuides() {
+        alignmentGuidesClearRequested(itemData.id);
     }
 
     HomeWidgetContent {
@@ -53,6 +469,32 @@ Item {
         radius: Theme.radius
     }
 
+    Rectangle {
+        id: sizeBadge
+
+        visible: root.editing && root.selected && root.interactionActive
+        x: Theme.spacingSm
+        y: root.y >= height + Theme.spacingSm
+           ? -height - Theme.spacingSm : Theme.spacingSm
+        z: 2001
+        width: sizeLabel.implicitWidth + Theme.spacingMd * 2
+        height: 28
+        radius: Theme.controlRadius
+        color: Theme.materialFillStrong
+        border.width: 1
+        border.color: Theme.accent
+
+        AppLabel {
+            id: sizeLabel
+
+            anchors.centerIn: parent
+            text: Math.round(root.width) + " × " + Math.round(root.height) + " px"
+            color: Theme.foreground
+            font.pointSize: Theme.captionSize
+            font.weight: Font.DemiBold
+        }
+    }
+
     MouseArea {
         id: moveArea
         anchors.fill: parent
@@ -62,9 +504,27 @@ Item {
         drag.minimumY: 0
         drag.maximumX: Math.max(0, root.canvas.width - root.width)
         drag.maximumY: Math.max(0, root.canvas.height - root.height)
+        drag.smoothed: false
         cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-        onPressed: root.selectionRequested(root.itemData.id)
-        onReleased: root.commitGeometry()
+        onPressed: {
+            root.selectionRequested(root.itemData.id);
+            root.clearGuides();
+        }
+        onPositionChanged: {
+            if (!drag.active)
+                return;
+            const geometry = root.snapMove(root.x, root.y);
+            root.x = geometry.x;
+            root.y = geometry.y;
+            root.publishGuides(geometry.verticalGuides,
+                               geometry.horizontalGuides,
+                               geometry.spacingGuides);
+        }
+        onReleased: {
+            root.clearGuides();
+            root.commitGeometry();
+        }
+        onCanceled: root.clearGuides()
     }
 
     Repeater {
@@ -105,6 +565,8 @@ Item {
                              : handle.modelData.x === handle.modelData.y
                                ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
                 onPressed: mouse => {
+                    root.resizeActive = true;
+                    root.clearGuides();
                     handle.startX = root.x;
                     handle.startY = root.y;
                     handle.startWidth = root.width;
@@ -131,21 +593,59 @@ Item {
                                             Math.min(root.canvas.width - handle.startX,
                                                      handle.startWidth + dx));
                     }
+                    const requiredMinimumHeight = root.minimumHeightFor(
+                                                      root.itemData,
+                                                      newWidth,
+                                                      newHeight);
                     if (handle.modelData.y < 0) {
-                        newY = Math.max(0, Math.min(handle.startY + handle.startHeight - root.minimumWidgetHeight, handle.startY + dy));
+                        newY = Math.max(
+                                   0,
+                                   Math.min(handle.startY + handle.startHeight
+                                            - requiredMinimumHeight,
+                                            handle.startY + dy));
                         newHeight = handle.startHeight + handle.startY - newY;
                     } else if (handle.modelData.y > 0) {
-                        newHeight = Math.max(root.minimumWidgetHeight,
+                        newHeight = Math.max(requiredMinimumHeight,
                                              Math.min(root.canvas.height - handle.startY,
                                                       handle.startHeight + dy));
                     }
-                    root.x = newX;
-                    root.y = newY;
-                    root.width = newWidth;
-                    root.height = newHeight;
+                    if (newHeight < requiredMinimumHeight) {
+                        newHeight = Math.min(root.canvas.height,
+                                             requiredMinimumHeight);
+                        newY = Math.max(0, Math.min(
+                                            newY,
+                                            root.canvas.height - newHeight));
+                    }
+                    const geometry = root.snapResize({
+                        "x": newX,
+                        "y": newY,
+                        "width": newWidth,
+                        "height": newHeight
+                    }, handle.modelData.x, handle.modelData.y);
+                    root.x = geometry.x;
+                    root.y = geometry.y;
+                    root.width = geometry.width;
+                    root.height = geometry.height;
+                    root.publishGuides(geometry.verticalGuides,
+                                       geometry.horizontalGuides,
+                                       geometry.spacingGuides);
                 }
-                onReleased: root.commitGeometry()
+                onReleased: {
+                    root.resizeActive = false;
+                    root.clearGuides();
+                    root.commitGeometry();
+                }
+                onCanceled: {
+                    root.resizeActive = false;
+                    root.clearGuides();
+                }
             }
         }
     }
+
+    onEditingChanged: {
+        if (!editing)
+            clearGuides();
+    }
+    Component.onDestruction: clearGuides()
 }

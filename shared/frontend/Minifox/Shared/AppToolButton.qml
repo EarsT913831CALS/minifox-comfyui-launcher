@@ -5,17 +5,18 @@ Fluent.ToolButton {
     id: control
 
     property bool accented: false
+    property bool compact: false
     property bool destructive: false
     readonly property int motionDuration: Theme.controlMotionDuration
 
     hoverEnabled: true
     activeFocusOnTab: true
-    implicitWidth: Theme.controlHeight
-    implicitHeight: Theme.controlHeight
-    leftPadding: 8
-    rightPadding: 8
-    topPadding: 7
-    bottomPadding: 7
+    implicitWidth: compact ? 34 : Theme.controlHeight
+    implicitHeight: compact ? 34 : Theme.controlHeight
+    leftPadding: compact ? 6 : 8
+    rightPadding: compact ? 6 : 8
+    topPadding: compact ? 5 : 7
+    bottomPadding: compact ? 5 : 7
     scale: !enabled ? 1.0 : down && hovered ? 0.97 : 1.0
     transformOrigin: Item.Center
     font.family: Theme.uiFontFamily

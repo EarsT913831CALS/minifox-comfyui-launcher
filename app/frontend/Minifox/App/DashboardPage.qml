@@ -18,6 +18,7 @@ Pane {
     property real normalCanvasWidth: 0
     property real normalCanvasHeight: 0
     readonly property var selectedItem: itemById(selectedItemId)
+    readonly property var selectedFolderEntries: folderEntriesForItem(selectedItem)
 
     function itemById(id) {
         const items = appContext.skins.homeItems;
@@ -52,6 +53,72 @@ Pane {
         appContext.skins.updateItem(selectedItemId, {"properties": properties});
     }
 
+    function defaultFolderEntries() {
+        return [
+            {"kind": "root", "path": "${COMFYUI}"},
+            {"kind": "custom_nodes", "path": "${COMFYUI}/custom_nodes"},
+            {"kind": "input", "path": "${COMFYUI}/input"},
+            {"kind": "output", "path": "${COMFYUI}/output"}
+        ];
+    }
+
+    function folderEntriesForItem(item) {
+        const properties = item && item.properties ? item.properties : ({});
+        const entries = properties.folders;
+        return entries && entries.length > 0
+               ? entries.slice(0, 8) : defaultFolderEntries();
+    }
+
+    function folderEntryTitle(entry, index) {
+        if (entry && entry.title && entry.title.length > 0)
+            return entry.title;
+        const kind = entry ? (entry.kind || "") : "";
+        if (kind === "root") return qsTr("根目录");
+        if (kind === "custom_nodes") return "custom_nodes";
+        if (kind === "input") return "input";
+        if (kind === "output") return "output";
+        return qsTr("文件夹 %1").arg(index + 1);
+    }
+
+    function copyFolderEntries() {
+        let copies = [];
+        for (const source of selectedFolderEntries) {
+            let entry = {};
+            for (const key in source)
+                entry[key] = source[key];
+            copies.push(entry);
+        }
+        return copies;
+    }
+
+    function updateFolderEntry(index, key, value) {
+        if (index < 0 || index >= selectedFolderEntries.length)
+            return;
+        const entries = copyFolderEntries();
+        entries[index][key] = value;
+        setSelectedProperty("folders", entries);
+    }
+
+    function addFolderEntry() {
+        if (selectedFolderEntries.length >= 8)
+            return;
+        const entries = copyFolderEntries();
+        entries.push({
+            "title": qsTr("文件夹 %1").arg(entries.length + 1),
+            "path": ""
+        });
+        setSelectedProperty("folders", entries);
+    }
+
+    function removeFolderEntry(index) {
+        if (selectedFolderEntries.length <= 1
+                || index < 0 || index >= selectedFolderEntries.length)
+            return;
+        const entries = copyFolderEntries();
+        entries.splice(index, 1);
+        setSelectedProperty("folders", entries);
+    }
+
     padding: Theme.spacingLg
     background: Rectangle { color: "transparent" }
 
@@ -82,7 +149,7 @@ Pane {
             PageHeader {
                 title: root.appContext.skins.editing ? qsTr("编辑首页") : qsTr("一键启动")
                 description: root.appContext.skins.editing
-                             ? qsTr("拖动组件并使用八个控制点调整尺寸；完成后保存布局。")
+                             ? qsTr("拖动或缩放组件时会显示对齐和等距辅助线并自动吸附；完成后保存布局。")
                              : qsTr("确认当前配置，然后启动 ComfyUI。")
                 icon: root.appContext.skins.editing ? "\uE70F" : "\uE768"
                 Layout.fillWidth: true
@@ -181,6 +248,26 @@ Pane {
                                                           / Math.max(1, width),
                                                           canvasViewport.height
                                                           / Math.max(1, height))
+                    property string alignmentGuideOwner: ""
+                    property var verticalAlignmentGuides: []
+                    property var horizontalAlignmentGuides: []
+                    property var spacingGuides: []
+
+                    function setAlignmentGuides(owner, vertical, horizontal, spacing) {
+                        alignmentGuideOwner = owner;
+                        verticalAlignmentGuides = vertical;
+                        horizontalAlignmentGuides = horizontal;
+                        spacingGuides = spacing;
+                    }
+
+                    function clearAlignmentGuides(owner) {
+                        if (alignmentGuideOwner !== owner)
+                            return;
+                        alignmentGuideOwner = "";
+                        verticalAlignmentGuides = [];
+                        horizontalAlignmentGuides = [];
+                        spacingGuides = [];
+                    }
 
                     width: root.appContext.skins.editing
                            && root.normalCanvasWidth > 0
@@ -225,11 +312,81 @@ Pane {
                             editing: root.appContext.skins.editing
                             selected: root.selectedItemId === modelData.id
                             onSelectionRequested: id => root.selectedItemId = id
+                            onAlignmentGuidesRequested: (owner, vertical, horizontal, spacing) =>
+                                homeCanvas.setAlignmentGuides(owner, vertical, horizontal, spacing)
+                            onAlignmentGuidesClearRequested: owner =>
+                                homeCanvas.clearAlignmentGuides(owner)
                             onOpenConfiguration: root.openConfiguration()
                             onOpenRuntime: root.openRuntime()
                             onLaunchRequested: root.launchRequested()
                         }
                     }
+
+                    Canvas {
+                        id: alignmentGuideCanvas
+
+                        anchors.fill: parent
+                        z: 2000
+                        visible: root.appContext.skins.editing
+                                 && (homeCanvas.verticalAlignmentGuides.length > 0
+                                     || homeCanvas.horizontalAlignmentGuides.length > 0
+                                     || homeCanvas.spacingGuides.length > 0)
+
+                        onPaint: {
+                            const context = getContext("2d");
+                            context.clearRect(0, 0, width, height);
+                            const scaleFactor = Math.max(0.05, Math.abs(homeCanvas.scale));
+                            context.save();
+                            context.strokeStyle = Theme.accent.toString();
+                            context.lineWidth = 1.25 / scaleFactor;
+                            context.setLineDash([6 / scaleFactor, 4 / scaleFactor]);
+                            context.beginPath();
+                            for (const x of homeCanvas.verticalAlignmentGuides) {
+                                context.moveTo(x, 0);
+                                context.lineTo(x, height);
+                            }
+                            for (const y of homeCanvas.horizontalAlignmentGuides) {
+                                context.moveTo(0, y);
+                                context.lineTo(width, y);
+                            }
+                            for (const guide of homeCanvas.spacingGuides) {
+                                if (guide.orientation === "horizontal") {
+                                    context.moveTo(guide.from, guide.coordinate);
+                                    context.lineTo(guide.to, guide.coordinate);
+                                } else {
+                                    context.moveTo(guide.coordinate, guide.from);
+                                    context.lineTo(guide.coordinate, guide.to);
+                                }
+                            }
+                            context.stroke();
+
+                            context.setLineDash([]);
+                            context.beginPath();
+                            const tickSize = 4 / scaleFactor;
+                            for (const guide of homeCanvas.spacingGuides) {
+                                if (guide.orientation === "horizontal") {
+                                    context.moveTo(guide.from, guide.coordinate - tickSize);
+                                    context.lineTo(guide.from, guide.coordinate + tickSize);
+                                    context.moveTo(guide.to, guide.coordinate - tickSize);
+                                    context.lineTo(guide.to, guide.coordinate + tickSize);
+                                } else {
+                                    context.moveTo(guide.coordinate - tickSize, guide.from);
+                                    context.lineTo(guide.coordinate + tickSize, guide.from);
+                                    context.moveTo(guide.coordinate - tickSize, guide.to);
+                                    context.lineTo(guide.coordinate + tickSize, guide.to);
+                                }
+                            }
+                            context.stroke();
+                            context.restore();
+                        }
+
+                        onVisibleChanged: requestPaint()
+                    }
+
+                    onVerticalAlignmentGuidesChanged: alignmentGuideCanvas.requestPaint()
+                    onHorizontalAlignmentGuidesChanged: alignmentGuideCanvas.requestPaint()
+                    onSpacingGuidesChanged: alignmentGuideCanvas.requestPaint()
+                    onScaleChanged: alignmentGuideCanvas.requestPaint()
                 }
             }
 
@@ -283,22 +440,6 @@ Pane {
                                 onValueModified: root.appContext.skins.updateItem(
                                                      root.selectedItemId, {"y": value / 100})
                             }
-                            AppLabel { text: qsTr("宽度 %") }
-                            AppSpinBox {
-                                Layout.fillWidth: true
-                                from: 8; to: 100
-                                value: Math.round((root.selectedItem.w || 0.4) * 100)
-                                onValueModified: root.appContext.skins.updateItem(
-                                                     root.selectedItemId, {"w": value / 100})
-                            }
-                            AppLabel { text: qsTr("高度 %") }
-                            AppSpinBox {
-                                Layout.fillWidth: true
-                                from: 8; to: 100
-                                value: Math.round((root.selectedItem.h || 0.3) * 100)
-                                onValueModified: root.appContext.skins.updateItem(
-                                                     root.selectedItemId, {"h": value / 100})
-                            }
                             AppLabel { text: qsTr("透明度 %") }
                             AppSpinBox {
                                 Layout.fillWidth: true
@@ -315,6 +456,101 @@ Pane {
                             checked: root.selectedItem.properties
                                      && root.selectedItem.properties.detailed !== false
                             onToggled: root.setSelectedProperty("detailed", checked)
+                        }
+
+                        ColumnLayout {
+                            visible: root.selectedItem.type === "folders"
+                            Layout.fillWidth: true
+                            spacing: Theme.spacingSm
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Theme.spacingSm
+
+                                AppLabel {
+                                    Layout.fillWidth: true
+                                    text: qsTr("文件夹（%1/8）")
+                                          .arg(root.selectedFolderEntries.length)
+                                    font.weight: Font.DemiBold
+                                }
+
+                                AppButton {
+                                    text: qsTr("添加")
+                                    compact: true
+                                    enabled: root.selectedFolderEntries.length < 8
+                                    onClicked: root.addFolderEntry()
+                                }
+                            }
+
+                            Repeater {
+                                model: root.selectedFolderEntries
+
+                                delegate: MaterialPanel {
+                                    id: folderEditorRow
+
+                                    required property int index
+                                    required property var modelData
+
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    padding: Theme.spacingSm
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        spacing: Theme.spacingXs
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Theme.spacingXs
+
+                                            AppTextField {
+                                                Layout.fillWidth: true
+                                                Layout.minimumWidth: 0
+                                                text: root.folderEntryTitle(
+                                                          folderEditorRow.modelData,
+                                                          folderEditorRow.index)
+                                                placeholderText: qsTr("显示名称")
+                                                onEditingFinished: root.updateFolderEntry(
+                                                                       folderEditorRow.index,
+                                                                       "title", text)
+                                            }
+
+                                            AppToolButton {
+                                                text: "\uE74D"
+                                                font.family: Theme.iconFontFamily
+                                                compact: true
+                                                destructive: true
+                                                enabled: root.selectedFolderEntries.length > 1
+                                                Accessible.name: qsTr("删除此文件夹")
+                                                ToolTip.visible: hovered
+                                                ToolTip.text: qsTr("删除此文件夹")
+                                                onClicked: root.removeFolderEntry(
+                                                               folderEditorRow.index)
+                                            }
+                                        }
+
+                                        PathField {
+                                            Layout.fillWidth: true
+                                            Layout.minimumWidth: 0
+                                            appContext: root.appContext
+                                            compactButton: true
+                                            folderMode: true
+                                            pathValue: folderEditorRow.modelData.path || ""
+                                            onPathEdited: value => root.updateFolderEntry(
+                                                              folderEditorRow.index,
+                                                              "path", value)
+                                        }
+                                    }
+                                }
+                            }
+
+                            AppLabel {
+                                Layout.fillWidth: true
+                                text: qsTr("可使用 ${COMFYUI} 表示当前 ComfyUI 根目录。")
+                                color: Theme.foregroundSecondary
+                                font.pointSize: Theme.captionSize
+                                wrapMode: Text.WordWrap
+                            }
                         }
 
                         AppButton {

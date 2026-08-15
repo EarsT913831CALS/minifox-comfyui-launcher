@@ -8,6 +8,7 @@ Controls.Dialog {
     id: control
 
     property bool destructiveAccept: false
+    property bool acceptEnabled: true
     property string acceptText: ""
     property string rejectText: ""
 
@@ -36,6 +37,7 @@ Controls.Dialog {
 
             accented: acceptsAction && !control.destructiveAccept
             destructive: acceptsAction && control.destructiveAccept
+            enabled: !acceptsAction || control.acceptEnabled
 
             Binding {
                 target: dialogButton

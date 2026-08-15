@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Minifox.Shared
 
@@ -12,6 +13,7 @@ Pane {
     property int selectedCategoryIndex: 0
     property bool removeRequested: false
     property bool commandPromptErrorRequested: false
+    property bool configurationPackageErrorRequested: false
     property string searchQuery: ""
     readonly property var categoryModel: appContext.configuration.categories
     readonly property var selectedCategory: categoryModel[selectedCategoryIndex]
@@ -80,47 +82,89 @@ Pane {
             }
         }
 
-        AppTextField {
+        MaterialPanel {
             Layout.fillWidth: true
-            placeholderText: qsTr("搜索参数、分类或命令行标志")
-            text: root.searchQuery
-            Accessible.name: qsTr("搜索高级选项")
-            onTextChanged: root.searchQuery = text
+            padding: Theme.spacingSm
+
+            AppTextField {
+                anchors.fill: parent
+                placeholderText: qsTr("搜索参数、分类或命令行标志")
+                text: root.searchQuery
+                Accessible.name: qsTr("搜索高级选项")
+                onTextChanged: root.searchQuery = text
+            }
         }
 
         MaterialPanel {
             Layout.fillWidth: true
             padding: Theme.spacingMd
 
-            ColumnLayout {
+            GridLayout {
                 anchors.fill: parent
-                spacing: Theme.spacingSm
+                columns: 2
+                columnSpacing: Theme.spacingMd
+                rowSpacing: Theme.spacingSm
+
+                AppLabel {
+                    id: profileLabel
+                    text: qsTr("配置")
+                }
 
                 RowLayout {
+                    id: profileFields
+
                     Layout.fillWidth: true
                     spacing: Theme.spacingSm
 
-                    AppLabel {
-                        text: qsTr("配置")
-                    }
-
                     AppComboBox {
-                        Layout.preferredWidth: Math.min(240, Math.max(170, root.width * 0.24))
+                        id: profileSelector
+
+                        Layout.preferredWidth: Math.max(
+                                                   0,
+                                                   (profileFields.width
+                                                    - profileFields.spacing) * 0.35)
+                        Layout.maximumWidth: Layout.preferredWidth
+                        Layout.minimumWidth: 0
                         model: root.appContext.configuration.profileNames
                         currentIndex: root.appContext.configuration.currentProfileIndex
-                        onActivated: index => root.appContext.configuration.currentProfileIndex = index
+                        contentItem: Text {
+                            text: profileSelector.displayText
+                            font: profileSelector.font
+                            rightPadding: Theme.spacingSm
+                                          + (profileSelector.indicator
+                                             ? profileSelector.indicator.width : 0)
+                            color: profileSelector.enabled
+                                   ? Theme.foreground : Theme.foregroundSecondary
+                            verticalAlignment: Text.AlignVCenter
+                            maximumLineCount: 1
+                            wrapMode: Text.NoWrap
+                            elide: Text.ElideRight
+                            clip: true
+                        }
+                        onActivated: index => {
+                            if (!root.appContext.configurationPackages.switchProfile(index))
+                                root.configurationPackageErrorRequested = true;
+                        }
                     }
 
                     AppTextField {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: root.appContext.configuration.currentProfileName
                         placeholderText: qsTr("配置名称")
+                        maximumLength: 18
                         onEditingFinished: root.appContext.configuration.currentProfileName = text
                     }
+
+                }
+
+                Item {
+                    Layout.preferredWidth: profileLabel.implicitWidth
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.topMargin: 4
                     spacing: Theme.spacingSm
 
                     Item {
@@ -128,25 +172,69 @@ Pane {
                     }
 
                     AppButton {
+                        visible: root.appContext.configurationPackages.restartRequired
+                        text: qsTr("重启启动器")
+                        accented: true
+                        compact: true
+                        onClicked: root.appContext.configurationPackages.restartLauncher()
+                    }
+
+                    AppButton {
+                        text: qsTr("导入")
+                        accented: true
+                        compact: true
+                        onClicked: importConfigurationDialog.open()
+                    }
+
+                    AppButton {
+                        text: qsTr("导出")
+                        compact: true
+                        onClicked: exportConfigurationDialog.open()
+                    }
+
+                    AppButton {
                         text: qsTr("新建")
                         accented: true
-                        onClicked: root.appContext.configuration.addProfile()
+                        compact: true
+                        onClicked: {
+                            if (!root.appContext.configurationPackages.addProfile())
+                                root.configurationPackageErrorRequested = true;
+                        }
                     }
 
                     AppButton {
                         text: qsTr("复制")
-                        onClicked: root.appContext.configuration.duplicateCurrentProfile()
+                        compact: true
+                        onClicked: {
+                            if (!root.appContext.configurationPackages.duplicateCurrentProfile())
+                                root.configurationPackageErrorRequested = true;
+                        }
                     }
 
                     AppToolButton {
                         text: "\uE74D"
                         destructive: true
+                        compact: true
                         font.family: Theme.iconFontFamily
-                        Accessible.name: qsTr("删除当前配置")
+                        Accessible.name: qsTr("删除配置")
                         ToolTip.visible: hovered
-                        ToolTip.text: qsTr("删除当前配置")
+                        ToolTip.text: qsTr("删除配置")
                         onClicked: root.removeRequested = true
                     }
+
+                }
+
+                AppLabel {
+                    Layout.columnSpan: 2
+                    visible: root.appContext.configurationPackages.lastError.length > 0
+                             || root.appContext.configurationPackages.lastMessage.length > 0
+                    Layout.fillWidth: true
+                    text: root.appContext.configurationPackages.lastError.length > 0
+                          ? root.appContext.configurationPackages.lastError
+                          : root.appContext.configurationPackages.lastMessage
+                    color: root.appContext.configurationPackages.lastError.length > 0
+                           ? Theme.error : Theme.foregroundSecondary
+                    wrapMode: Text.Wrap
                 }
             }
         }
@@ -167,6 +255,7 @@ Pane {
                 PathField {
                     Layout.fillWidth: true
                     appContext: root.appContext
+                    compactButton: true
                     pathValue: root.appContext.configuration.pythonPath
                     executableMode: true
                     onPathEdited: value => root.appContext.configuration.pythonPath = value
@@ -178,6 +267,7 @@ Pane {
                 PathField {
                     Layout.fillWidth: true
                     appContext: root.appContext
+                    compactButton: true
                     pathValue: root.appContext.configuration.comfyRoot
                     folderMode: true
                     onPathEdited: value => root.appContext.configuration.comfyRoot = value
@@ -403,6 +493,29 @@ Pane {
         }
     }
 
+    FileDialog {
+        id: importConfigurationDialog
+        title: qsTr("导入启动配置")
+        fileMode: FileDialog.OpenFile
+        nameFilters: [qsTr("Minifox 配置包 (*.zip)"), qsTr("所有文件 (*)")]
+        onAccepted: {
+            if (!root.appContext.configurationPackages.importPackage(selectedFile))
+                root.configurationPackageErrorRequested = true;
+        }
+    }
+
+    FileDialog {
+        id: exportConfigurationDialog
+        title: qsTr("导出启动配置")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "zip"
+        nameFilters: [qsTr("Minifox 配置包 (*.zip)"), qsTr("所有文件 (*)")]
+        onAccepted: {
+            if (!root.appContext.configurationPackages.exportPackage(selectedFile))
+                root.configurationPackageErrorRequested = true;
+        }
+    }
+
     Loader {
         active: root.removeRequested
         sourceComponent: removeDialogComponent
@@ -411,6 +524,32 @@ Pane {
     Loader {
         active: root.commandPromptErrorRequested
         sourceComponent: commandPromptErrorDialogComponent
+    }
+
+    Loader {
+        active: root.configurationPackageErrorRequested
+        sourceComponent: configurationPackageErrorDialogComponent
+    }
+
+    Component {
+        id: configurationPackageErrorDialogComponent
+
+        AppDialog {
+            title: qsTr("配置操作失败")
+            modal: true
+            acceptText: qsTr("确定")
+            standardButtons: Dialog.Ok
+            closePolicy: Popup.CloseOnEscape
+            Component.onCompleted: open()
+
+            AppLabel {
+                text: root.appContext.configurationPackages.lastError
+                wrapMode: Text.Wrap
+            }
+
+            onAccepted: root.configurationPackageErrorRequested = false
+            onClosed: root.configurationPackageErrorRequested = false
+        }
     }
 
     Component {
@@ -440,25 +579,133 @@ Pane {
         id: removeDialogComponent
 
         AppDialog {
-            title: qsTr("删除启动配置")
+            id: profileDeleteDialog
+
+            property var selectedIds: []
+            readonly property var profiles: root.appContext.configuration.profileEntries
+
+            function setSelected(profileId, selected) {
+                const updated = selectedIds.slice();
+                const index = updated.indexOf(profileId);
+                if (selected && index < 0)
+                    updated.push(profileId);
+                else if (!selected && index >= 0)
+                    updated.splice(index, 1);
+                selectedIds = updated;
+            }
+
+            title: qsTr("选择要删除的配置")
+            anchors.centerIn: Overlay.overlay
+            width: Math.min(520, root.width - Theme.spacingXl * 2)
             modal: true
             destructiveAccept: true
+            acceptEnabled: selectedIds.length > 0
             acceptText: qsTr("删除")
             rejectText: qsTr("取消")
             standardButtons: Dialog.Yes | Dialog.Cancel
             closePolicy: Popup.CloseOnEscape
             Component.onCompleted: open()
 
-            AppLabel {
-                text: qsTr("确定删除“%1”吗？此操作无法撤销。").arg(root.appContext.configuration.currentProfileName)
-                wrapMode: Text.Wrap
+            contentItem: ColumnLayout {
+                spacing: Theme.spacingMd
+
+                AppLabel {
+                    text: qsTr("选择一个或多个配置。当前使用的配置不能删除。")
+                    color: Theme.foregroundSecondary
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(
+                                                Math.max(deleteProfileList.contentHeight, 48),
+                                                240)
+                    color: Theme.surfaceRaised
+                    border.width: 1
+                    border.color: Theme.materialStroke
+                    radius: Theme.controlRadius
+                    clip: true
+
+                    ListView {
+                        id: deleteProfileList
+
+                        anchors.fill: parent
+                        model: profileDeleteDialog.profiles
+                        boundsBehavior: Flickable.StopAtBounds
+                        clip: true
+                        ScrollBar.vertical: ScrollBar {
+                            policy: ScrollBar.AsNeeded
+                        }
+
+                        delegate: Rectangle {
+                            id: deleteProfileRow
+
+                            required property int index
+                            required property var modelData
+
+                            width: ListView.view.width
+                            height: 48
+                            color: modelData.current
+                                   ? Theme.materialFillStrong
+                                   : index % 2 === 0
+                                     ? Theme.materialFill : Theme.surfaceRaised
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spacingSm
+                                anchors.rightMargin: Theme.spacingMd
+                                spacing: Theme.spacingSm
+
+                                CheckBox {
+                                    enabled: !deleteProfileRow.modelData.current
+                                    checked: profileDeleteDialog.selectedIds.indexOf(
+                                                 deleteProfileRow.modelData.id) >= 0
+                                    Accessible.name: deleteProfileRow.modelData.name
+                                    onToggled: profileDeleteDialog.setSelected(
+                                                   deleteProfileRow.modelData.id, checked)
+                                }
+
+                                AppLabel {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    text: deleteProfileRow.modelData.name
+                                    maximumLineCount: 1
+                                    elide: Text.ElideRight
+                                }
+
+                                StatusBadge {
+                                    visible: deleteProfileRow.modelData.current
+                                    text: qsTr("当前使用")
+                                    icon: "\uE73E"
+                                    statusColor: Theme.accent
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 1
+                                visible: deleteProfileRow.index
+                                         < deleteProfileList.count - 1
+                                color: Theme.materialStroke
+                            }
+                        }
+                    }
+                }
             }
 
             onAccepted: {
-                root.appContext.configuration.removeCurrentProfile();
+                if (profileDeleteDialog.selectedIds.length > 0
+                        && !root.appContext.configurationPackages.deleteProfiles(
+                            profileDeleteDialog.selectedIds)) {
+                    root.configurationPackageErrorRequested = true;
+                }
                 root.removeRequested = false;
             }
             onRejected: root.removeRequested = false
+            onClosed: root.removeRequested = false
         }
     }
 }

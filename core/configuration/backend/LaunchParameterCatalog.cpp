@@ -318,7 +318,7 @@ const QList<LaunchParameterDefinition> &LaunchParameterCatalog::parameters()
                   flagOptions({{"", "默认（safetensors mmap）", ""}, {"enable", "启用 torch mmap", "--mmap-torch-files"}, {"disable", "禁用 mmap", "--disable-mmap"}})),
 
         parameter("attention", "performance", "注意力实现", "选择交叉注意力优化实现。", "choice", "flagChoice", {}, "",
-                  flagOptions({{"", "默认（自动选择）", ""}, {"split", "Split", "--use-split-cross-attention"}, {"quad", "Sub-quadratic", "--use-quad-cross-attention"}, {"pytorch", "PyTorch 2", "--use-pytorch-cross-attention"}, {"sage", "Sage Attention", "--use-sage-attention"}, {"flash", "FlashAttention", "--use-flash-attention"}})),
+                  flagOptions({{"", "默认（自动选择）", ""}, {"ck", "Comfy-Kitchen Attention", "--use-ck-attention"}, {"pytorch", "SDP Attention", "--use-pytorch-cross-attention"}, {"sage", "Sage Attention", "--use-sage-attention"}, {"quad", "SubQ Attention", "--use-quad-cross-attention"}, {"flash", "FlashAttention", "--use-flash-attention"}, {"split", "Split Attention", "--use-split-cross-attention"}})),
         parameter("disableXformers", "performance", "禁用 xFormers", "强制不使用 xFormers。", "switch", "switch", "--disable-xformers", false),
         parameter("upcastAttention", "performance", "注意力 Upcast", "显式强制启用或禁用注意力 upcast。", "choice", "triState", "--force-upcast-attention", "default",
                   flagOptions({{"default", "默认（自动判断）", ""}, {"enable", "强制启用", "--force-upcast-attention"}, {"disable", "禁用", "--dont-upcast-attention"}}), "--dont-upcast-attention"),

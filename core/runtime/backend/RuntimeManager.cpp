@@ -788,9 +788,6 @@ void RuntimeManager::updateAcceleratorSummary(ZludaBootstrap::BackendKind backen
         break;
     }
 
-    if (!detection.torchVersion.trimmed().isEmpty()) {
-        parts.append(tr("PyTorch %1").arg(detection.torchVersion.trimmed()));
-    }
     if (!detection.deviceNames.isEmpty()) {
         parts.append(detection.deviceNames.join(QStringLiteral(", ")));
     }
