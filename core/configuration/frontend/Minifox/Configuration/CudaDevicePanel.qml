@@ -8,11 +8,22 @@ MaterialPanel {
     id: root
 
     required property var appContext
-    readonly property var hardware: appContext.hardware
+    readonly property var devices: appContext.runtime.acceleratorDevices
+
+    function useAllCudaDevices() {
+        const indexes = [];
+        for (let index = 0; index < devices.length; ++index) {
+            const device = devices[index];
+            if (device.type.toLowerCase() === "cuda" && device.index >= 0)
+                indexes.push(device.index);
+        }
+        if (indexes.length > 0)
+            appContext.configuration.setParameterValue("cudaDevice", indexes.join(","));
+    }
 
     Layout.fillWidth: true
     strong: true
-    accented: hardware.hasCuda
+    accented: true
     padding: Theme.spacingMd
 
     ColumnLayout {
@@ -25,7 +36,7 @@ MaterialPanel {
 
             IconLabel {
                 glyph: "\uE950"
-                color: root.hardware.hasCuda ? Theme.accent : Theme.foregroundSecondary
+                color: Theme.accent
             }
 
             ColumnLayout {
@@ -33,40 +44,27 @@ MaterialPanel {
                 spacing: Theme.spacingXs
 
                 AppLabel {
-                    text: qsTr("CUDA 设备自动检测")
+                    text: qsTr("本次 ComfyUI 检测到的设备")
                     font.weight: Font.DemiBold
                     Layout.fillWidth: true
                 }
 
                 AppLabel {
-                    text: root.hardware.summary
+                    text: qsTr("每次 ComfyUI 启动完成后自动刷新。")
                     color: Theme.foregroundSecondary
-                    wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
             }
 
             StatusBadge {
-                text: root.hardware.detecting
-                      ? qsTr("检测中")
-                      : root.hardware.hasCuda
-                        ? qsTr("已检测")
-                        : qsTr("未发现")
-                icon: root.hardware.hasCuda ? "\uE73E" : "\uE711"
-                statusColor: root.hardware.hasCuda ? Theme.success : Theme.foregroundSecondary
+                text: qsTr("已刷新")
+                icon: "\uE73E"
+                statusColor: Theme.success
             }
         }
 
-        AppLabel {
-            visible: root.hardware.lastError.length > 0
-            text: root.hardware.lastError
-            color: Theme.error
-            wrapMode: Text.Wrap
-            Layout.fillWidth: true
-        }
-
         Repeater {
-            model: root.hardware.cudaDevices
+            model: root.devices
 
             delegate: Rectangle {
                 id: deviceDelegate
@@ -95,7 +93,8 @@ MaterialPanel {
 
                         AppLabel {
                             anchors.centerIn: parent
-                            text: String(deviceDelegate.modelData.index)
+                            text: deviceDelegate.modelData.index >= 0
+                                  ? String(deviceDelegate.modelData.index) : "–"
                             color: Theme.accent
                             font.weight: Font.DemiBold
                         }
@@ -113,62 +112,36 @@ MaterialPanel {
                         }
 
                         AppLabel {
-                            text: {
-                                const details = [deviceDelegate.modelData.memoryText];
-                                if (deviceDelegate.modelData.capability)
-                                    details.push(qsTr("计算能力 %1").arg(deviceDelegate.modelData.capability));
-                                return details.join(" · ");
-                            }
+                            visible: text.length > 0
+                            text: deviceDelegate.modelData.memoryText
                             color: Theme.foregroundSecondary
                             Layout.fillWidth: true
                         }
                     }
 
                     AppButton {
+                        visible: deviceDelegate.modelData.type.toLowerCase() === "cuda"
+                                 && deviceDelegate.modelData.index >= 0
                         text: qsTr("使用此设备")
                         compact: true
-                        onClicked: root.hardware.useDevice(deviceDelegate.modelData.index)
+                        onClicked: root.appContext.configuration.setParameterValue(
+                                       "cudaDevice", String(deviceDelegate.modelData.index))
                     }
                 }
             }
         }
 
         RowLayout {
+            visible: root.devices.length > 1
             Layout.fillWidth: true
-            spacing: Theme.spacingSm
 
-            AppLabel {
-                text: {
-                    const details = [];
-                    if (root.hardware.detectionSource)
-                        details.push(qsTr("来源：%1").arg(root.hardware.detectionSource));
-                    if (root.hardware.torchVersion)
-                        details.push(qsTr("PyTorch %1").arg(root.hardware.torchVersion));
-                    if (root.hardware.cudaRuntimeVersion)
-                        details.push(qsTr("CUDA %1").arg(root.hardware.cudaRuntimeVersion));
-                    if (root.hardware.driverVersion)
-                        details.push(qsTr("驱动 %1").arg(root.hardware.driverVersion));
-                    return details.join(" · ");
-                }
-                color: Theme.foregroundSecondary
-                font.pointSize: Theme.captionSize
-                elide: Text.ElideRight
-                Layout.fillWidth: true
-            }
+            Item { Layout.fillWidth: true }
 
             AppButton {
-                text: qsTr("重新检测")
-                compact: true
-                enabled: !root.hardware.detecting
-                onClicked: root.hardware.detect()
-            }
-
-            AppButton {
-                visible: root.hardware.cudaDevices.length > 1
                 text: qsTr("使用全部设备")
                 accented: true
                 compact: true
-                onClicked: root.hardware.applyAllDevices()
+                onClicked: root.useAllCudaDevices()
             }
         }
     }

@@ -25,7 +25,8 @@ public:
     Q_INVOKABLE bool addProfile();
     Q_INVOKABLE bool duplicateCurrentProfile();
     Q_INVOKABLE bool importPackage(const QUrl &source);
-    Q_INVOKABLE bool exportPackage(const QUrl &destination);
+    Q_INVOKABLE bool exportPackage(const QUrl &destination,
+                                   bool includeSensitiveValues = false);
     Q_INVOKABLE bool deleteProfiles(const QStringList &profileIds);
     Q_INVOKABLE bool restartLauncher();
 
@@ -34,7 +35,8 @@ signals:
 
 private:
     QString snapshotPath(const QString &profileId) const;
-    bool captureCurrentProfile(const QString &destination);
+    bool captureCurrentProfile(const QString &destination,
+                               bool includeSensitiveValues = true);
     bool applyPackageState(const QString &packagePath, bool *changed);
     void setError(const QString &message);
     void setMessage(const QString &message);

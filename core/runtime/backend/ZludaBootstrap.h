@@ -53,6 +53,7 @@ public:
     static BackendKind classifyBackend(const QString &cudaVersion,
                                        const QString &hipVersion,
                                        const QStringList &deviceNames);
+    static BackendKind classifyInstalledTorch(const QString &pythonPath);
 
     static QStringList systemAdapterNames();
     static SystemAdapterKind classifySystemAdapters(const QStringList &adapterNames);

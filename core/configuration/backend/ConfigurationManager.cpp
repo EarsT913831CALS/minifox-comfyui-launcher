@@ -261,6 +261,24 @@ QVariantList ConfigurationManager::environmentEntries() const
     return entries;
 }
 
+bool ConfigurationManager::isSensitiveEnvironmentName(const QString &name)
+{
+    static const QRegularExpression secretName(
+        QStringLiteral("(TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY)"),
+        QRegularExpression::CaseInsensitiveOption);
+    return secretName.match(name).hasMatch();
+}
+
+bool ConfigurationManager::hasSensitiveEnvironmentValues() const
+{
+    for (const auto &entry : currentProfile().environment) {
+        if (!entry.value.isEmpty() && isSensitiveEnvironmentName(entry.name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 QVariantList ConfigurationManager::categories() const
 {
     return LaunchParameterCatalog::categories();
@@ -427,9 +445,22 @@ void ConfigurationManager::removeEnvironmentEntry(int index)
     updateAfterEdit();
 }
 
-QVariantMap ConfigurationManager::currentProfileSnapshot() const
+QVariantMap ConfigurationManager::currentProfileSnapshot(bool includeSensitiveValues) const
 {
     const auto &profile = currentProfile();
+    QVariantList environment = environmentEntries();
+    if (!includeSensitiveValues) {
+        for (QVariant &value : environment) {
+            QVariantMap entry = value.toMap();
+            if (!entry.value(QStringLiteral("value")).toString().isEmpty()
+                && isSensitiveEnvironmentName(entry.value(QStringLiteral("name")).toString())) {
+                entry.insert(QStringLiteral("value"), QString{});
+                entry.insert(QStringLiteral("enabled"), false);
+                entry.insert(QStringLiteral("redacted"), true);
+                value = entry;
+            }
+        }
+    }
     return {
         {QStringLiteral("id"), profile.id},
         {QStringLiteral("name"), profile.name},
@@ -437,7 +468,7 @@ QVariantMap ConfigurationManager::currentProfileSnapshot() const
         {QStringLiteral("comfyRoot"), profile.comfyRoot},
         {QStringLiteral("customArguments"), profile.customArguments},
         {QStringLiteral("parameters"), profile.parameters},
-        {QStringLiteral("environment"), environmentEntries()}
+        {QStringLiteral("environment"), environment}
     };
 }
 

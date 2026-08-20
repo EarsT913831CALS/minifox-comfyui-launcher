@@ -23,6 +23,13 @@ qt_add_resources(minifox_runtime_backend minifox_zluda_packages
     FILES ${minifox_zluda_package_files}
 )
 
+qt_add_resources(minifox_runtime_backend minifox_python_bridge
+    PREFIX "/minifox/python"
+    BASE "${PROJECT_SOURCE_DIR}/assets/python"
+    FILES
+        ${PROJECT_SOURCE_DIR}/assets/python/minifox_progress_bridge.py
+)
+
 target_include_directories(minifox_runtime_backend
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}

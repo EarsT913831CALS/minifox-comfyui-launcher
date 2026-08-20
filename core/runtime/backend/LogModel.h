@@ -23,6 +23,9 @@ class LogModel final : public QAbstractListModel
     Q_PROPERTY(QString progressRate READ progressRate NOTIFY progressChanged)
 
 public:
+    static constexpr int MaximumEntryCount = 50000;
+    static constexpr int MaximumPartialCharacters = 1024 * 1024;
+
     enum Role {
         TimestampRole = Qt::UserRole + 1,
         TextRole,
@@ -86,6 +89,7 @@ public:
 
 signals:
     void countChanged();
+    void historyTrimmed();
     void progressChanged();
 
 private:
@@ -117,6 +121,7 @@ private:
 
     void appendData(StreamState &state, const QByteArray &data, const QString &stream);
     void appendLine(StreamState &state, QString line, const QString &stream);
+    void appendEntry(Entry entry);
     bool updateProgressFromLine(const QString &line);
     void applyProgress(const ProgressInfo &progress);
     void resetProgress();

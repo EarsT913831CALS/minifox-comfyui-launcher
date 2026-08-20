@@ -297,11 +297,7 @@ void LogModel::appendStandardError(const QByteArray &data)
 
 void LogModel::appendSystemMessage(const QString &message, const QString &color)
 {
-    const int row = m_entries.size();
-    beginInsertRows({}, row, row);
-    m_entries.append({QDateTime::currentDateTime(), message, QStringLiteral("system"), color});
-    endInsertRows();
-    emit countChanged();
+    appendEntry({QDateTime::currentDateTime(), message, QStringLiteral("system"), color});
 }
 
 void LogModel::flush()
@@ -610,6 +606,13 @@ void LogModel::appendData(StreamState &state, const QByteArray &data, const QStr
         }
     }
 
+    while (state.partial.size() > MaximumPartialCharacters) {
+        QString line = state.partial.first(MaximumPartialCharacters);
+        state.partial.remove(0, MaximumPartialCharacters);
+        if (!updateProgressFromLine(line)) {
+            appendLine(state, std::move(line), stream);
+        }
+    }
     if (!state.partial.isEmpty()) {
         updateProgressFromLine(state.partial);
     }
@@ -641,9 +644,28 @@ void LogModel::appendLine(StreamState &state, QString line, const QString &strea
     static const QRegularExpression otherEscape(QStringLiteral("\\x1B(?:[@-_][0-?]*[ -/]*[@-~])"));
     line.remove(otherEscape);
 
+    appendEntry({QDateTime::currentDateTime(), line, stream, state.color});
+}
+
+void LogModel::appendEntry(Entry entry)
+{
+    if (entry.text.size() > MaximumPartialCharacters) {
+        entry.text.truncate(MaximumPartialCharacters);
+        entry.text.append(QStringLiteral(" ... [truncated]"));
+    }
+
+    constexpr int trimBatch = 5000;
+    if (m_entries.size() >= MaximumEntryCount) {
+        const int removalCount = qMin(trimBatch, m_entries.size());
+        beginRemoveRows({}, 0, removalCount - 1);
+        m_entries.remove(0, removalCount);
+        endRemoveRows();
+        emit historyTrimmed();
+    }
+
     const int row = m_entries.size();
     beginInsertRows({}, row, row);
-    m_entries.append({QDateTime::currentDateTime(), line, stream, state.color});
+    m_entries.append(std::move(entry));
     endInsertRows();
     emit countChanged();
 }
@@ -709,23 +731,6 @@ bool LogModel::updateProgressFromLine(const QString &line)
         const QString rate = timingMatch.captured(3).trimmed();
         if (!rate.startsWith(QLatin1Char('?'))) {
             progress.rate = rate;
-        }
-    }
-
-    static const QRegularExpression bracketExpression(
-        QStringLiteral(R"(\[([^\]]*)\]\s*$)"));
-    const QRegularExpressionMatch bracketMatch = bracketExpression.match(normalized);
-    if (progress.label.isEmpty() && bracketMatch.hasMatch()) {
-        const QStringList parts =
-            bracketMatch.captured(1).split(QLatin1Char(','), Qt::SkipEmptyParts);
-        for (qsizetype index = 2; index < parts.size(); ++index) {
-            const QString candidate = parts.at(index).trimmed();
-            if (!candidate.isEmpty()
-                && !candidate.contains(QStringLiteral("it/s"), Qt::CaseInsensitive)
-                && !candidate.contains(QStringLiteral("s/it"), Qt::CaseInsensitive)) {
-                progress.label = candidate.left(120);
-                break;
-            }
         }
     }
 
