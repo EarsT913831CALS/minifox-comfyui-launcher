@@ -25,7 +25,7 @@
 
 namespace {
 
-constexpr qsizetype kMaximumPackageBytes = 1024ll * 1024 * 1024;
+constexpr qsizetype kMaximumPackageBytes = 64ll * 1024 * 1024;
 constexpr qsizetype kMaximumPackageEntries = 8192;
 constexpr auto kPackageFormat = "minifox-configuration";
 
@@ -108,6 +108,18 @@ bool writeStoreZip(const QString &path,
         return false;
     }
 
+    qsizetype totalBytes = 0;
+    for (const auto &[name, bytes] : files) {
+        Q_UNUSED(name);
+        if (bytes.size() > kMaximumPackageBytes - totalBytes) {
+            if (error) {
+                *error = QObject::tr("配置包超过 64 MB 限制。");
+            }
+            return false;
+        }
+        totalBytes += bytes.size();
+    }
+
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         if (error) {
@@ -118,15 +130,12 @@ bool writeStoreZip(const QString &path,
     QDataStream stream(&file);
     stream.setByteOrder(QDataStream::LittleEndian);
     QList<CentralEntry> central;
-    qsizetype totalBytes = 0;
 
     for (const auto &[nameString, bytes] : files) {
         const QByteArray name = nameString.toUtf8();
-        totalBytes += bytes.size();
         if (!safeArchivePath(nameString)
             || name.size() > std::numeric_limits<quint16>::max()
-            || bytes.size() > std::numeric_limits<quint32>::max()
-            || totalBytes > kMaximumPackageBytes) {
+            || bytes.size() > std::numeric_limits<quint32>::max()) {
             if (error) {
                 *error = QObject::tr("配置包中包含无效或过大的文件。");
             }
@@ -163,6 +172,13 @@ bool writeStoreZip(const QString &path,
            << static_cast<quint16>(central.size())
            << centralSize << centralOffset << quint16(0);
 
+    if (file.size() > kMaximumPackageBytes) {
+        file.cancelWriting();
+        if (error) {
+            *error = QObject::tr("配置包超过 64 MB 限制。");
+        }
+        return false;
+    }
     if (!file.commit()) {
         if (error) {
             *error = QObject::tr("无法保存配置包：%1").arg(file.errorString());
@@ -183,7 +199,7 @@ bool readStoreZip(const QString &path, QHash<QString, QByteArray> *files, QStrin
     }
     if (file.size() > kMaximumPackageBytes) {
         if (error) {
-            *error = QObject::tr("配置包超过 1 GB 限制。");
+            *error = QObject::tr("配置包超过 64 MB 限制。");
         }
         return false;
     }
@@ -446,7 +462,8 @@ QString ConfigurationPackageManager::snapshotPath(const QString &profileId) cons
         .filePath(QStringLiteral("configurations/%1.zip").arg(profileId));
 }
 
-bool ConfigurationPackageManager::captureCurrentProfile(const QString &destination)
+bool ConfigurationPackageManager::captureCurrentProfile(const QString &destination,
+                                                         bool includeSensitiveValues)
 {
     QHash<QString, QByteArray> state;
     QString error;
@@ -465,7 +482,7 @@ bool ConfigurationPackageManager::captureCurrentProfile(const QString &destinati
          QJsonDocument(manifest).toJson(QJsonDocument::Indented)},
         {QStringLiteral("profile.json"),
          QJsonDocument(QJsonObject::fromVariantMap(
-                           m_configuration->currentProfileSnapshot()))
+                           m_configuration->currentProfileSnapshot(includeSensitiveValues)))
              .toJson(QJsonDocument::Indented)}
     };
     QStringList paths = state.keys();
@@ -571,13 +588,14 @@ bool ConfigurationPackageManager::duplicateCurrentProfile()
     return true;
 }
 
-bool ConfigurationPackageManager::exportPackage(const QUrl &destination)
+bool ConfigurationPackageManager::exportPackage(const QUrl &destination,
+                                                bool includeSensitiveValues)
 {
     QString path = cleanLocalPath(destination);
     if (QFileInfo(path).suffix().compare(QStringLiteral("zip"), Qt::CaseInsensitive) != 0) {
         path += QStringLiteral(".zip");
     }
-    if (path.isEmpty() || !captureCurrentProfile(path)) {
+    if (path.isEmpty() || !captureCurrentProfile(path, includeSensitiveValues)) {
         return false;
     }
     setMessage(tr("配置已导出：%1").arg(QDir::toNativeSeparators(path)));

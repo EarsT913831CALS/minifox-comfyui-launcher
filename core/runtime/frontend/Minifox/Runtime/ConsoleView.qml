@@ -41,6 +41,10 @@ Rectangle {
         function onCountChanged() {
             root.scheduleLogRefresh();
         }
+
+        function onHistoryTrimmed() {
+            root.rebuildConsoleText();
+        }
     }
 
     ScrollView {

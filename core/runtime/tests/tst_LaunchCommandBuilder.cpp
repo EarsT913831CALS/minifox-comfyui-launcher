@@ -2,7 +2,6 @@
 #include "ApplicationSettings.h"
 #include "CommandPromptBuilder.h"
 #include "ConfigurationManager.h"
-#include "HardwareManager.h"
 #include "LogModel.h"
 #include "RuntimeManager.h"
 #include "ZludaBootstrap.h"
@@ -57,6 +56,7 @@ private slots:
     void commandPromptActivatesSelectedEnvironment();
     void explicitModesAndCustomArguments();
     void environmentIsAppliedAndSecretsAreMasked();
+    void sensitiveProfileSnapshotsCanBeRedacted();
     void proxySettingsAreAppliedToChildEnvironment();
     void appearanceSettingsExposeEffectiveValues();
     void quickControlsUseTheApplicationPaletteWhenCreated();
@@ -68,16 +68,17 @@ private slots:
     void runtimeAcceptsBareVcsDependencies();
     void runtimeBlocksMissingDependencies();
     void zludaBackendClassificationProtectsNvidia();
+    void installedTorchBackendUsesVersionMetadata();
     void zludaRuntimePreparationStagesAliases();
     void zludaLocalIntegrationWhenConfigured();
     void zludaRuntimeManagerIntegrationWhenConfigured();
-    void hardwareManagerDefersPortableZludaUntilLaunch();
     void runtimeShutdownReleasesChildPort();
     void profilesPersistWithoutLeavingTheTestDirectory();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
     void consoleDisplayTextSupportsDocumentSelection();
     void consoleViewRefreshesWhenLogCountChanges();
+    void consoleHistoryIsBounded();
     void attentionOptionsUseRequestedOrderAndFlags();
     void profileNamesAreLimitedAndSuffixesFit();
     void currentProfileIsProtectedFromBatchDeletion();
@@ -233,6 +234,47 @@ void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
     QVERIFY(result.preview.contains(QStringLiteral("set \"CUSTOM_ENV=value with spaces\"")));
     QVERIFY(result.preview.contains(QStringLiteral("SERVICE_API_KEY=••••••••")));
     QVERIFY(!result.preview.contains(QStringLiteral("top-secret")));
+}
+
+void LaunchCommandBuilderTest::sensitiveProfileSnapshotsCanBeRedacted()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    ConfigurationManager manager(
+        temporaryDirectory.filePath(QStringLiteral("profiles.json")));
+
+    const int ordinaryIndex = manager.addEnvironmentEntry();
+    manager.updateEnvironmentEntry(ordinaryIndex, QStringLiteral("CUSTOM_ENV"),
+                                   QStringLiteral("ordinary-value"), true);
+    const int secretIndex = manager.addEnvironmentEntry();
+    manager.updateEnvironmentEntry(secretIndex, QStringLiteral("SERVICE_API_KEY"),
+                                   QStringLiteral("top-secret"), true);
+    QVERIFY(manager.hasSensitiveEnvironmentValues());
+
+    const QVariantList fullEnvironment = manager.currentProfileSnapshot(true)
+                                             .value(QStringLiteral("environment"))
+                                             .toList();
+    QCOMPARE(fullEnvironment.at(secretIndex).toMap()
+                 .value(QStringLiteral("value")).toString(),
+             QStringLiteral("top-secret"));
+    QVERIFY(fullEnvironment.at(secretIndex).toMap()
+                .value(QStringLiteral("enabled")).toBool());
+
+    const QVariantList redactedEnvironment = manager.currentProfileSnapshot(false)
+                                                 .value(QStringLiteral("environment"))
+                                                 .toList();
+    QCOMPARE(redactedEnvironment.at(ordinaryIndex).toMap()
+                 .value(QStringLiteral("value")).toString(),
+             QStringLiteral("ordinary-value"));
+    QVERIFY(redactedEnvironment.at(ordinaryIndex).toMap()
+                .value(QStringLiteral("enabled")).toBool());
+    QCOMPARE(redactedEnvironment.at(secretIndex).toMap()
+                 .value(QStringLiteral("value")).toString(),
+             QString{});
+    QVERIFY(!redactedEnvironment.at(secretIndex).toMap()
+                 .value(QStringLiteral("enabled")).toBool());
+    QVERIFY(redactedEnvironment.at(secretIndex).toMap()
+                .value(QStringLiteral("redacted")).toBool());
 }
 
 void LaunchCommandBuilderTest::proxySettingsAreAppliedToChildEnvironment()
@@ -791,6 +833,45 @@ void LaunchCommandBuilderTest::zludaBackendClassificationProtectsNvidia()
     QCOMPARE(ZludaBootstrap::classifySystemAdapters({}), Adapter::Unknown);
 }
 
+void LaunchCommandBuilderTest::installedTorchBackendUsesVersionMetadata()
+{
+    using Backend = ZludaBootstrap::BackendKind;
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    QDir root(temporaryDirectory.path());
+    QVERIFY(root.mkpath(QStringLiteral("venv/Scripts")));
+    QVERIFY(root.mkpath(QStringLiteral("venv/Lib/site-packages/torch")));
+
+    const QString pythonPath = root.filePath(QStringLiteral("venv/Scripts/python.exe"));
+    const QString versionPath =
+        root.filePath(QStringLiteral("venv/Lib/site-packages/torch/version.py"));
+    const auto writeFile = [](const QString &path, const QByteArray &contents) {
+        QFile file(path);
+        return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+            && file.write(contents) == contents.size();
+    };
+
+    QVERIFY(writeFile(pythonPath, QByteArrayLiteral("python")));
+    QVERIFY(writeFile(versionPath,
+                      QByteArrayLiteral("__version__ = '2.7.0+rocm6.4'\n"
+                                        "cuda = None\n"
+                                        "hip = '6.4.0'\n")));
+    QCOMPARE(ZludaBootstrap::classifyInstalledTorch(pythonPath), Backend::Rocm);
+
+    QVERIFY(writeFile(versionPath,
+                      QByteArrayLiteral("__version__: str = '2.8.0+cu128'\n"
+                                        "cuda: str = '12.8'\n"
+                                        "hip = None\n")));
+    QCOMPARE(ZludaBootstrap::classifyInstalledTorch(pythonPath), Backend::Nvidia);
+
+    QVERIFY(writeFile(versionPath,
+                      QByteArrayLiteral("__version__ = '2.8.0+cpu'\n"
+                                        "cuda = None\n"
+                                        "hip = None\n")));
+    QCOMPARE(ZludaBootstrap::classifyInstalledTorch(pythonPath), Backend::Unknown);
+}
+
 void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
 {
     QTemporaryDir temporaryDirectory;
@@ -1010,37 +1091,6 @@ void LaunchCommandBuilderTest::zludaRuntimeManagerIntegrationWhenConfigured()
     runtime.shutdown();
 }
 
-void LaunchCommandBuilderTest::hardwareManagerDefersPortableZludaUntilLaunch()
-{
-    const QString pythonPath = qEnvironmentVariable("MINIFOX_TEST_ZLUDA_PYTHON");
-    const QString rocmPath = qEnvironmentVariable("MINIFOX_TEST_ROCM_PATH");
-    if (pythonPath.isEmpty() || rocmPath.isEmpty()) {
-        QSKIP("Local ZLUDA integration paths were not provided");
-    }
-
-    QTemporaryDir temporaryDirectory;
-    QVERIFY(temporaryDirectory.isValid());
-    QDir root(temporaryDirectory.path());
-    QVERIFY(root.mkdir(QStringLiteral("ComfyUI")));
-
-    ConfigurationManager configuration(
-        root.filePath(QStringLiteral("profiles.json")));
-    configuration.setComfyRoot(root.filePath(QStringLiteral("ComfyUI")));
-    configuration.setPythonPath(pythonPath);
-    int environmentIndex = configuration.addEnvironmentEntry();
-    configuration.updateEnvironmentEntry(
-        environmentIndex, QStringLiteral("HIP_PATH"), rocmPath, true);
-
-    HardwareManager hardware(&configuration);
-    QTRY_VERIFY_WITH_TIMEOUT(!hardware.detecting(), 60000);
-    QVERIFY2(hardware.lastError().isEmpty(), qPrintable(hardware.lastError()));
-    QVERIFY2(hardware.detectionSource().contains(QStringLiteral("ZLUDA 将在启动 ComfyUI 时检查")),
-             qPrintable(QStringLiteral("source=%1 torch=%2 cuda=%3")
-                            .arg(hardware.detectionSource(),
-                                 hardware.torchVersion(),
-                                 hardware.cudaRuntimeVersion())));
-}
-
 void LaunchCommandBuilderTest::runtimeBlocksMissingDependencies()
 {
     const QString python = QStandardPaths::findExecutable(QStringLiteral("python.exe"));
@@ -1158,7 +1208,7 @@ void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()
     QCOMPARE(model.progressPercent(), 0);
     QCOMPARE(model.progressCurrent(), 0);
     QCOMPARE(model.progressTotal(), 8);
-    QCOMPARE(model.progressLabel(), QStringLiteral("Model Initializing ..."));
+    QVERIFY(model.progressLabel().isEmpty());
 
     QByteArray damagedProgressFrame = QByteArrayLiteral("\r 25%|");
     damagedProgressFrame.append(char(0xff));
@@ -1176,7 +1226,16 @@ void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()
     QCOMPARE(model.progressCurrent(), 4);
     QCOMPARE(model.progressRemaining(), QStringLiteral("00:01"));
     QCOMPARE(model.progressRate(), QStringLiteral("2.47it/s"));
-    QCOMPARE(model.progressLabel(), QStringLiteral("Model Initializing ..."));
+    QVERIFY(model.progressLabel().isEmpty());
+
+    model.appendStandardError(
+        QByteArrayLiteral("\rNode 42: 75%|#######5  | 6/8 [00:02<00:01, 2.35steps/s]"));
+    QCOMPARE(model.rowCount(), 0);
+    QCOMPARE(model.progressPercent(), 75);
+    QCOMPARE(model.progressCurrent(), 6);
+    QCOMPARE(model.progressTotal(), 8);
+    QCOMPARE(model.progressLabel(), QStringLiteral("Node 42"));
+    QCOMPARE(model.progressRate(), QStringLiteral("2.35steps/s"));
 
     model.appendStandardError(
         QByteArrayLiteral("\r100%|##########| 8/8 [00:03<00:00, 2.41it/s]\n"));
@@ -1257,6 +1316,44 @@ void LaunchCommandBuilderTest::consoleDisplayTextSupportsDocumentSelection()
     QVERIFY(timestampedRange.contains(QStringLiteral("<td width=\"48\"")));
     QVERIFY(timestampedRange.contains(QStringLiteral("<td width=\"104\"")));
     QVERIFY(timestampedRange.contains(QStringLiteral("<td width=\"32\"")));
+}
+
+void LaunchCommandBuilderTest::consoleHistoryIsBounded()
+{
+    LogModel model;
+    QSignalSpy trimmedSpy(&model, &LogModel::historyTrimmed);
+    for (int line = 0; line <= LogModel::MaximumEntryCount; ++line) {
+        model.appendSystemMessage(QStringLiteral("line-%1").arg(line));
+    }
+
+    QVERIFY(model.rowCount() <= LogModel::MaximumEntryCount);
+    QCOMPARE(trimmedSpy.count(), 1);
+    QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(),
+             QStringLiteral("line-5000"));
+
+    model.clear();
+    model.appendStandardOutput(
+        QByteArray(LogModel::MaximumPartialCharacters + 1, 'x'));
+    QCOMPARE(model.rowCount(), 1);
+    model.flush();
+    QCOMPARE(model.rowCount(), 2);
+
+    model.clear();
+    QByteArray oversizedLine(LogModel::MaximumPartialCharacters + 128, 'y');
+    oversizedLine.append('\n');
+    model.appendStandardOutput(oversizedLine);
+    QCOMPARE(model.rowCount(), 1);
+    const QString storedLine = model.data(
+        model.index(0, 0), LogModel::TextRole).toString();
+    QVERIFY(storedLine.size() <= LogModel::MaximumPartialCharacters + 16);
+    QVERIFY(storedLine.endsWith(QStringLiteral("[truncated]")));
+
+    model.clear();
+    model.appendSystemMessage(
+        QString(LogModel::MaximumPartialCharacters + 128, QLatin1Char('z')));
+    QCOMPARE(model.rowCount(), 1);
+    QVERIFY(model.data(model.index(0, 0), LogModel::TextRole)
+                .toString().endsWith(QStringLiteral("[truncated]")));
 }
 
 void LaunchCommandBuilderTest::consoleViewRefreshesWhenLogCountChanges()

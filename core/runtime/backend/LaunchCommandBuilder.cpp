@@ -1,5 +1,6 @@
 #include "LaunchCommandBuilder.h"
 
+#include "ConfigurationManager.h"
 #include "LaunchParameterCatalog.h"
 
 #include <QProcess>
@@ -215,10 +216,7 @@ QStringList LaunchCommandBuilder::parameterArguments(const QVariantMap &paramete
 
 QString LaunchCommandBuilder::maskedEnvironmentValue(const QString &name, const QString &value)
 {
-    static const QRegularExpression secretName(
-        QStringLiteral("(TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY)"),
-        QRegularExpression::CaseInsensitiveOption);
-    return secretName.match(name).hasMatch() && !value.isEmpty()
+    return ConfigurationManager::isSensitiveEnvironmentName(name) && !value.isEmpty()
         ? QStringLiteral("••••••••")
         : value;
 }

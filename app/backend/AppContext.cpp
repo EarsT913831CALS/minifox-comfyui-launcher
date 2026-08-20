@@ -4,7 +4,6 @@
 #include "ApplicationSettings.h"
 #include "ConfigurationPackageManager.h"
 #include "ConfigurationManager.h"
-#include "HardwareManager.h"
 #include "PortablePaths.h"
 #include "RuntimeManager.h"
 #include "SkinManager.h"
@@ -24,7 +23,6 @@ AppContext::AppContext(QObject *parent)
       m_configurationPackages(new ConfigurationPackageManager(m_configuration, this)),
       m_settings(new ApplicationSettings({}, this)),
       m_appIcon(new ApplicationIconManager(m_settings, this)),
-      m_hardware(new HardwareManager(m_configuration, this)),
       m_runtime(new RuntimeManager(m_configuration, m_settings, this)),
       m_skins(new SkinManager(m_settings, {}, this)),
       m_windowChrome(new WindowChromeController(this)),
@@ -45,13 +43,6 @@ AppContext::AppContext(QObject *parent)
             m_zludaPreloadThread, &QObject::deleteLater);
     m_zludaPreloadThread->start();
 
-    const auto syncRuntimePreflight = [this] {
-        m_runtime->setPreflightReady(!m_hardware->detecting());
-    };
-    connect(m_hardware, &HardwareManager::detectionChanged,
-            m_runtime, syncRuntimePreflight);
-    syncRuntimePreflight();
-
     connect(m_settings, &ApplicationSettings::languageChanged, this, &AppContext::applyLanguage);
     applyLanguage();
 }
@@ -70,7 +61,6 @@ ConfigurationPackageManager *AppContext::configurationPackages() const
 {
     return m_configurationPackages;
 }
-HardwareManager *AppContext::hardware() const { return m_hardware; }
 RuntimeManager *AppContext::runtime() const { return m_runtime; }
 ApplicationSettings *AppContext::settings() const { return m_settings; }
 SkinManager *AppContext::skins() const { return m_skins; }
@@ -97,7 +87,6 @@ void AppContext::applyLanguage()
         QCoreApplication::installTranslator(&m_translator);
     }
     m_configuration->retranslate();
-    m_hardware->retranslate();
     m_runtime->retranslate();
     m_versions->retranslate();
     if (m_qmlEngine) {

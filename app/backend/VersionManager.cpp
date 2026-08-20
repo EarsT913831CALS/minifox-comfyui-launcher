@@ -18,6 +18,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
+#include <QSharedPointer>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QTimer>
@@ -29,6 +30,38 @@ namespace {
 
 constexpr auto kOfficialComfyUiRemote = "https://github.com/Comfy-Org/ComfyUI.git";
 constexpr auto kCnbComfyUiRemote = "https://cnb.cool/IndexMirror/ComfyUI.git";
+constexpr qsizetype kMaximumCatalogBytes = 16 * 1024 * 1024;
+constexpr qsizetype kMaximumCatalogEntries = 20000;
+
+Qt::CaseSensitivity pathCaseSensitivity()
+{
+#ifdef Q_OS_WIN
+    return Qt::CaseInsensitive;
+#else
+    return Qt::CaseSensitive;
+#endif
+}
+
+bool isManagedExtensionDirectory(const QString &customNodesPath, const QString &targetPath)
+{
+    const QFileInfo customNodes(customNodesPath);
+    const QFileInfo target(targetPath);
+    if (!customNodes.isDir() || !target.isDir() || target.isSymLink()) {
+        return false;
+    }
+
+    const QString rootAbsolute = QDir::cleanPath(customNodes.absoluteFilePath());
+    const QString rootCanonical = QDir::cleanPath(customNodes.canonicalFilePath());
+    const QString targetParent = QDir::cleanPath(target.absolutePath());
+    const QString targetCanonical = target.canonicalFilePath();
+    if (rootCanonical.isEmpty() || targetCanonical.isEmpty()) {
+        return false;
+    }
+    const QString targetCanonicalParent = QDir::cleanPath(
+        QFileInfo(targetCanonical).absolutePath());
+    return targetParent.compare(rootAbsolute, pathCaseSensitivity()) == 0
+        && targetCanonicalParent.compare(rootCanonical, pathCaseSensitivity()) == 0;
+}
 
 bool isIgnoredCoreWorkingTreeEntry(const QString &statusLine)
 {
@@ -467,10 +500,10 @@ void VersionManager::installExtension(const QString &url)
 
 void VersionManager::removeExtension(const QString &path)
 {
-    const QDir customNodes(QDir(m_comfyRoot).filePath(QStringLiteral("custom_nodes")));
+    const QString customNodesPath =
+        QDir(m_comfyRoot).filePath(QStringLiteral("custom_nodes"));
     const QFileInfo target(path);
-    if (m_busy || !target.exists()
-        || !QDir::cleanPath(target.absolutePath()).startsWith(QDir::cleanPath(customNodes.absolutePath()))) {
+    if (m_busy || !isManagedExtensionDirectory(customNodesPath, path)) {
         return;
     }
     QDir directory(target.absoluteFilePath());
@@ -485,8 +518,10 @@ void VersionManager::removeExtension(const QString &path)
 void VersionManager::setExtensionEnabled(const QString &path, bool enabled)
 {
     if (m_busy) return;
-    QFileInfo source(path);
-    if (!source.exists()) return;
+    const QString customNodesPath =
+        QDir(m_comfyRoot).filePath(QStringLiteral("custom_nodes"));
+    const QFileInfo source(path);
+    if (!isManagedExtensionDirectory(customNodesPath, path)) return;
     QString targetName = source.fileName();
     if (enabled && targetName.endsWith(QStringLiteral(".disabled"))) {
         targetName.chop(9);
@@ -1162,7 +1197,7 @@ void VersionManager::beginExtensionChecks()
 
 void VersionManager::startExtensionCheckJobs()
 {
-    constexpr int maximumConcurrentChecks = 16;
+    constexpr int maximumConcurrentChecks = 8;
     while (m_activeExtensionChecks < maximumConcurrentChecks
            && !m_extensionCheckQueue.isEmpty()) {
         const QString path = m_extensionCheckQueue.takeFirst();
@@ -1309,7 +1344,8 @@ QString VersionManager::catalogCachePath() const
 void VersionManager::downloadCatalog()
 {
     QFile cached(catalogCachePath());
-    if (m_catalogExtensions.isEmpty() && cached.open(QIODevice::ReadOnly)) {
+    if (m_catalogExtensions.isEmpty() && cached.size() <= kMaximumCatalogBytes
+        && cached.open(QIODevice::ReadOnly)) {
         applyCatalogData(cached.readAll());
     }
 
@@ -1329,29 +1365,68 @@ void VersionManager::downloadCatalog()
                          QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setTransferTimeout(30000);
     QNetworkReply *reply = m_network.get(request);
+    const auto catalogData = QSharedPointer<QByteArray>::create();
+    catalogData->reserve(256 * 1024);
+    const auto drainCatalogData = [reply, catalogData] {
+        constexpr qint64 readChunkBytes = 64 * 1024;
+        while (reply->bytesAvailable() > 0
+               && !reply->property("catalogTooLarge").toBool()) {
+            const qint64 remaining = kMaximumCatalogBytes - catalogData->size();
+            if (remaining <= 0) {
+                reply->setProperty("catalogTooLarge", true);
+                catalogData->clear();
+                reply->abort();
+                return;
+            }
+            const qint64 requested = qMin(readChunkBytes, remaining + 1);
+            const QByteArray chunk = reply->read(requested);
+            if (chunk.isEmpty()) {
+                return;
+            }
+            if (chunk.size() > remaining) {
+                reply->setProperty("catalogTooLarge", true);
+                catalogData->clear();
+                reply->abort();
+                return;
+            }
+            catalogData->append(chunk);
+        }
+    };
     m_catalogReply = reply;
     m_catalogLoading = true;
     emit stateChanged();
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+    connect(reply, &QNetworkReply::metaDataChanged, this, [reply] {
+        const qint64 declaredSize =
+            reply->header(QNetworkRequest::ContentLengthHeader).toLongLong();
+        if (declaredSize > kMaximumCatalogBytes) {
+            reply->setProperty("catalogTooLarge", true);
+            reply->abort();
+        }
+    });
+    connect(reply, &QNetworkReply::readyRead, this, drainCatalogData);
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, catalogData, drainCatalogData] {
         if (m_catalogReply != reply) {
             reply->deleteLater();
             return;
         }
-        const QByteArray data = reply->readAll();
-        const bool networkOk = reply->error() == QNetworkReply::NoError;
-        const bool downloaded = networkOk && applyCatalogData(data);
+        drainCatalogData();
+        const bool tooLarge = reply->property("catalogTooLarge").toBool();
+        const bool networkOk = !tooLarge && reply->error() == QNetworkReply::NoError;
+        const bool downloaded = networkOk && applyCatalogData(*catalogData);
         if (downloaded) {
             PortablePaths::ensureDataDirectory();
             QSaveFile cache(catalogCachePath());
             if (cache.open(QIODevice::WriteOnly)) {
-                cache.write(data);
+                cache.write(*catalogData);
                 cache.commit();
             }
         } else {
-            const QString reason = networkOk
-                ? tr("服务器返回了无法识别的扩展索引。")
-                : reply->errorString();
+            const QString reason = tooLarge
+                ? tr("扩展索引超过 16 MB 限制。")
+                : networkOk ? tr("服务器返回了无法识别的扩展索引。")
+                            : reply->errorString();
             m_lastError = tr("可安装扩展列表刷新失败：%1").arg(reason);
         }
         m_catalogLoading = false;
@@ -1373,7 +1448,7 @@ bool VersionManager::applyCatalogData(const QByteArray &data)
     if (error.error != QJsonParseError::NoError || !document.isObject()) return false;
 
     const QJsonArray nodes = document.object().value(QStringLiteral("custom_nodes")).toArray();
-    if (nodes.isEmpty()) return false;
+    if (nodes.isEmpty() || nodes.size() > kMaximumCatalogEntries) return false;
     QVariantList catalog;
     catalog.reserve(nodes.size());
     for (const QJsonValue &value : nodes) {
@@ -1388,14 +1463,14 @@ bool VersionManager::applyCatalogData(const QByteArray &data)
                 break;
             }
         }
-        const QString title = node.value(QStringLiteral("title")).toString().trimmed();
+        const QString title = node.value(QStringLiteral("title")).toString().trimmed().left(256);
         if (title.isEmpty() || remote.isEmpty()) continue;
         catalog.append(QVariantMap{
             {QStringLiteral("name"), title},
-            {QStringLiteral("description"), node.value(QStringLiteral("description")).toString()},
-            {QStringLiteral("remote"), remote},
-            {QStringLiteral("reference"), node.value(QStringLiteral("reference")).toString()},
-            {QStringLiteral("author"), node.value(QStringLiteral("author")).toString()},
+            {QStringLiteral("description"), node.value(QStringLiteral("description")).toString().left(4096)},
+            {QStringLiteral("remote"), remote.left(2048)},
+            {QStringLiteral("reference"), node.value(QStringLiteral("reference")).toString().left(2048)},
+            {QStringLiteral("author"), node.value(QStringLiteral("author")).toString().left(512)},
             {QStringLiteral("installed"), false}
         });
     }

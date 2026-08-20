@@ -37,6 +37,8 @@ public:
     bool canUndo() const;
     bool canRedo() const;
     QString lastError() const;
+    static bool isAllowedLocalFolderPath(const QString &path);
+    static bool isAllowedExternalLink(const QUrl &url);
 
     Q_INVOKABLE QString createSkin(const QString &name = {});
     Q_INVOKABLE QString duplicateActiveSkin(const QString &name = {});
@@ -49,6 +51,8 @@ public:
     Q_INVOKABLE QString importImage(const QUrl &source);
     Q_INVOKABLE bool setBackgroundImage(const QUrl &source);
     Q_INVOKABLE QString assetUrl(const QString &assetReference) const;
+    Q_INVOKABLE bool openLocalFolder(const QString &path);
+    Q_INVOKABLE bool openExternalLink(const QUrl &url);
 
     Q_INVOKABLE void setAppearanceValue(const QString &key, const QVariant &value);
     Q_INVOKABLE void beginEdit();

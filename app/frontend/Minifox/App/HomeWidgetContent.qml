@@ -171,9 +171,7 @@ Item {
                 const path = resolvedFolderPath(entry);
                 if (path.length === 0)
                     return;
-                const url = path.startsWith("file:")
-                            ? path : "file:///" + path.replace(/\\/g, "/");
-                Qt.openUrlExternally(url);
+                root.appContext.skins.openLocalFolder(path);
             }
 
             ColumnLayout {
@@ -238,7 +236,7 @@ Item {
                         textFormat: Text.MarkdownText
                         wrapMode: Text.WordWrap
                         color: Theme.foregroundSecondary
-                        onLinkActivated: link => Qt.openUrlExternally(link)
+                        onLinkActivated: link => root.appContext.skins.openExternalLink(link)
                     }
                 }
             }

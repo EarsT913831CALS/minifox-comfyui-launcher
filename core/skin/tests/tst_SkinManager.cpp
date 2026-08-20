@@ -22,6 +22,7 @@ private slots:
     void rejectsDamagedPackage();
     void migratesLegacyBackgroundMaterials();
     void folderItemsAreLimitedAndKeepCustomPaths();
+    void externalTargetsAreRestricted();
 };
 
 void SkinManagerTest::createsEditsAndPersistsSkin()
@@ -129,6 +130,31 @@ void SkinManagerTest::folderItemsAreLimitedAndKeepCustomPaths()
     QCOMPARE(normalizedFolders.constLast().toMap()
                  .value(QStringLiteral("path")).toString(),
              QStringLiteral("D:/Folder8"));
+}
+
+void SkinManagerTest::externalTargetsAreRestricted()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+
+    QVERIFY(SkinManager::isAllowedLocalFolderPath(temporary.path()));
+    QVERIFY(!SkinManager::isAllowedLocalFolderPath(
+        temporary.filePath(QStringLiteral("missing"))));
+    QVERIFY(!SkinManager::isAllowedLocalFolderPath(
+        QStringLiteral("file:///C:/Windows")));
+    QVERIFY(!SkinManager::isAllowedLocalFolderPath(
+        QStringLiteral("//server/share")));
+
+    QVERIFY(SkinManager::isAllowedExternalLink(
+        QUrl(QStringLiteral("https://example.com/project"))));
+    QVERIFY(SkinManager::isAllowedExternalLink(
+        QUrl(QStringLiteral("http://example.com"))));
+    QVERIFY(!SkinManager::isAllowedExternalLink(
+        QUrl(QStringLiteral("file:///C:/Windows/System32/cmd.exe"))));
+    QVERIFY(!SkinManager::isAllowedExternalLink(
+        QUrl(QStringLiteral("ms-settings:windowsupdate"))));
+    QVERIFY(!SkinManager::isAllowedExternalLink(
+        QUrl(QStringLiteral("https:///missing-host"))));
 }
 
 void SkinManagerTest::copiesAndDeduplicatesImageAssets()

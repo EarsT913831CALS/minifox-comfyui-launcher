@@ -14,6 +14,8 @@ Pane {
     property bool removeRequested: false
     property bool commandPromptErrorRequested: false
     property bool configurationPackageErrorRequested: false
+    property bool sensitiveExportRequested: false
+    property var pendingExportUrl
     property string searchQuery: ""
     readonly property var categoryModel: appContext.configuration.categories
     readonly property var selectedCategory: categoryModel[selectedCategoryIndex]
@@ -64,10 +66,6 @@ Pane {
             AppButton {
                 text: qsTr("启动命令提示符")
                 onClicked: {
-                    if (!root.appContext.runtime.preflightReady) {
-                        root.appContext.runtime.openCommandPrompt();
-                        return;
-                    }
                     if (!root.appContext.runtime.openCommandPrompt())
                         root.commandPromptErrorRequested = true;
                 }
@@ -391,7 +389,9 @@ Pane {
                     }
 
                     Loader {
-                        active: root.searchQuery.trim().length === 0 && root.selectedCategory.key === "device"
+                        active: root.searchQuery.trim().length === 0
+                                && root.selectedCategory.key === "device"
+                                && root.appContext.runtime.acceleratorDevices.length > 0
                         sourceComponent: cudaDevicePanelComponent
                         visible: active
                         width: optionColumn.width
@@ -511,8 +511,15 @@ Pane {
         defaultSuffix: "zip"
         nameFilters: [qsTr("Minifox 配置包 (*.zip)"), qsTr("所有文件 (*)")]
         onAccepted: {
-            if (!root.appContext.configurationPackages.exportPackage(selectedFile))
+            root.pendingExportUrl = selectedFile;
+            if (root.appContext.configuration.hasSensitiveEnvironmentValues()) {
+                root.sensitiveExportRequested = true;
+            } else if (!root.appContext.configurationPackages.exportPackage(selectedFile, false)) {
+                root.pendingExportUrl = undefined;
                 root.configurationPackageErrorRequested = true;
+            } else {
+                root.pendingExportUrl = undefined;
+            }
         }
     }
 
@@ -529,6 +536,71 @@ Pane {
     Loader {
         active: root.configurationPackageErrorRequested
         sourceComponent: configurationPackageErrorDialogComponent
+    }
+
+    Loader {
+        active: root.sensitiveExportRequested
+        sourceComponent: sensitiveExportDialogComponent
+    }
+
+    Component {
+        id: sensitiveExportDialogComponent
+
+        AppDialog {
+            id: sensitiveExportDialog
+
+            function exportSelectedProfile(includeSensitiveValues) {
+                const destination = root.pendingExportUrl;
+                root.pendingExportUrl = undefined;
+                if (!root.appContext.configurationPackages.exportPackage(
+                            destination, includeSensitiveValues))
+                    root.configurationPackageErrorRequested = true;
+                sensitiveExportDialog.close();
+            }
+
+            title: qsTr("配置中包含敏感信息")
+            anchors.centerIn: Overlay.overlay
+            width: Math.min(560, root.width - Theme.spacingXl * 2)
+            modal: true
+            rejectText: qsTr("取消")
+            standardButtons: Dialog.Cancel
+            closePolicy: Popup.CloseOnEscape
+            Component.onCompleted: open()
+
+            contentItem: ColumnLayout {
+                spacing: Theme.spacingMd
+
+                AppLabel {
+                    text: qsTr("当前配置包含令牌、密码、API Key 或私钥类环境变量。脱敏导出会保留变量名，但清空并禁用其值；完整备份会把这些值以明文写入 ZIP，请勿分享。")
+                    color: Theme.foregroundSecondary
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingSm
+
+                    Item { Layout.fillWidth: true }
+
+                    AppButton {
+                        text: qsTr("完整备份")
+                        onClicked: sensitiveExportDialog.exportSelectedProfile(true)
+                    }
+
+                    AppButton {
+                        text: qsTr("脱敏导出（推荐）")
+                        accented: true
+                        onClicked: sensitiveExportDialog.exportSelectedProfile(false)
+                    }
+                }
+            }
+
+            onClosed: {
+                root.pendingExportUrl = undefined;
+                root.sensitiveExportRequested = false;
+            }
+        }
     }
 
     Component {

@@ -30,6 +30,7 @@ public:
         const QString &name,
         int maximumCharacters = MaximumProfileNameCharacters);
     static QString profileNameWithSuffix(const QString &baseName, const QString &suffix);
+    static bool isSensitiveEnvironmentName(const QString &name);
 
     QStringList profileNames() const;
     QVariantList profileEntries() const;
@@ -46,6 +47,7 @@ public:
     void setCustomArguments(const QString &arguments);
 
     QVariantList environmentEntries() const;
+    Q_INVOKABLE bool hasSensitiveEnvironmentValues() const;
     QVariantList categories() const;
     int parameterRevision() const;
     bool isValid() const;
@@ -64,7 +66,7 @@ public:
     Q_INVOKABLE void updateEnvironmentEntry(int index, const QString &name, const QString &value, bool enabled);
     Q_INVOKABLE void removeEnvironmentEntry(int index);
 
-    QVariantMap currentProfileSnapshot() const;
+    QVariantMap currentProfileSnapshot(bool includeSensitiveValues = true) const;
     QString profileIdAt(int index) const;
     Q_INVOKABLE void reloadFromDisk();
     void retranslate();

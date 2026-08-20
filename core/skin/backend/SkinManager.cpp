@@ -5,6 +5,7 @@
 
 #include <QCryptographicHash>
 #include <QDataStream>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -428,6 +429,23 @@ bool SkinManager::canUndo() const { return m_editing && !m_undo.isEmpty(); }
 bool SkinManager::canRedo() const { return m_editing && !m_redo.isEmpty(); }
 QString SkinManager::lastError() const { return m_lastError; }
 
+bool SkinManager::isAllowedLocalFolderPath(const QString &path)
+{
+    const QString normalized = QDir::fromNativeSeparators(path.trimmed());
+    if (normalized.isEmpty() || normalized.startsWith(QStringLiteral("//"))
+        || !QDir::isAbsolutePath(normalized)) {
+        return false;
+    }
+    return QFileInfo(normalized).isDir();
+}
+
+bool SkinManager::isAllowedExternalLink(const QUrl &url)
+{
+    const QString scheme = url.scheme().toLower();
+    return url.isValid() && !url.host().isEmpty()
+        && (scheme == QStringLiteral("http") || scheme == QStringLiteral("https"));
+}
+
 QString SkinManager::createSkin(const QString &name)
 {
     SkinEntry entry;
@@ -754,6 +772,34 @@ QString SkinManager::assetUrl(const QString &assetReference) const
     }
     const QString path = resolveAssetPath(*entry, assetReference);
     return QFileInfo::exists(path) ? QUrl::fromLocalFile(path).toString() : QString{};
+}
+
+bool SkinManager::openLocalFolder(const QString &path)
+{
+    if (!isAllowedLocalFolderPath(path)) {
+        setLastError(tr("只允许打开当前电脑上实际存在的本地文件夹。"));
+        return false;
+    }
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()))) {
+        setLastError(tr("无法打开所选文件夹。"));
+        return false;
+    }
+    setLastError({});
+    return true;
+}
+
+bool SkinManager::openExternalLink(const QUrl &url)
+{
+    if (!isAllowedExternalLink(url)) {
+        setLastError(tr("皮肤中的链接只允许使用 HTTP 或 HTTPS。"));
+        return false;
+    }
+    if (!QDesktopServices::openUrl(url)) {
+        setLastError(tr("无法打开所选链接。"));
+        return false;
+    }
+    setLastError({});
+    return true;
 }
 
 void SkinManager::setAppearanceValue(const QString &key, const QVariant &value)

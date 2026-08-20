@@ -723,6 +723,67 @@ ZludaBootstrap::BackendKind ZludaBootstrap::classifyBackend(
     return deviceNames.isEmpty() ? BackendKind::Unknown : BackendKind::Other;
 }
 
+ZludaBootstrap::BackendKind ZludaBootstrap::classifyInstalledTorch(
+    const QString &pythonPath)
+{
+    const QDir pythonDirectory = QFileInfo(pythonPath).absoluteDir();
+    QStringList candidates;
+    const auto appendCandidate = [&candidates](const QString &path) {
+        const QString cleanPath = QDir::cleanPath(path);
+        if (!candidates.contains(cleanPath, Qt::CaseInsensitive)) {
+            candidates.append(cleanPath);
+        }
+    };
+    appendCandidate(pythonDirectory.filePath(QStringLiteral("Lib/site-packages/torch/version.py")));
+    appendCandidate(pythonDirectory.filePath(QStringLiteral("../Lib/site-packages/torch/version.py")));
+    appendCandidate(pythonDirectory.filePath(QStringLiteral("lib/site-packages/torch/version.py")));
+    appendCandidate(pythonDirectory.filePath(QStringLiteral("../lib/site-packages/torch/version.py")));
+
+    QString contents;
+    for (const QString &candidate : std::as_const(candidates)) {
+        QFile file(candidate);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+        contents = QString::fromUtf8(file.readAll());
+        break;
+    }
+    if (contents.isEmpty()) {
+        return BackendKind::Unknown;
+    }
+
+    QString cudaVersion;
+    QString hipVersion;
+    QString torchVersion;
+    static const QRegularExpression assignment(
+        QStringLiteral(R"((?m)^\s*(cuda|hip|__version__)\s*(?::[^=\r\n]+)?=\s*(['"])([^'"]*)\2)"));
+    auto matches = assignment.globalMatch(contents);
+    while (matches.hasNext()) {
+        const QRegularExpressionMatch match = matches.next();
+        const QString name = match.captured(1);
+        const QString value = match.captured(3).trimmed();
+        if (name == QStringLiteral("cuda")) {
+            cudaVersion = value;
+        } else if (name == QStringLiteral("hip")) {
+            hipVersion = value;
+        } else {
+            torchVersion = value;
+        }
+    }
+
+    if (!hipVersion.isEmpty()
+        || torchVersion.contains(QStringLiteral("rocm"), Qt::CaseInsensitive)) {
+        return BackendKind::Rocm;
+    }
+    if (!cudaVersion.isEmpty()
+        || QRegularExpression(QStringLiteral(R"(\+cu\d+)"),
+                              QRegularExpression::CaseInsensitiveOption)
+               .match(torchVersion).hasMatch()) {
+        return BackendKind::Nvidia;
+    }
+    return BackendKind::Unknown;
+}
+
 QStringList ZludaBootstrap::systemAdapterNames()
 {
     QStringList adapters;
