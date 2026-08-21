@@ -13,7 +13,7 @@
 
 Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs and can be placed directly into an existing ComfyUI portable package.
 
-Minifox does not use the Windows Registry or modify ComfyUI files, and it can be configured to open the UI interface in your default browser.
+Minifox does not use the Windows Registry or modify ComfyUI files; it only creates cache directories alongside the executable.
 
 ## Features
 
@@ -42,7 +42,7 @@ The launcher detects common portable directory layouts automatically. Python and
 
 ## GPU and ZLUDA
 
-The launcher detects the installed GPUs first, then inspects the PyTorch backend in the portable package:
+The launcher does not show environment info upon opening. When ComfyUI starts, it captures the logs and displays the relevant information on the home page card. You can see the detection logic in the console during startup:
 
 | Environment | Behavior |
 |---|---|
