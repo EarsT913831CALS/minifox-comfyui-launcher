@@ -13,35 +13,36 @@
 
 Minifox 是面向 Windows 10/11 x64 的便携式 ComfyUI 启动器，专门用于配置、启动和管理 ComfyUI。程序使用 Qt 6、Qt Quick、C++20、QML 和 CMake 开发，可构建为无需附带 Qt DLL 的单文件 EXE，直接放入现有 ComfyUI 整合包使用。
 
-Minifox 不使用注册表，不修改 ComfyUI 源码，也不内置浏览器或 WebUI。
+Minifox 不使用注册表，不修改 ComfyUI 文件，支持在在默认浏览器中自动打开 Web 界面。
 
 ## 主要功能
 
-- 内置默认设置，也可管理多套 ComfyUI 启动配置、参数和运行环境
-- 启动、停止并监控 ComfyUI 进程、状态和控制台输出
-- 管理 ComfyUI 内核与扩展的版本、更新和回退
-- 识别 CUDA、ROCm 或适用的 ZLUDA 环境
-- 对首页提供较高的个性化自由度
+- 几乎没有预设启动参数（完全由 ComfyUI 决定），支持多套启动配置无缝切换
+- 启动、停止并实时监控 ComfyUI 进程、运行状态与控制台输出
+- 管理 ComfyUI 核心与扩展 / 自定义节点（Custom Nodes）版本，配有一键刷新与一键更新按钮
+- 自动识别 CUDA、ROCm 及适用的 ZLUDA 环境
+- 提供模块化与可自定义的组件以个性化首页
 
-## 直接使用
+## 快速上手
 
-将 `Minifox ComfyUI Launcher.exe` 放到 ComfyUI 整合包目录后运行：
+将 `Minifox ComfyUI Launcher.exe` 放入 ComfyUI 整合包目录中直接运行：
 
 ```text
 ComfyUI-Package/
-├─ Minifox ComfyUI Launcher.exe
-├─ ComfyUI/
-│  └─ main.py
-└─ python/
-   └─ python.exe
+├── Minifox ComfyUI Launcher.exe
+├── ComfyUI/
+│   ├── main.py
+│   └── ...
+└── python/
+    ├── python.exe
+    └── ...
 ```
 
-启动器会自动识别常见的便携目录，也可以在启动配置中手动选择 Python 和 ComfyUI 路径。
-
+启动器会自动识别常见的便携式目录结构，也可以在启动配置中手动选择 Python 和 ComfyUI 路径。
 
 ## GPU 与 ZLUDA
 
-启动器先识别系统显卡，再判断整合包中的 PyTorch 后端：
+启动器刚打开后不会显示环境信息，在启动ComfyUI时会截获日志并将相关信息展示在首页卡片上。启动ComfyUI时可在控制台看到检测逻辑：
 
 | 环境 | 行为 |
 |---|---|
@@ -52,24 +53,25 @@ ZLUDA注入是最低优先级。
 
 > **兼容性说明：** HIP SDK 5.7 + ZLUDA 已通过测试。任何使用 CK (Composable Kernel) 或 MIOpen 的内容均未测试，不应视为已受支持或稳定可用。
 
-> **另附建议：** HIP SDK 7.1 + ZLUDA 的组合受支持但不如 HIP SDK 5.7 组占用稳定。强烈推荐 AMD 显卡使用原生 Pytorch (正式版或 Rocm Preview 7.14 及之后版本) 。如用 ZLUDA 请配合适配的 Triton Wheel 使用。
+> **另附建议：** HIP SDK 7.1 + ZLUDA 的组合受支持但不如 HIP SDK 5.7 组占用稳定。强烈推荐 AMD 显卡使用原生 Pytorch (正式版或 Rocm Preview 7.14 及之后版本) 。如果使用 ZLUDA，建议配合兼容的 Triton wheel 使用，以获得更好的算子兼容性与速度提升。
 
 ### AMD ZLUDA 前置条件
 
-1. 使用 AMD 官方安装器安装 HIP SDK，并保留安装器创建的 `HIP_PATH`。
-2. HIP 安装目录中应包含适用于当前显卡 `gfx` 架构的 rocBLAS/Tensile 文件等相关文件：
+1. 使用 AMD 官方安装器安装 HIP SDK（安装器会自动设置 `HIP_PATH` 环境变量）。
+2. HIP 目录中必须包含适用于当前显卡 `gfx` 架构的 rocBLAS/Tensile 库文件：
 
    ```text
    <HIP_PATH>\bin\rocblas\library\
    ```
 
-3. 使用原本面向 NVIDIA显卡 的 ComfyUI 整合包。
+   > [!NOTE]
+   > 如果您的显卡架构不在官方支持列表中，需要在该目录下手动补充对应的 Tensile / rocBLAS 文件。
 
-Minifox 内置 HIP SDK 5.7 和 HIP SDK 7.1 ZLUDA 运行组件，但不内置针对特定 `gfx` 的 rocBLAS/Tensile 补丁，也不维护有限的显卡架构白名单。
+3. 使用原本面向 NVIDIA 显卡的 ComfyUI 整合包（PyTorch 需要重装为兼容版本）。
 
-仓库只保存并编入启动器通用的 `assets/zluda/zluda.extpack`。在符合条件的纯 AMD 环境中，Minifox 会读取实际的 `gcnArchName`，将运行组件释放到 `.minifox`、准备缓存，并且只向 ComfyUI 子进程注入所需环境。
+Minifox 内置了 HIP SDK 5.7 和 HIP SDK 7.1 的 ZLUDA 运行组件，但不内置针对特定 `gfx` 架构的 rocBLAS/Tensile 补丁。
 
-启动器不会修改 ComfyUI、PyTorch、HIP 安装文件或系统环境变量。已经释放且版本未变化的运行包不会重复解压，已有缓存会继续复用。
+启动器不会修改 ComfyUI、HIP 安装文件或系统环境变量。ZLUDA 本身作为 PyTorch 的临时补丁运行：它会在运行时替换部分必要文件，并在启动器关闭后自动恢复原样。已释放且版本未变化的运行包不会重复解压，已有缓存会继续复用。
 
 ## 版本管理
 
