@@ -13,7 +13,7 @@
 
 Minifox 是面向 Windows 10/11 x64 的便携式 ComfyUI 启动器，专门用于配置、启动和管理 ComfyUI。程序使用 Qt 6、Qt Quick、C++20、QML 和 CMake 开发，可构建为无需附带 Qt DLL 的单文件 EXE，直接放入现有 ComfyUI 整合包使用。
 
-Minifox 不使用注册表，不修改 ComfyUI 文件，支持在在默认浏览器中自动打开 Web 界面。
+Minifox 不使用注册表也不修改 ComfyUI 文件，只在同级文件夹下产生缓存目录。
 
 ## 主要功能
 
