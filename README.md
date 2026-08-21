@@ -13,15 +13,15 @@
 
 Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs and can be placed directly into an existing ComfyUI portable package.
 
-Minifox does not use the Windows registry, modify the ComfyUI source tree, or include a browser or WebUI.
+Minifox does not use the Windows Registry or modify ComfyUI files, and it can be configured to open the UI interface in your default browser.
 
 ## Features
 
-- Built-in defaults, with support for managing multiple ComfyUI launch profiles, arguments, and runtime environments
-- Launch, stop, and monitor the ComfyUI process, status, and console output
-- Manage ComfyUI core and extension versions, updates, and rollback
-- Detect CUDA, ROCm, and eligible ZLUDA environments
-- Provide a high degree of freedom to personalize the home page
+- Switch seamlessly between multiple configurations with minimal preset launch arguments (fully managed by ComfyUI)
+- Launch, stop, and monitor ComfyUI processes, status, and live console output
+- Manage ComfyUI core and extension / custom node versions, featuring one-click refresh and update buttons
+- Automatically detect CUDA, ROCm, and eligible ZLUDA environments
+- Personalize the home page with modular and customizable widgets
 
 ## Quick Start
 
@@ -29,11 +29,13 @@ Place `Minifox ComfyUI Launcher.exe` in a ComfyUI portable package directory and
 
 ```text
 ComfyUI-Package/
-├─ Minifox ComfyUI Launcher.exe
-├─ ComfyUI/
-│  └─ main.py
-└─ python/
-   └─ python.exe
+├── Minifox ComfyUI Launcher.exe
+├── ComfyUI/
+│   ├── main.py
+│   └── ...
+└── python/
+    ├── python.exe
+    └── ...
 ```
 
 The launcher detects common portable directory layouts automatically. Python and ComfyUI paths can also be selected manually in a launch profile.
@@ -51,24 +53,25 @@ ZLUDA injection has the lowest priority.
 
 > **Compatibility:** HIP SDK 5.7 + ZLUDA has been tested. Anything that uses CK (Composable Kernel) or MIOpen has not been tested and should not be considered supported or stable.
 
-> **Additional recommendation:** HIP SDK 7.1 + ZLUDA is supported, but its memory usage is less stable than the HIP SDK 5.7 combination. Native PyTorch (either a stable release or ROCm Preview 7.14 and later) is strongly recommended for AMD GPUs. If you use ZLUDA, use a compatible Triton wheel with it.
+> **Additional recommendation:** HIP SDK 7.1 + ZLUDA is supported, but its memory usage is less stable than the HIP SDK 5.7 combination. Native PyTorch (either a stable release or ROCm Preview 7.14 and later) is strongly recommended for AMD GPUs. If you use ZLUDA, pair it with a compatible Triton wheel for better operator compatibility and performance speedups.
 
 ### AMD ZLUDA prerequisites
 
-1. Install the HIP SDK with AMD's official installer and keep the `HIP_PATH` created by the installer.
+1. Install the HIP SDK using AMD's official installer (which will automatically set the HIP_PATH environment variable).
 2. HIP must contain rocBLAS/Tensile files for the GPU's `gfx` architecture:
 
    ```text
    <HIP_PATH>\bin\rocblas\library\
    ```
 
-3. Use a ComfyUI portable package originally intended for NVIDIA GPUs.
+   > [!NOTE]
+   > If your GPU architecture is not officially supported, you will need to manually add the corresponding files to this directory.
 
-Minifox bundles HIP SDK 5.7 and HIP SDK 7.1 ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures and does not maintain a limited GPU architecture allowlist.
+3. Use a ComfyUI portable package originally intended for NVIDIA GPUs (PyTorch needs to be reinstalled to a compatible version).
 
-Only the general-purpose `assets/zluda/zluda.extpack` is stored in this repository and embedded in the launcher. On an eligible AMD-only environment, Minifox reads the actual `gcnArchName`, extracts the runtime under `.minifox`, prepares caches, and injects the required environment into the ComfyUI child process only.
+Minifox bundles HIP SDK 5.7 and HIP SDK 7.1 ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures.
 
-The launcher does not modify ComfyUI, PyTorch, HIP installation files, or system environment variables. Runtime packages are not extracted again when their version has not changed, and existing caches are reused.
+The launcher does not modify ComfyUI, HIP files, or system environment variables. ZLUDA itself acts as a patch for PyTorch: it temporarily replaces certain files and automatically restores them to their original state once the launcher is closed. Runtime packages are not re-extracted if their versions have not changed, and existing caches are reused.
 
 ## Version Management
 
@@ -100,7 +103,7 @@ The following directories are created beside the executable when needed:
 └─ torchinductor/
 ```
 
-`.minifox` and `.cache` are marked as hidden directories. Contents under `.cache` are read and written only when ZLUDA is used; NVIDIA, native ROCm, and other non-ZLUDA launch paths do not use this directory.
+`.minifox` and `.cache` are marked as hidden directories. Contents under `.cache` are read and written only when ZLUDA is used; NVIDIA, ROCm, and other non-ZLUDA launch paths do not use this directory.
 
 ## Build Requirements
 
