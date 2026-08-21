@@ -55,6 +55,7 @@ private slots:
     void defaultsStayImplicit();
     void commandPromptActivatesSelectedEnvironment();
     void explicitModesAndCustomArguments();
+    void progressBridgeEnablesArgumentParsingBeforeProgressImport();
     void environmentIsAppliedAndSecretsAreMasked();
     void sensitiveProfileSnapshotsCanBeRedacted();
     void proxySettingsAreAppliedToChildEnvironment();
@@ -185,6 +186,7 @@ void LaunchCommandBuilderTest::explicitModesAndCustomArguments()
         {QStringLiteral("browser"), QStringLiteral("disable")},
         {QStringLiteral("port"), 9000},
         {QStringLiteral("vramMode"), QStringLiteral("low")},
+        {QStringLiteral("pinnedMemory"), QStringLiteral("disable")},
         {QStringLiteral("asyncOffload"), QStringLiteral("enable")},
         {QStringLiteral("asyncOffloadStreams"), QStringLiteral("4")}
     };
@@ -199,9 +201,24 @@ void LaunchCommandBuilderTest::explicitModesAndCustomArguments()
     const auto result = LaunchCommandBuilder::build(profile);
     QVERIFY(result.arguments.contains(QStringLiteral("--disable-auto-launch")));
     QVERIFY(result.arguments.contains(QStringLiteral("--lowvram")));
+    QVERIFY(result.arguments.contains(QStringLiteral("--disable-pinned-memory")));
     QVERIFY(result.arguments.contains(QStringLiteral("--async-offload")));
     QCOMPARE(result.arguments.at(result.arguments.indexOf(QStringLiteral("--port")) + 1), QStringLiteral("9000"));
     QCOMPARE(result.arguments.constLast(), QStringLiteral("two words"));
+}
+
+void LaunchCommandBuilderTest::progressBridgeEnablesArgumentParsingBeforeProgressImport()
+{
+    Q_INIT_RESOURCE(minifox_python_bridge);
+    QFile bridge(QStringLiteral(":/minifox/python/minifox_progress_bridge.py"));
+    QVERIFY2(bridge.open(QIODevice::ReadOnly), qPrintable(bridge.errorString()));
+    const QByteArray source = bridge.readAll();
+
+    QVERIFY(source.contains("comfy.options.enable_args_parsing()"));
+    const qsizetype parsingCall = source.lastIndexOf("\nenable_comfy_argument_parsing()\n");
+    const qsizetype progressCall = source.lastIndexOf("\nenable_cli_progress()\n");
+    QVERIFY(parsingCall >= 0);
+    QVERIFY(progressCall > parsingCall);
 }
 
 void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()

@@ -11,6 +11,18 @@ import runpy
 import sys
 
 
+def enable_comfy_argument_parsing() -> None:
+    """Match main.py's setup before imports can cache default CLI values."""
+    try:
+        import comfy.options
+
+        comfy.options.enable_args_parsing()
+    except Exception:
+        # Older ComfyUI builds may not expose this module. Their main entry
+        # point remains responsible for parsing the original argument list.
+        return
+
+
 def enable_cli_progress() -> None:
     try:
         from comfy_execution import progress
@@ -42,6 +54,7 @@ comfy_root = os.path.dirname(main_path)
 if comfy_root not in sys.path:
     sys.path.insert(0, comfy_root)
 
+enable_comfy_argument_parsing()
 enable_cli_progress()
 sys.argv[0] = main_path
 runpy.run_path(main_path, run_name="__main__")
