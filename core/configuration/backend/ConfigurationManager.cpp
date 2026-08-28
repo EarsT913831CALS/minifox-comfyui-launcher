@@ -172,7 +172,7 @@ void ConfigurationManager::setCurrentProfileIndex(int index)
     }
     m_currentProfileIndex = index;
     ++m_parameterRevision;
-    save();
+    markPendingChanges();
     validate();
     emit currentProfileChanged();
     emit parameterRevisionChanged();
@@ -190,7 +190,7 @@ void ConfigurationManager::setCurrentProfileName(const QString &name)
         return;
     }
     currentProfile().name = limitedName;
-    save();
+    markPendingChanges();
     emit profilesChanged();
     emit currentProfileChanged();
 }
@@ -304,6 +304,24 @@ QString ConfigurationManager::lastError() const
     return m_lastError;
 }
 
+bool ConfigurationManager::hasPendingChanges() const
+{
+    return m_pendingChanges;
+}
+
+bool ConfigurationManager::savePendingChanges()
+{
+    if (!m_pendingChanges) {
+        return true;
+    }
+    if (!save()) {
+        return false;
+    }
+    m_pendingChanges = false;
+    emit pendingChangesChanged();
+    return true;
+}
+
 void ConfigurationManager::retranslate()
 {
     validate();
@@ -344,7 +362,9 @@ void ConfigurationManager::setParameterValue(const QString &key, const QVariant 
     } else {
         currentProfile().parameters.insert(key, value);
     }
-    updateAfterEdit(true);
+    markPendingChanges();
+    validate();
+    emit parameterValueChanged(key, parameterValue(key));
 }
 
 void ConfigurationManager::addProfile(const QString &name)
@@ -355,7 +375,7 @@ void ConfigurationManager::addProfile(const QString &name)
     m_profiles.append(makeDefaultProfile(profileName));
     m_currentProfileIndex = m_profiles.size() - 1;
     ++m_parameterRevision;
-    save();
+    markPendingChanges();
     validate();
     emit profilesChanged();
     emit currentProfileChanged();
@@ -370,7 +390,7 @@ void ConfigurationManager::duplicateCurrentProfile()
     m_profiles.append(copy);
     m_currentProfileIndex = m_profiles.size() - 1;
     ++m_parameterRevision;
-    save();
+    markPendingChanges();
     validate();
     emit profilesChanged();
     emit currentProfileChanged();
@@ -403,7 +423,7 @@ bool ConfigurationManager::removeProfiles(const QStringList &profileIds)
         }
     }
     ++m_parameterRevision;
-    save();
+    markPendingChanges();
     validate();
     emit profilesChanged();
     emit currentProfileChanged();
@@ -428,12 +448,22 @@ void ConfigurationManager::updateEnvironmentEntry(
     if (index < 0 || index >= currentProfile().environment.size()) {
         return;
     }
+    const QStringList previousErrors = environmentEntryErrors(currentProfile());
     auto &entry = currentProfile().environment[index];
     if (entry.name == name && entry.value == value && entry.enabled == enabled) {
         return;
     }
     entry = {name.trimmed(), value, enabled};
-    updateAfterEdit();
+    markPendingChanges();
+    validate();
+    const QVariantList entries = environmentEntries();
+    for (qsizetype entryIndex = 0; entryIndex < entries.size(); ++entryIndex) {
+        const QString error = entries.at(entryIndex).toMap()
+                                  .value(QStringLiteral("error")).toString();
+        if (entryIndex == index || error != previousErrors.at(entryIndex)) {
+            emit environmentEntryChanged(entryIndex, entries.at(entryIndex).toMap());
+        }
+    }
 }
 
 void ConfigurationManager::removeEnvironmentEntry(int index)
@@ -482,6 +512,10 @@ void ConfigurationManager::reloadFromDisk()
     m_profiles.clear();
     m_currentProfileIndex = 0;
     load();
+    if (m_pendingChanges) {
+        m_pendingChanges = false;
+        emit pendingChangesChanged();
+    }
     validate();
     ++m_parameterRevision;
     emit profilesChanged();
@@ -658,17 +692,20 @@ bool ConfigurationManager::save()
     return true;
 }
 
-void ConfigurationManager::updateAfterEdit(bool parametersChanged)
+void ConfigurationManager::updateAfterEdit()
 {
-    if (parametersChanged) {
-        ++m_parameterRevision;
-    }
-    save();
+    markPendingChanges();
     validate();
     emit currentProfileChanged();
-    if (parametersChanged) {
-        emit parameterRevisionChanged();
+}
+
+void ConfigurationManager::markPendingChanges()
+{
+    if (m_pendingChanges) {
+        return;
     }
+    m_pendingChanges = true;
+    emit pendingChangesChanged();
 }
 
 QStringList ConfigurationManager::environmentEntryErrors(const Profile &profile) const
@@ -788,13 +825,5 @@ QString ConfigurationManager::findDefaultPython(const QString &comfyRoot)
         return bundledPython;
     }
 
-    const QStringList candidates {
-        QDir(QDir::homePath()).filePath(QStringLiteral("micromamba/envs/comfy-neo-env/python.exe"))
-    };
-    for (const QString &candidate : candidates) {
-        if (QFileInfo::exists(candidate)) {
-            return QDir::cleanPath(candidate);
-        }
-    }
     return QStandardPaths::findExecutable(QStringLiteral("python.exe"));
 }

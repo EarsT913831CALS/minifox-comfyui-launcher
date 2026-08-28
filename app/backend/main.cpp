@@ -21,6 +21,11 @@ int main(int argc, char *argv[])
 
     QGuiApplication application(argc, argv);
     AppContext appContext;
+    QObject::connect(&application, &QCoreApplication::aboutToQuit,
+                     &appContext, [&appContext] {
+        appContext.configuration()->savePendingChanges();
+    });
+
 
     QQmlApplicationEngine engine;
     appContext.setQmlEngine(&engine);

@@ -1,6 +1,8 @@
 qt_add_library(minifox_shared_backend STATIC
     PortablePaths.cpp
     PortablePaths.h
+    ProcessTextDecoder.cpp
+    ProcessTextDecoder.h
 )
 
 target_include_directories(minifox_shared_backend

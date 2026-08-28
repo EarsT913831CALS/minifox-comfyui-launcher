@@ -14,6 +14,7 @@ Control {
     required property var appContext
     property int currentPage: 0
     readonly property bool compactNavigation: width < 1000
+    onCurrentPageChanged: root.appContext.configuration.savePendingChanges()
 
     padding: 0
     background: Rectangle {

@@ -37,7 +37,22 @@ ColumnLayout {
 
             required property int index
             required property var modelData
-            readonly property string errorText: modelData.error
+            property string entryName: modelData.name
+            property string entryValue: modelData.value
+            property bool entryEnabled: modelData.enabled
+            property string errorText: modelData.error
+
+            Connections {
+                target: root.appContext.configuration
+                function onEnvironmentEntryChanged(index, entry) {
+                    if (index !== environmentEntry.index)
+                        return;
+                    environmentEntry.entryName = entry.name;
+                    environmentEntry.entryValue = entry.value;
+                    environmentEntry.entryEnabled = entry.enabled;
+                    environmentEntry.errorText = entry.error;
+                }
+            }
 
             function focusName() {
                 nameInput.forceActiveFocus();
@@ -57,7 +72,7 @@ ColumnLayout {
 
                     AppSwitch {
                         id: enabledSwitch
-                        checked: environmentEntry.modelData.enabled
+                        checked: environmentEntry.entryEnabled
                         Accessible.name: qsTr("启用环境变量")
                         KeyNavigation.right: nameInput
                         onToggled: root.appContext.configuration.updateEnvironmentEntry(environmentEntry.index, nameInput.text, valueInput.text, checked)
@@ -66,7 +81,7 @@ ColumnLayout {
                     AppTextField {
                         id: nameInput
                         Layout.preferredWidth: 220
-                        text: environmentEntry.modelData.name
+                        text: environmentEntry.entryName
                         placeholderText: qsTr("变量名")
                         font.family: root.consoleFontFamily
                         font.pointSize: root.consoleFontSize
@@ -76,20 +91,20 @@ ColumnLayout {
                         Accessible.description: environmentEntry.errorText
                         KeyNavigation.left: enabledSwitch
                         KeyNavigation.right: valueInput
-                        onEditingFinished: root.appContext.configuration.updateEnvironmentEntry(environmentEntry.index, text, valueInput.text, enabledSwitch.checked)
+                        onTextEdited: root.appContext.configuration.updateEnvironmentEntry(environmentEntry.index, text, valueInput.text, enabledSwitch.checked)
                     }
 
                     AppTextField {
                         id: valueInput
                         Layout.fillWidth: true
-                        text: environmentEntry.modelData.value
+                        text: environmentEntry.entryValue
                         placeholderText: qsTr("值")
                         font.family: root.consoleFontFamily
                         font.pointSize: root.consoleFontSize
                         selectByMouse: true
                         KeyNavigation.left: nameInput
                         KeyNavigation.right: removeButton
-                        onEditingFinished: root.appContext.configuration.updateEnvironmentEntry(environmentEntry.index, nameInput.text, text, enabledSwitch.checked)
+                        onTextEdited: root.appContext.configuration.updateEnvironmentEntry(environmentEntry.index, nameInput.text, text, enabledSwitch.checked)
                     }
 
                     AppToolButton {

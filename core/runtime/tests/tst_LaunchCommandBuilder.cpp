@@ -75,6 +75,7 @@ private slots:
     void zludaRuntimeManagerIntegrationWhenConfigured();
     void runtimeShutdownReleasesChildPort();
     void profilesPersistWithoutLeavingTheTestDirectory();
+    void launchConfigurationEditsUseTargetedNotifications();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
     void consoleDisplayTextSupportsDocumentSelection();
@@ -212,12 +213,20 @@ void LaunchCommandBuilderTest::progressBridgeEnablesArgumentParsingBeforeProgres
     Q_INIT_RESOURCE(minifox_python_bridge);
     QFile bridge(QStringLiteral(":/minifox/python/minifox_progress_bridge.py"));
     QVERIFY2(bridge.open(QIODevice::ReadOnly), qPrintable(bridge.errorString()));
-    const QByteArray source = bridge.readAll();
+    QByteArray source = bridge.readAll();
+    source.replace("\r\n", "\n");
 
     QVERIFY(source.contains("comfy.options.enable_args_parsing()"));
     const qsizetype parsingCall = source.lastIndexOf("\nenable_comfy_argument_parsing()\n");
     const qsizetype progressCall = source.lastIndexOf("\nenable_cli_progress()\n");
     QVERIFY(parsingCall >= 0);
+    QVERIFY(source.contains("class MinifoxCLIProgressHandler"));
+    QVERIFY(source.contains("metadata.get(\"title\")"));
+    QVERIFY(source.contains("_is_core_progress_node"));
+    QVERIFY(source.contains("\"samplercustom\""));
+    QVERIFY(source.contains("\"textencode\""));
+    QVERIFY(source.contains("\"vae\""));
+    QVERIFY(source.contains("\"unet\""));
     QVERIFY(progressCall > parsingCall);
 }
 
@@ -591,6 +600,7 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
         manager.updateEnvironmentEntry(environmentIndex, QStringLiteral("CUSTOM_ENV"), QStringLiteral("enabled"), true);
         QCOMPARE(manager.profileNames().size(), 2);
         QCOMPARE(manager.currentProfileName(), QStringLiteral("GPU profile"));
+        QVERIFY(manager.savePendingChanges());
     }
 
     ConfigurationManager restored(storagePath);
@@ -599,8 +609,19 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
     QCOMPARE(restored.customArguments(), QStringLiteral("--custom value"));
     QCOMPARE(restored.environmentEntries().at(0).toMap().value(QStringLiteral("name")).toString(),
              QStringLiteral("CUSTOM_ENV"));
+
+    restored.setCustomArguments({});
+    QVERIFY(restored.savePendingChanges());
+    ConfigurationManager withoutCustomArguments(storagePath);
+    QVERIFY(withoutCustomArguments.customArguments().isEmpty());
+
+    withoutCustomArguments.setCustomArguments(QStringLiteral("--new-custom value"));
+    QVERIFY(withoutCustomArguments.savePendingChanges());
+    ConfigurationManager withNewCustomArguments(storagePath);
+    QCOMPARE(withNewCustomArguments.customArguments(), QStringLiteral("--new-custom value"));
+
     QString inactiveProfileId;
-    for (const QVariant &entry : restored.profileEntries()) {
+    for (const QVariant &entry : withNewCustomArguments.profileEntries()) {
         const QVariantMap profile = entry.toMap();
         if (!profile.value(QStringLiteral("current")).toBool()) {
             inactiveProfileId = profile.value(QStringLiteral("id")).toString();
@@ -608,9 +629,72 @@ void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
         }
     }
     QVERIFY(!inactiveProfileId.isEmpty());
-    QVERIFY(restored.removeProfiles({inactiveProfileId}));
-    QCOMPARE(restored.profileNames().size(), 1);
-    QCOMPARE(restored.currentProfileName(), QStringLiteral("GPU profile"));
+    QVERIFY(withNewCustomArguments.removeProfiles({inactiveProfileId}));
+    QCOMPARE(withNewCustomArguments.profileNames().size(), 1);
+    QCOMPARE(withNewCustomArguments.currentProfileName(), QStringLiteral("GPU profile"));
+}
+
+void LaunchCommandBuilderTest::launchConfigurationEditsUseTargetedNotifications()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString storagePath = temporaryDirectory.filePath(QStringLiteral("profiles.json"));
+
+    ConfigurationManager manager(storagePath);
+    QSignalSpy parameterChanges(&manager, &ConfigurationManager::parameterValueChanged);
+    QSignalSpy revisionChanges(&manager, &ConfigurationManager::parameterRevisionChanged);
+    QSignalSpy profileChanges(&manager, &ConfigurationManager::currentProfileChanged);
+
+    manager.setParameterValue(QStringLiteral("listen"), QStringLiteral("0.0.0.0"));
+    QCOMPARE(parameterChanges.count(), 1);
+    const auto parameterArguments = parameterChanges.takeFirst();
+    QCOMPARE(parameterArguments.at(0).toString(), QStringLiteral("listen"));
+    QCOMPARE(parameterArguments.at(1).toString(), QStringLiteral("0.0.0.0"));
+    QCOMPARE(revisionChanges.count(), 0);
+    QCOMPARE(profileChanges.count(), 0);
+
+    QVERIFY(manager.hasPendingChanges());
+    ConfigurationManager beforeParameterSave(storagePath);
+    QCOMPARE(beforeParameterSave.parameterValue(QStringLiteral("listen")).toString(),
+             QStringLiteral("127.0.0.1"));
+    QVERIFY(manager.savePendingChanges());
+    QVERIFY(!manager.hasPendingChanges());
+    ConfigurationManager restoredParameter(storagePath);
+    QCOMPARE(restoredParameter.parameterValue(QStringLiteral("listen")).toString(),
+             QStringLiteral("0.0.0.0"));
+
+    const int environmentIndex = manager.addEnvironmentEntry();
+    QCOMPARE(environmentIndex, 0);
+    profileChanges.clear();
+    QSignalSpy environmentChanges(&manager, &ConfigurationManager::environmentEntryChanged);
+    manager.updateEnvironmentEntry(environmentIndex, QStringLiteral("CUSTOM_ENV"),
+                                   QStringLiteral("live-value"), true);
+
+    QCOMPARE(environmentChanges.count(), 1);
+    const auto environmentArguments = environmentChanges.takeFirst();
+    QCOMPARE(environmentArguments.at(0).toInt(), environmentIndex);
+    const QVariantMap entry = environmentArguments.at(1).toMap();
+    QCOMPARE(entry.value(QStringLiteral("name")).toString(), QStringLiteral("CUSTOM_ENV"));
+    QCOMPARE(entry.value(QStringLiteral("value")).toString(), QStringLiteral("live-value"));
+    QVERIFY(entry.value(QStringLiteral("enabled")).toBool());
+    QCOMPARE(revisionChanges.count(), 0);
+    QCOMPARE(profileChanges.count(), 0);
+
+    QVERIFY(manager.savePendingChanges());
+    ConfigurationManager restoredEnvironment(storagePath);
+    const QVariantMap restoredEntry =
+        restoredEnvironment.environmentEntries().at(environmentIndex).toMap();
+    QCOMPARE(restoredEntry.value(QStringLiteral("name")).toString(), QStringLiteral("CUSTOM_ENV"));
+    QCOMPARE(restoredEntry.value(QStringLiteral("value")).toString(), QStringLiteral("live-value"));
+
+    const int duplicateIndex = manager.addEnvironmentEntry();
+    environmentChanges.clear();
+    manager.updateEnvironmentEntry(duplicateIndex, QStringLiteral("CUSTOM_ENV"),
+                                   QStringLiteral("duplicate-value"), true);
+    QCOMPARE(environmentChanges.count(), 2);
+    for (const auto &arguments : environmentChanges) {
+        QVERIFY(!arguments.at(1).toMap().value(QStringLiteral("error")).toString().isEmpty());
+    }
 }
 
 void LaunchCommandBuilderTest::environmentEntriesAreValidatedAndLegacyDefaultsMigrated()
@@ -1217,6 +1301,10 @@ void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()
 {
     LogModel model;
     QSignalSpy progressSpy(&model, &LogModel::progressChanged);
+    model.appendStandardError(
+        QByteArrayLiteral("\rLoading UNet: 50%|#####     | 1/2 [00:10<00:10, 0.10it/s]"));
+    QCOMPARE(model.rowCount(), 0);
+    QVERIFY(!model.progressActive());
 
     model.appendStandardError(
         QByteArrayLiteral("\r  0%|          | 0/8 [00:00<?, ?it/s, Model Initializing ...]"));
@@ -1243,15 +1331,22 @@ void LaunchCommandBuilderTest::tqdmProgressIsSeparatedFromConsoleLog()
     QCOMPARE(model.progressCurrent(), 4);
     QCOMPARE(model.progressRemaining(), QStringLiteral("00:01"));
     QCOMPARE(model.progressRate(), QStringLiteral("2.47it/s"));
-    QVERIFY(model.progressLabel().isEmpty());
+    model.appendStandardError(
+        QByteArrayLiteral("\r采样步骤 50%-: 62.5%|######    | 5/8 [00:01<00:00, 3.00it/s]"));
+    QCOMPARE(model.rowCount(), 0);
+    QCOMPARE(model.progressPercent(), 63);
+    QCOMPARE(model.progressCurrent(), 5);
+    QCOMPARE(model.progressLabel(), QStringLiteral("采样步骤 50%-"));
+
+    QVERIFY(!model.progressLabel().isEmpty());
 
     model.appendStandardError(
-        QByteArrayLiteral("\rNode 42: 75%|#######5  | 6/8 [00:02<00:01, 2.35steps/s]"));
+        QByteArrayLiteral("\rKSampler: 75%|#######5  | 6/8 [00:02<00:01, 2.35steps/s]"));
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.progressPercent(), 75);
     QCOMPARE(model.progressCurrent(), 6);
     QCOMPARE(model.progressTotal(), 8);
-    QCOMPARE(model.progressLabel(), QStringLiteral("Node 42"));
+    QCOMPARE(model.progressLabel(), QStringLiteral("KSampler"));
     QCOMPARE(model.progressRate(), QStringLiteral("2.35steps/s"));
 
     model.appendStandardError(

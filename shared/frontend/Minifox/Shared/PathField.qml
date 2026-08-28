@@ -11,6 +11,7 @@ RowLayout {
     property bool folderMode: false
     property bool executableMode: false
     property bool compactButton: false
+    property bool liveEditing: false
     property bool dialogRequested: false
     signal pathEdited(string value)
 
@@ -25,7 +26,14 @@ RowLayout {
         font.family: root.appContext.settings.consoleFontFamily
         font.pointSize: root.appContext.settings.consoleFontSize
         selectByMouse: true
-        onEditingFinished: root.pathEdited(text)
+        onTextEdited: {
+            if (root.liveEditing)
+                root.pathEdited(text);
+        }
+        onEditingFinished: {
+            if (!root.liveEditing)
+                root.pathEdited(text);
+        }
     }
 
     AppButton {

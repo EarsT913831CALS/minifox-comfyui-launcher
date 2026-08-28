@@ -48,7 +48,10 @@ QString humanizeKey(const QString &key)
             word[0] = word.at(0).toUpper();
         }
     }
-    return words.join(QLatin1Char(' '));
+    QString resultText = words.join(QLatin1Char(' '));
+    resultText.replace(QRegularExpression(QStringLiteral(R"(\bFP\s+(\d+)\b)")),
+                       QStringLiteral("FP\\1"));
+    return resultText;
 }
 
 QString englishTitle(const QString &key)
@@ -113,7 +116,7 @@ QString englishOptionLabel(const QString &source, const QString &value)
         {QStringLiteral("默认"), QStringLiteral("Default")},
         {QStringLiteral("默认（遵循 ComfyUI 设置）"), QStringLiteral("Default (follow ComfyUI setting)")},
         {QStringLiteral("默认（新版界面）"), QStringLiteral("Default (new UI)")},
-        {QStringLiteral("默认（动态显存）"), QStringLiteral("Default (dynamic VRAM)")},
+
         {QStringLiteral("默认（Torch 2.0+ 启用）"), QStringLiteral("Default (enabled on Torch 2.0+)")},
         {QStringLiteral("默认（NVIDIA 关闭，ROCm 自动）"), QStringLiteral("Default (off on NVIDIA, automatic on ROCm)")},
         {QStringLiteral("默认（自动选择）"), QStringLiteral("Default (automatic selection)")},
@@ -129,6 +132,7 @@ QString englishOptionLabel(const QString &source, const QString &value)
         {QStringLiteral("自动打开"), QStringLiteral("Open automatically")},
         {QStringLiteral("不自动打开"), QStringLiteral("Do not open automatically")},
         {QStringLiteral("调试"), QStringLiteral("Debug")},
+        {QStringLiteral("详细"), QStringLiteral("Detail")},
         {QStringLiteral("信息（默认）"), QStringLiteral("Info (default)")},
         {QStringLiteral("警告"), QStringLiteral("Warning")},
         {QStringLiteral("错误"), QStringLiteral("Error")},
@@ -254,7 +258,7 @@ const QList<LaunchParameterDefinition> &LaunchParameterCatalog::parameters()
         parameter("managerUi", "basic", "Manager 界面模式", "选择默认界面、禁用界面端点或使用旧版界面。", "choice", "flagChoice", {}, "",
                   flagOptions({{"", "默认（新版界面）", ""}, {"disabled", "禁用界面", "--disable-manager-ui"}, {"legacy", "旧版界面", "--enable-manager-legacy-ui"}})),
         parameter("verbose", "basic", "日志级别", "设置 ComfyUI 输出的最低日志级别。", "choice", "value", "--verbose", "INFO",
-                  flagOptions({{"DEBUG", "调试", ""}, {"INFO", "信息（默认）", ""}, {"WARNING", "警告", ""}, {"ERROR", "错误", ""}, {"CRITICAL", "严重错误", ""}})),
+                  flagOptions({{"DEBUG", "调试", ""}, {"DETAIL", "详细", ""}, {"INFO", "信息（默认）", ""}, {"WARNING", "警告", ""}, {"ERROR", "错误", ""}, {"CRITICAL", "严重错误", ""}})),
         parameter("logStdout", "basic", "常规日志写入 stdout", "将常规进程输出从 stderr 改为 stdout。", "switch", "switch", "--log-stdout", false),
         parameter("windowsStandalone", "basic", "Windows 独立包兼容模式", "启用 ComfyUI Windows 独立包的便利行为。", "switch", "switch", "--windows-standalone-build", false),
 
@@ -281,7 +285,7 @@ const QList<LaunchParameterDefinition> &LaunchParameterCatalog::parameters()
         parameter("directml", "device", "DirectML", "留空禁用；填写 auto 自动选择，或填写设备编号。", "text", "special", "--directml", ""),
         parameter("oneapiSelector", "device", "oneAPI 设备选择器", "设置 oneAPI 设备选择字符串。", "text", "value", "--oneapi-device-selector", ""),
         parameter("vramMode", "device", "显存模式", "选择 ComfyUI 的模型驻留和卸载策略。", "choice", "flagChoice", {}, "",
-                  flagOptions({{"", "默认（动态显存）", ""}, {"gpu", "仅 GPU", "--gpu-only"}, {"high", "高显存", "--highvram"}, {"low", "低显存", "--lowvram"}, {"none", "极低显存", "--novram"}, {"cpu", "仅 CPU", "--cpu"}})),
+                  flagOptions({{"", "默认（自动选择）", ""}, {"gpu", "仅 GPU", "--gpu-only"}, {"high", "高显存", "--highvram"}, {"low", "低显存", "--lowvram"}, {"none", "极低显存", "--novram"}, {"cpu", "仅 CPU", "--cpu"}})),
         parameter("cudaMalloc", "device", "cudaMallocAsync", "显式开启、关闭，或保留 PyTorch 默认行为。", "choice", "triState", "--cuda-malloc", "default",
                   flagOptions({{"default", "默认（Torch 2.0+ 启用）", ""}, {"enable", "启用", "--cuda-malloc"}, {"disable", "禁用", "--disable-cuda-malloc"}}), "--disable-cuda-malloc"),
         parameter("tritonBackend", "device", "Triton 后端", "显式开启或强制关闭 comfy-kitchen Triton 后端。", "choice", "triState", "--enable-triton-backend", "default",
