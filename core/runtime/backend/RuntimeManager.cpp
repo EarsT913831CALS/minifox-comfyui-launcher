@@ -6,6 +6,7 @@
 #include "LaunchCommandBuilder.h"
 #include "LogModel.h"
 #include "PortablePaths.h"
+#include "ProcessTextDecoder.h"
 #include "ZludaBootstrap.h"
 
 #include <QCoreApplication>
@@ -363,6 +364,10 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
     connect(m_configuration, &ConfigurationManager::currentProfileChanged,
             this, &RuntimeManager::updateCommandPreview);
     connect(m_configuration, &ConfigurationManager::parameterRevisionChanged,
+            this, &RuntimeManager::updateCommandPreview);
+    connect(m_configuration, &ConfigurationManager::parameterValueChanged,
+            this, &RuntimeManager::updateCommandPreview);
+    connect(m_configuration, &ConfigurationManager::environmentEntryChanged,
             this, &RuntimeManager::updateCommandPreview);
     connect(m_settings, &ApplicationSettings::proxyChanged,
             this, &RuntimeManager::updateCommandPreview);
@@ -789,9 +794,9 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
     const QJsonObject result = document.isObject() ? document.object() : QJsonObject{};
     if (exitStatus != QProcess::NormalExit || parseError.error != QJsonParseError::NoError
         || result.isEmpty()) {
-        QString detail = QString::fromUtf8(standardError).trimmed();
+        QString detail = ProcessTextDecoder::decode(standardError).trimmed();
         if (detail.isEmpty()) {
-            detail = QString::fromUtf8(standardOutput).trimmed();
+            detail = ProcessTextDecoder::decode(standardOutput).trimmed();
         }
         if (detail.isEmpty()) {
             detail = tr("检查进程退出代码 %1。").arg(exitCode);

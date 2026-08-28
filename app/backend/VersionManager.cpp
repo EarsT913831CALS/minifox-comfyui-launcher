@@ -2,7 +2,9 @@
 
 #include "ConfigurationManager.h"
 #include "PortablePaths.h"
+#include "ProcessTextDecoder.h"
 
+#include <QByteArray>
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -613,8 +615,8 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     m_gitTimeout.stop();
     const Operation completed = m_operation;
     m_operation = Operation::None;
-    const QString output = QString::fromUtf8(m_process.readAllStandardOutput()).trimmed();
-    const QString error = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
+    const QString output = ProcessTextDecoder::decode(m_process.readAllStandardOutput()).trimmed();
+    const QString error = ProcessTextDecoder::decode(m_process.readAllStandardError()).trimmed();
 
     if (exitStatus != QProcess::NormalExit || exitCode != 0) {
         if (completed == Operation::LoadExtensionHistory) {
@@ -1263,8 +1265,8 @@ void VersionManager::handleExtensionCheckFinished(QProcess *process, int exitCod
     if (timeout) timeout->stop();
     const QString path = process->property("extensionPath").toString();
     const QString phase = process->property("extensionPhase").toString();
-    const QString output = QString::fromUtf8(process->readAllStandardOutput()).trimmed();
-    const QString error = QString::fromUtf8(process->readAllStandardError()).trimmed();
+    const QString output = ProcessTextDecoder::decode(process->readAllStandardOutput()).trimmed();
+    const QString error = ProcessTextDecoder::decode(process->readAllStandardError()).trimmed();
     const bool succeeded = exitStatus == QProcess::NormalExit && exitCode == 0;
 
     if (phase == QStringLiteral("fetch") && succeeded) {
@@ -1713,7 +1715,8 @@ void VersionManager::startNextDependencyCheck()
 void VersionManager::handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     m_dependencyTimeout.stop();
-    const QString output = QString::fromUtf8(m_dependencyProcess.readAllStandardOutput()).trimmed();
+    const QString output = ProcessTextDecoder::decode(
+        m_dependencyProcess.readAllStandardOutput()).trimmed();
     const QString name = QFileInfo(m_dependencyDir).fileName();
     const bool timedOut = m_dependencyTimedOut;
     m_dependencyTimedOut = false;

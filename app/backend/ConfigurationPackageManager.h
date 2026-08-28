@@ -39,6 +39,7 @@ private:
                                bool includeSensitiveValues = true);
     bool applyPackageState(const QString &packagePath, bool *changed);
     void setError(const QString &message);
+    bool flushPendingChanges();
     void setMessage(const QString &message);
 
     ConfigurationManager *m_configuration;

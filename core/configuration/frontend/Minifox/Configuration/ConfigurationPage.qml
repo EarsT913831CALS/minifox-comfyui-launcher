@@ -26,6 +26,11 @@ Pane {
 
     padding: Theme.spacingLg
 
+    // Categories are separate views inside the configuration page. Flush any
+    // edits before rendering the newly selected view.
+    onSelectedCategoryIndexChanged: root.appContext.configuration.savePendingChanges()
+
+
     function filteredParameters() {
         const query = searchQuery.trim().toLowerCase();
         if (query.length === 0)
@@ -484,8 +489,8 @@ Pane {
                     font.pointSize: root.consoleFontSize
                     selectByMouse: true
                     wrapMode: root.consoleWordWrap ? TextEdit.WrapAnywhere : TextEdit.NoWrap
-                    onActiveFocusChanged: {
-                        if (!activeFocus)
+                    onTextChanged: {
+                        if (activeFocus)
                             root.appContext.configuration.customArguments = text;
                     }
                 }

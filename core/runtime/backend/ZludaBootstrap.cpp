@@ -1,5 +1,7 @@
 #include "ZludaBootstrap.h"
 
+#include "ProcessTextDecoder.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -224,7 +226,8 @@ QString extractAkiExtpack(const QString &portableRoot,
         || extractor.exitCode() != 0
         || !hasZludaFiles(extractedDirectory)) {
         if (error) {
-            const QString detail = QString::fromUtf8(extractor.readAllStandardError()).trimmed();
+            const QString detail = ProcessTextDecoder::decode(
+                extractor.readAllStandardError()).trimmed();
             *error = detail.isEmpty()
                 ? QStringLiteral("无法解包秋叶 ZLUDA 扩展包。")
                 : QStringLiteral("无法解包秋叶 ZLUDA 扩展包：%1").arg(detail);
@@ -372,7 +375,8 @@ bool extractEmbeddedArchive(const QString &archivePath,
         || extractor.exitCode() != 0
         || QDir(destination).entryList({validationPattern}, QDir::Files).isEmpty()) {
         if (error) {
-            const QString detail = QString::fromUtf8(extractor.readAllStandardError()).trimmed();
+            const QString detail = ProcessTextDecoder::decode(
+                extractor.readAllStandardError()).trimmed();
             *error = detail.isEmpty()
                 ? QStringLiteral("无法释放内置运行包：%1").arg(QFileInfo(archivePath).fileName())
                 : QStringLiteral("无法释放内置运行包：%1").arg(detail);
@@ -456,11 +460,12 @@ QString detectGfxArchitecture(const QString &rocmBin, QString *error)
         || probe.exitCode() != 0) {
         if (error) {
             *error = QStringLiteral("HIP 设备检测失败：%1")
-                         .arg(QString::fromUtf8(probe.readAllStandardError()).trimmed());
+                         .arg(ProcessTextDecoder::decode(
+                             probe.readAllStandardError()).trimmed());
         }
         return {};
     }
-    const QString output = QString::fromUtf8(probe.readAllStandardOutput());
+    const QString output = ProcessTextDecoder::decode(probe.readAllStandardOutput());
     const QRegularExpression expression(
         QStringLiteral(R"(gcnArchName:\s*(gfx[0-9a-f]+))"),
         QRegularExpression::CaseInsensitiveOption);

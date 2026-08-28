@@ -476,7 +476,7 @@
     <message>
         <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="67"/>
         <source>启动命令提示符</source>
-        <translation>Open Command Prompt</translation>
+        <translation>Open CMD in venv</translation>
     </message>
     <message>
         <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="75"/>
@@ -547,6 +547,30 @@
         <location filename="../../../core/runtime/frontend/Minifox/Runtime/ConsoleProgressPanel.qml" line="89"/>
         <source>ComfyUI 处理进度</source>
         <translation>ComfyUI progress</translation>
+    </message>
+    <message>
+        <source>第 %1 / %2 步</source>
+        <translation>Step %1 / %2</translation>
+    </message>
+    <message>
+        <source>进行中</source>
+        <translation>In progress</translation>
+    </message>
+    <message>
+        <source>已用时 %1</source>
+        <translation>Elapsed %1</translation>
+    </message>
+    <message>
+        <source>预计剩余 %1</source>
+        <translation>ETA %1</translation>
+    </message>
+    <message>
+        <source>速度 %1</source>
+        <translation>Speed %1</translation>
+    </message>
+    <message>
+        <source>正在执行</source>
+        <translation>Executing</translation>
     </message>
 </context>
 <context>
@@ -1136,6 +1160,16 @@
         <location filename="../Minifox/App/Main.qml" line="170"/>
         <source>关闭启动器会停止正在运行的 ComfyUI，并释放其占用的浏览器端口。确定要退出吗？</source>
         <translation>Closing the launcher will stop ComfyUI and release its browser port. Are you sure you want to exit?</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="192"/>
+        <source>无法保存启动配置</source>
+        <translation>Unable to Save Launch Configuration</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/Main.qml" line="195"/>
+        <source>确定</source>
+        <translation>OK</translation>
     </message>
 </context>
 <context>

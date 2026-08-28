@@ -441,6 +441,15 @@ ConfigurationPackageManager::ConfigurationPackageManager(
 {
 }
 
+bool ConfigurationPackageManager::flushPendingChanges()
+{
+    if (m_configuration->savePendingChanges()) {
+        return true;
+    }
+    setError(m_configuration->lastError());
+    return false;
+}
+
 bool ConfigurationPackageManager::restartRequired() const
 {
     return m_restartRequired;
@@ -522,6 +531,10 @@ bool ConfigurationPackageManager::applyPackageState(const QString &packagePath, 
 
 bool ConfigurationPackageManager::switchProfile(int index)
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     if (index == m_configuration->currentProfileIndex()) {
         return true;
     }
@@ -542,6 +555,10 @@ bool ConfigurationPackageManager::switchProfile(int index)
         return false;
     }
     m_configuration->setCurrentProfileIndex(index);
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     if (!QFileInfo::exists(targetSnapshot)) {
         captureCurrentProfile(targetSnapshot);
     }
@@ -556,6 +573,10 @@ bool ConfigurationPackageManager::switchProfile(int index)
 
 bool ConfigurationPackageManager::addProfile()
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     const QString outgoingId = m_configuration->currentProfileSnapshot()
                                    .value(QStringLiteral("id")).toString();
     if (!captureCurrentProfile(snapshotPath(outgoingId))) {
@@ -567,12 +588,20 @@ bool ConfigurationPackageManager::addProfile()
     if (!captureCurrentProfile(snapshotPath(createdId))) {
         return false;
     }
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     setMessage(tr("已新建启动配置。"));
     return true;
 }
 
 bool ConfigurationPackageManager::duplicateCurrentProfile()
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     const QString outgoingId = m_configuration->currentProfileSnapshot()
                                    .value(QStringLiteral("id")).toString();
     if (!captureCurrentProfile(snapshotPath(outgoingId))) {
@@ -584,6 +613,10 @@ bool ConfigurationPackageManager::duplicateCurrentProfile()
     if (!captureCurrentProfile(snapshotPath(createdId))) {
         return false;
     }
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     setMessage(tr("已复制启动配置。"));
     return true;
 }
@@ -591,6 +624,10 @@ bool ConfigurationPackageManager::duplicateCurrentProfile()
 bool ConfigurationPackageManager::exportPackage(const QUrl &destination,
                                                 bool includeSensitiveValues)
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     QString path = cleanLocalPath(destination);
     if (QFileInfo(path).suffix().compare(QStringLiteral("zip"), Qt::CaseInsensitive) != 0) {
         path += QStringLiteral(".zip");
@@ -604,6 +641,10 @@ bool ConfigurationPackageManager::exportPackage(const QUrl &destination,
 
 bool ConfigurationPackageManager::importPackage(const QUrl &source)
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     const QString sourcePath = cleanLocalPath(source);
     QHash<QString, QByteArray> files;
     QHash<QString, QByteArray> importedState;
@@ -697,6 +738,10 @@ bool ConfigurationPackageManager::importPackage(const QUrl &source)
 
 bool ConfigurationPackageManager::deleteProfiles(const QStringList &profileIds)
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     const QString currentId = m_configuration->currentProfileSnapshot()
                                   .value(QStringLiteral("id")).toString();
     QStringList removableIds;
@@ -717,12 +762,20 @@ bool ConfigurationPackageManager::deleteProfiles(const QStringList &profileIds)
     for (const QString &profileId : std::as_const(removableIds)) {
         QFile::remove(snapshotPath(profileId));
     }
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     setMessage(tr("已删除 %1 个配置。").arg(removableIds.size()));
     return true;
 }
 
 bool ConfigurationPackageManager::restartLauncher()
 {
+    if (!flushPendingChanges()) {
+        return false;
+    }
+
     const QString executable = QCoreApplication::applicationFilePath();
     QStringList arguments = QCoreApplication::arguments();
     if (!arguments.isEmpty()) {

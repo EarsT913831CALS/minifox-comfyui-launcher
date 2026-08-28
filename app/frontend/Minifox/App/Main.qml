@@ -53,6 +53,12 @@ ApplicationWindow {
     palette.linkVisited: Theme.info
 
     onClosing: close => {
+        if (!appContext.configuration.savePendingChanges()) {
+            close.accepted = false;
+            if (!saveErrorDialog.visible)
+                saveErrorDialog.open();
+            return;
+        }
         if (appContext.runtime.active && !allowClose) {
             close.accepted = false;
             if (!closeConfirmation.visible)
@@ -175,6 +181,24 @@ ApplicationWindow {
                 window.allowClose = true;
                 window.appContext.runtime.shutdown();
                 window.close();
+            }
+        }
+
+        AppDialog {
+            id: saveErrorDialog
+
+            parent: designSurface
+            anchors.centerIn: parent
+            title: qsTr("无法保存启动配置")
+            modal: true
+            standardButtons: Dialog.Ok
+            acceptText: qsTr("确定")
+            closePolicy: Popup.CloseOnEscape
+
+            AppLabel {
+                width: saveErrorDialog.availableWidth
+                text: window.appContext.configuration.lastError
+                wrapMode: Text.Wrap
             }
         }
 

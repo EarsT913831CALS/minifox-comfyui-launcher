@@ -17,6 +17,7 @@ class ConfigurationManager final : public QObject
     Q_PROPERTY(QVariantList environmentEntries READ environmentEntries NOTIFY currentProfileChanged)
     Q_PROPERTY(QVariantList categories READ categories NOTIFY parameterRevisionChanged)
     Q_PROPERTY(int parameterRevision READ parameterRevision NOTIFY parameterRevisionChanged)
+    Q_PROPERTY(bool pendingChanges READ hasPendingChanges NOTIFY pendingChangesChanged)
     Q_PROPERTY(bool valid READ isValid NOTIFY validationChanged)
     Q_PROPERTY(QStringList validationErrors READ validationErrors NOTIFY validationChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -45,6 +46,8 @@ public:
     void setComfyRoot(const QString &path);
     QString customArguments() const;
     void setCustomArguments(const QString &arguments);
+    bool hasPendingChanges() const;
+    Q_INVOKABLE bool savePendingChanges();
 
     QVariantList environmentEntries() const;
     Q_INVOKABLE bool hasSensitiveEnvironmentValues() const;
@@ -75,6 +78,9 @@ signals:
     void profilesChanged();
     void currentProfileChanged();
     void parameterRevisionChanged();
+    void pendingChangesChanged();
+    void parameterValueChanged(const QString &key, const QVariant &value);
+    void environmentEntryChanged(int index, const QVariantMap &entry);
     void validationChanged();
     void lastErrorChanged();
 
@@ -100,7 +106,8 @@ private:
     Profile makeDefaultProfile(const QString &name) const;
     void load();
     bool save();
-    void updateAfterEdit(bool parametersChanged = false);
+    void markPendingChanges();
+    void updateAfterEdit();
     void validate();
     QStringList environmentEntryErrors(const Profile &profile) const;
     void setLastError(const QString &message);
@@ -113,6 +120,7 @@ private:
     QList<Profile> m_profiles;
     int m_currentProfileIndex = 0;
     int m_parameterRevision = 0;
+    bool m_pendingChanges = false;
     QStringList m_validationErrors;
     QString m_lastError;
 };

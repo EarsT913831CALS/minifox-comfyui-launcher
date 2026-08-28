@@ -14,9 +14,18 @@ MaterialPanel {
     readonly property var displayFlags: parameter.flag
         ? String(parameter.flag).split(" / ")
         : []
+    property var currentValue: parameter.value
 
     Layout.fillWidth: true
     padding: Theme.spacingMd
+
+    Connections {
+        target: root.appContext.configuration
+        function onParameterValueChanged(key, value) {
+            if (key === root.parameter.key)
+                root.currentValue = value;
+        }
+    }
 
     function optionIndex(value) {
         for (let index = 0; index < parameter.options.length; ++index) {
@@ -136,7 +145,7 @@ MaterialPanel {
 
         AppSwitch {
             text: checked ? qsTr("已启用") : qsTr("未启用")
-            checked: Boolean(root.parameter.value)
+            checked: Boolean(root.currentValue)
             onToggled: root.appContext.configuration.setParameterValue(root.parameter.key, checked)
         }
     }
@@ -148,7 +157,7 @@ MaterialPanel {
             model: root.parameter.options
             textRole: "label"
             valueRole: "value"
-            currentIndex: root.optionIndex(root.parameter.value)
+            currentIndex: root.optionIndex(root.currentValue)
             onActivated: index => root.appContext.configuration.setParameterValue(root.parameter.key, root.parameter.options[index].value)
         }
     }
@@ -157,11 +166,11 @@ MaterialPanel {
         id: textEditor
 
         AppTextField {
-            text: root.parameter.value
+            text: root.currentValue
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
             selectByMouse: true
-            onEditingFinished: root.appContext.configuration.setParameterValue(root.parameter.key, text)
+            onTextEdited: root.appContext.configuration.setParameterValue(root.parameter.key, text)
         }
     }
 
@@ -171,7 +180,7 @@ MaterialPanel {
         AppSpinBox {
             from: root.parameter.minimum === undefined ? -2147483647 : root.parameter.minimum
             to: root.parameter.maximum === undefined ? 2147483647 : root.parameter.maximum
-            value: Number(root.parameter.value)
+            value: Number(root.currentValue)
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
             editable: true
@@ -183,7 +192,7 @@ MaterialPanel {
         id: integerOptionalEditor
 
         AppTextField {
-            text: root.parameter.value
+            text: root.currentValue
             placeholderText: root.optionalPlaceholder()
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
@@ -191,7 +200,10 @@ MaterialPanel {
                 bottom: root.parameter.minimum === undefined ? 0 : root.parameter.minimum
                 top: root.parameter.maximum === undefined ? 2147483647 : root.parameter.maximum
             }
-            onEditingFinished: root.appContext.configuration.setParameterValue(root.parameter.key, text)
+            onTextEdited: {
+                if (text.length === 0 || acceptableInput)
+                    root.appContext.configuration.setParameterValue(root.parameter.key, text);
+            }
         }
     }
 
@@ -199,7 +211,7 @@ MaterialPanel {
         id: realEditor
 
         AppTextField {
-            text: String(root.parameter.value)
+            text: String(root.currentValue)
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
             inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -208,7 +220,10 @@ MaterialPanel {
                 top: root.parameter.maximum === undefined ? 1.0e12 : root.parameter.maximum
                 notation: DoubleValidator.StandardNotation
             }
-            onEditingFinished: root.appContext.configuration.setParameterValue(root.parameter.key, Number(text))
+            onTextEdited: {
+                if (acceptableInput)
+                    root.appContext.configuration.setParameterValue(root.parameter.key, Number(text));
+            }
         }
     }
 
@@ -216,7 +231,7 @@ MaterialPanel {
         id: realOptionalEditor
 
         AppTextField {
-            text: root.parameter.value
+            text: root.currentValue
             placeholderText: root.optionalPlaceholder()
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
@@ -226,7 +241,10 @@ MaterialPanel {
                 top: root.parameter.maximum === undefined ? 1.0e12 : root.parameter.maximum
                 notation: DoubleValidator.StandardNotation
             }
-            onEditingFinished: root.appContext.configuration.setParameterValue(root.parameter.key, text)
+            onTextEdited: {
+                if (text.length === 0 || acceptableInput)
+                    root.appContext.configuration.setParameterValue(root.parameter.key, text);
+            }
         }
     }
 
@@ -236,7 +254,8 @@ MaterialPanel {
         PathField {
             appContext: root.appContext
             compactButton: true
-            pathValue: root.parameter.value
+            pathValue: root.currentValue
+            liveEditing: true
             folderMode: true
             onPathEdited: value => root.appContext.configuration.setParameterValue(root.parameter.key, value)
         }
@@ -248,7 +267,8 @@ MaterialPanel {
         PathField {
             appContext: root.appContext
             compactButton: true
-            pathValue: root.parameter.value
+            pathValue: root.currentValue
+            liveEditing: true
             onPathEdited: value => root.appContext.configuration.setParameterValue(root.parameter.key, value)
         }
     }
@@ -258,13 +278,16 @@ MaterialPanel {
 
         AppTextArea {
             implicitHeight: 92
-            text: root.parameter.value
+            text: root.currentValue
             placeholderText: qsTr("每行一项")
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
             selectByMouse: true
             wrapMode: root.consoleWordWrap ? TextEdit.WrapAnywhere : TextEdit.NoWrap
-            onEditingFinished: root.appContext.configuration.setParameterValue(root.parameter.key, text)
+            onTextChanged: {
+                if (activeFocus)
+                    root.appContext.configuration.setParameterValue(root.parameter.key, text);
+            }
         }
     }
 }

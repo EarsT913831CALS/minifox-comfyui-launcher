@@ -161,6 +161,30 @@ QString visibleStreamLabel(const QString &stream, const QString &text)
     return {};
 }
 
+bool ignoredProgressLabel(const QString &label)
+{
+    const QString normalized = label.simplified().toCaseFolded();
+    static const QRegularExpression genericNodeLabel(
+        QStringLiteral(R"(^node\s+\S+$)"));
+    if (genericNodeLabel.match(normalized).hasMatch()) {
+        return true;
+    }
+
+    const bool loading = normalized.contains(QStringLiteral("load"))
+        || normalized.contains(QStringLiteral("加载"));
+    if (!loading) {
+        return false;
+    }
+
+    return normalized.contains(QStringLiteral("unet"))
+        || normalized.contains(QStringLiteral("diffusion"))
+        || normalized.contains(QStringLiteral("checkpoint"))
+        || normalized.contains(QStringLiteral("model"))
+        || normalized.contains(QStringLiteral("clip"))
+        || normalized.contains(QStringLiteral("vae"))
+        || normalized.contains(QStringLiteral("模型"));
+}
+
 QColor semanticColorValue(SemanticLevel level,
                           const QColor &secondaryColor,
                           const QColor &infoColor,
@@ -678,15 +702,19 @@ bool LogModel::updateProgressFromLine(const QString &line)
     }
 
     static const QRegularExpression percentExpression(
-        QStringLiteral(R"((\d{1,3}(?:[.,]\d+)?)\s*%)"));
+        QStringLiteral(R"((\d{1,3}(?:[.,]\d+)?)\s*%(?=\s*(?:\||\d[\d,]*\s*/)))"));
     static const QRegularExpression countExpression(
         QStringLiteral(R"((\d[\d,]*)\s*/\s*(\d[\d,]*))"));
     const QRegularExpressionMatch percentMatch = percentExpression.match(normalized);
-    const QRegularExpressionMatch countMatch = countExpression.match(normalized);
     const bool hasProgressMarker = normalized.contains(QStringLiteral("%|"))
         || normalized.contains(QStringLiteral("it/s"), Qt::CaseInsensitive)
         || normalized.contains(QStringLiteral("s/it"), Qt::CaseInsensitive);
-    if (!percentMatch.hasMatch() || !countMatch.hasMatch() || !hasProgressMarker) {
+    if (!percentMatch.hasMatch() || !hasProgressMarker) {
+        return false;
+    }
+    const QRegularExpressionMatch countMatch = countExpression.match(normalized,
+                                                                      percentMatch.capturedEnd());
+    if (!countMatch.hasMatch()) {
         return false;
     }
 
@@ -716,8 +744,12 @@ bool LogModel::updateProgressFromLine(const QString &line)
 
     QString prefix = normalized.first(percentMatch.capturedStart()).trimmed();
     static const QRegularExpression trailingDecoration(
-        QStringLiteral(R"([|:>\-\s]+$)"));
+        QStringLiteral(R"(\s*:\s*$)"));
     prefix.remove(trailingDecoration);
+    if (ignoredProgressLabel(prefix)) {
+        resetProgress();
+        return true;
+    }
     if (!prefix.isEmpty() && prefix.size() <= 120) {
         progress.label = prefix;
     }
