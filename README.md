@@ -78,11 +78,28 @@ The launcher does not modify ComfyUI, HIP files, or system environment variables
 The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, and remote repository.
 
 - Refreshing lists reads remote information without modifying the working tree.
-- Core version switching, branch switching, and one-click updates (to the latest version on the page currently being viewed) run `git reset --hard` and `git clean -ffd` first.
+- Safe Update is enabled by default: updates and version switches are refused when the core or an extension worktree has Git changes; no reset or cleanup is run.
+- With Reset Tracked Files enabled, updates and version switches reset tracked files to match the remote repository; untracked files are unaffected.
+- The Full Cleanup button runs `git reset --hard HEAD` followed by `git clean -ffd`, deleting untracked files and directories and restoring a clean remote-repository state locally.
 - Extension version switching presents commit descriptions, dates, and the current version without requiring a commit ID.
 - Hold `Ctrl` and left-click a remote repository URL to open it in the default browser.
 
-> **Warning:** Forced switching or updating discards modified files and removes untracked files and directories inside the affected repository. Back up anything that must be preserved.
+> **Warning:** Reset Tracked Files and Full Cleanup modify the Git worktree. Full Cleanup also deletes untracked files and directories that are not ignored by Git. Back up anything that must be preserved.
+
+### Backup location
+
+Before Reset Tracked Files or Full Cleanup runs, the launcher backs up affected files. Backups are stored **in the directory above the ComfyUI folder**, alongside `ComfyUI/`:
+
+```text
+ComfyUI-Package/
+├── ComfyUI/
+└── backup/
+    └── YYYY-MM-DD/
+        ├── core/
+        └── extensions/
+```
+
+Each date folder keeps up to 3 core archives and 60 extension archives. Up to the 5 most recent date folders are retained. Archives are automatically numbered to prevent same-day name collisions.
 
 ## Portable Data
 
