@@ -283,7 +283,7 @@ Pane {
                     text: root.versions.updating ? qsTr("更新中…") : qsTr("▣  一键更新")
                     visible: root.selectedTab !== 2
                     enabled: root.selectedTab === 0
-                             ? root.versions.canCheck
+                             ? root.versions.canUpdate
                              : !root.versions.busy && root.versions.installedExtensions.length > 0
                     onClicked: {
                         if (root.selectedTab === 0) root.versions.updateComfyUi(root.coreChannel);
@@ -359,7 +359,7 @@ Pane {
 
                             AppButton {
                                 text: qsTr("⚯  切换分支")
-                                enabled: root.versions.canCheck
+                                enabled: root.versions.canUpdate
                                 Layout.alignment: Qt.AlignRight
                                 Layout.preferredHeight: 34
                                 leftPadding: 12
@@ -453,7 +453,7 @@ Pane {
                                         AppLabel { width: parent.width - 110 - 220 - 64 - root.coreActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: coreRow.modelData.subject; elide: Text.ElideRight; font.pointSize: root.tableFontSize }
                                         AppLabel { width: 220; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; text: coreRow.modelData.date; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
                                         AppLabel { width: 64; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; text: coreRow.modelData.current ? "✓" : ""; font.pointSize: Theme.bodySize }
-                                        AppButton { width: root.coreActionWidth; height: parent.height; leftPadding: 8; rightPadding: 8; text: qsTr("切换"); enabled: !coreRow.modelData.current && root.versions.canCheck; font.pointSize: root.tableFontSize; onClicked: root.versions.switchCoreVersion(coreRow.modelData.commit, root.coreChannel) }
+                                        AppButton { width: root.coreActionWidth; height: parent.height; leftPadding: 8; rightPadding: 8; text: qsTr("切换"); enabled: !coreRow.modelData.current && root.versions.canUpdate; font.pointSize: root.tableFontSize; onClicked: root.versions.switchCoreVersion(coreRow.modelData.commit, root.coreChannel) }
                                     }
                                 }
                             }

@@ -18,16 +18,23 @@
 #include <QThread>
 
 AppContext::AppContext(QObject *parent)
-    : QObject(parent),
-      m_configuration(new ConfigurationManager({}, this)),
-      m_configurationPackages(new ConfigurationPackageManager(m_configuration, this)),
-      m_settings(new ApplicationSettings({}, this)),
-      m_appIcon(new ApplicationIconManager(m_settings, this)),
-      m_runtime(new RuntimeManager(m_configuration, m_settings, this)),
-      m_skins(new SkinManager(m_settings, {}, this)),
-      m_windowChrome(new WindowChromeController(this)),
-      m_versions(new VersionManager(m_configuration, this))
+    : QObject(parent)
 {
+    // Establish a readable UI language before any manager creates localized
+    // first-run data or reports a startup error. A saved language preference
+    // is applied immediately after the settings file has been loaded.
+    installLanguage(QStringLiteral("system"));
+    m_settings = new ApplicationSettings({}, this);
+    installLanguage(m_settings->language());
+
+    m_configuration = new ConfigurationManager({}, this);
+    m_configurationPackages = new ConfigurationPackageManager(m_configuration, this);
+    m_appIcon = new ApplicationIconManager(m_settings, this);
+    m_runtime = new RuntimeManager(m_configuration, m_settings, this);
+    m_skins = new SkinManager(m_settings, {}, this);
+    m_windowChrome = new WindowChromeController(this);
+    m_versions = new VersionManager(m_configuration, m_settings, this);
+
     QString portableError;
     if (!PortablePaths::ensureDataDirectory(&portableError)) {
         qWarning().noquote() << portableError;
@@ -44,7 +51,6 @@ AppContext::AppContext(QObject *parent)
     m_zludaPreloadThread->start();
 
     connect(m_settings, &ApplicationSettings::languageChanged, this, &AppContext::applyLanguage);
-    applyLanguage();
 }
 
 AppContext::~AppContext()
@@ -74,22 +80,25 @@ void AppContext::setQmlEngine(QQmlEngine *engine)
 
 void AppContext::applyLanguage()
 {
-    QCoreApplication::removeTranslator(&m_translator);
+    installLanguage(m_settings ? m_settings->language() : QStringLiteral("system"));
 
-    QString language = m_settings->language();
-    if (language == QStringLiteral("system")) {
-        language = QLocale::system().name();
-    }
-    QLocale::setDefault(QLocale(language));
-
-    if (language.startsWith(QStringLiteral("en"), Qt::CaseInsensitive)
-        && m_translator.load(QStringLiteral(":/i18n/qml_en_US.qm"))) {
-        QCoreApplication::installTranslator(&m_translator);
-    }
-    m_configuration->retranslate();
-    m_runtime->retranslate();
-    m_versions->retranslate();
+    if (m_configuration) m_configuration->retranslate();
+    if (m_runtime) m_runtime->retranslate();
+    if (m_versions) m_versions->retranslate();
     if (m_qmlEngine) {
         m_qmlEngine->retranslate();
+    }
+}
+
+void AppContext::installLanguage(const QString &preference)
+{
+    QCoreApplication::removeTranslator(&m_translator);
+
+    const QString language = ApplicationSettings::effectiveLanguage(preference);
+    QLocale::setDefault(QLocale(language));
+
+    if (language == QStringLiteral("en_US")
+        && m_translator.load(QStringLiteral(":/i18n/qml_en_US.qm"))) {
+        QCoreApplication::installTranslator(&m_translator);
     }
 }

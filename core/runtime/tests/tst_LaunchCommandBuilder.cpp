@@ -539,6 +539,15 @@ void LaunchCommandBuilderTest::directControlPaletteBindingsOverrideStyleDefaults
 
 void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
 {
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("system"), QLocale::Chinese),
+             QStringLiteral("zh_CN"));
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("system"), QLocale::French),
+             QStringLiteral("en_US"));
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("zh_CN"), QLocale::English),
+             QStringLiteral("zh_CN"));
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("en_US"), QLocale::Chinese),
+             QStringLiteral("en_US"));
+
     QTemporaryDir temporaryDirectory;
     QVERIFY(temporaryDirectory.isValid());
     const QString storagePath = temporaryDirectory.filePath(QStringLiteral("settings.json"));
@@ -546,6 +555,7 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
     {
         ApplicationSettings settings(storagePath);
         QCOMPARE(settings.accentMode(), QStringLiteral("system"));
+        QVERIFY(!settings.resetTrackedFilesOnUpdate());
         QVERIFY(QColor(settings.effectiveAccentColor()).isValid());
         settings.setThemeMode(QStringLiteral("dark"));
         settings.setLanguage(QStringLiteral("en_US"));
@@ -562,6 +572,7 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
         settings.setProxyMode(QStringLiteral("manual"));
         settings.setProxyHost(QStringLiteral("127.0.0.1"));
         settings.setProxyPort(8899);
+        settings.setResetTrackedFilesOnUpdate(true);
     }
 
     ApplicationSettings restored(storagePath);
@@ -581,6 +592,7 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
     QCOMPARE(restored.proxyMode(), QStringLiteral("manual"));
     QCOMPARE(restored.proxyHost(), QStringLiteral("127.0.0.1"));
     QCOMPARE(restored.proxyPort(), 8899);
+    QVERIFY(restored.resetTrackedFilesOnUpdate());
 }
 
 void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()

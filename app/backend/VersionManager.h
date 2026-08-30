@@ -10,6 +10,7 @@
 #include <QVariantList>
 
 class ConfigurationManager;
+class ApplicationSettings;
 class QNetworkReply;
 
 class VersionManager final : public QObject
@@ -48,7 +49,9 @@ class VersionManager final : public QObject
     Q_PROPERTY(int behindCount READ behindCount NOTIFY stateChanged)
 
 public:
-    explicit VersionManager(ConfigurationManager *configuration, QObject *parent = nullptr);
+    explicit VersionManager(ConfigurationManager *configuration,
+                            ApplicationSettings *settings,
+                            QObject *parent = nullptr);
 
     bool busy() const;
     bool installingDependencies() const;
@@ -91,6 +94,7 @@ public:
     Q_INVOKABLE void updateComfyUi(int channel);
     Q_INVOKABLE void switchCoreVersion(const QString &commit, int channel);
     Q_INVOKABLE void switchBranch(const QString &branch, int repositorySource);
+    Q_INVOKABLE void cleanComfyUiRepository();
     Q_INVOKABLE void updateExtension(const QString &path);
     Q_INVOKABLE void updateAllExtensions();
     Q_INVOKABLE void loadExtensionVersions(const QString &path, const QString &currentCommit);
@@ -115,8 +119,10 @@ private:
         Fetch,
         ResolveCoreCompareBranch,
         Compare,
+        CollectTrackedBackup,
+        CollectUntrackedBackup,
+        CreateBackupArchive,
         ResetCoreForUpdate,
-        CleanCoreForUpdate,
         PrepareCoreUpdateFetch,
         ResolveStableUpdateCommit,
         ResolveDevelopmentUpdateBranch,
@@ -128,14 +134,15 @@ private:
         LoadCoreHistory,
         LoadStableHistory,
         ResetCoreForVersion,
-        CleanCoreForVersion,
         CheckoutCore,
         ResetCoreForBranch,
-        CleanCoreForBranch,
+        ResetCoreForCleanup,
+        CleanCore,
         SetCoreBranchRemote,
         FetchCoreBranchRemote,
         CheckoutBranch,
         ValidateExtensionUpdate,
+        ResetExtensionForUpdate,
         PrepareExtensionUpdateFetch,
         ResolveExtensionUpdateBranch,
         AttachExtensionUpdateBranch,
@@ -143,6 +150,7 @@ private:
         UpdateExtension,
         LoadExtensionHistory,
         ValidateExtensionCheckout,
+        ResetExtensionForCheckout,
         CheckoutExtension,
         InstallExtension,
         NormalizeBranch
@@ -155,7 +163,37 @@ private:
         AvailableExtensions
     };
 
+    enum class PendingCoreAction {
+        None,
+        Update,
+        SwitchVersion,
+        SwitchBranch,
+        FullClean,
+        UpdateExtension,
+        SwitchExtensionVersion
+    };
+
+    struct BackupArchiveRequest {
+        QString sourceRoot;
+        QString category;
+        QString label;
+        QByteArray fileList;
+    };
+
     void startGit(Operation operation, const QStringList &arguments);
+    void startProcess(Operation operation, const QString &program,
+                      const QStringList &arguments);
+    void beginResetAction(PendingCoreAction action, const QString &repositoryRoot);
+    void collectBackupPaths(const QByteArray &output);
+    void createBackupArchivesOrContinue();
+    void startNextBackupArchive();
+    void continuePendingCoreAction();
+    void clearBackupState();
+    bool pruneBackupArchives(const QString &categoryDirectory, int maximum, QString *error);
+    bool pruneBackupDays(const QString &backupRoot, QString *error);
+    QString backupLocationSummary() const;
+    void resetOperationBackupSummary();
+    void appendBackupSummaryToPendingCompletion();
     void startExtensionUpdate(const QString &path);
     void loadLocalState();
     void handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -196,6 +234,7 @@ private:
     static QString requirementsFileFor(const QString &targetDir);
 
     ConfigurationManager *m_configuration;
+    ApplicationSettings *m_settings;
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_catalogReply;
     QProcess m_process;
@@ -240,6 +279,16 @@ private:
     QString m_pendingCommit;
     QString m_pendingBranch;
     QString m_pendingBranchRemoteUrl;
+    PendingCoreAction m_pendingCoreAction = PendingCoreAction::None;
+    QString m_backupSourceRoot;
+    QByteArray m_backupPaths;
+    QList<BackupArchiveRequest> m_backupArchiveQueue;
+    QStringList m_createdBackupArchives;
+    QStringList m_operationBackupArchives;
+    QString m_backupListPath;
+    QString m_backupArchivePath;
+    QString m_backupRootPath;
+    QString m_currentBackupCategoryDirectory;
     QString m_extensionHistoryCurrentCommit;
     int m_requestedCoreChannel = 0;
     QStringList m_extensionUpdateQueue;

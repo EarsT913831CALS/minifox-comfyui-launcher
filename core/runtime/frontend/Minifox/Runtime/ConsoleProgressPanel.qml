@@ -14,19 +14,18 @@ Rectangle {
 
     readonly property color panelColor: darkConsole ? "#1b1b1b" : "#f3f3f3"
     readonly property color trackColor: darkConsole ? "#404040" : "#d6d6d6"
-    readonly property bool hasKnownTotal: progressModel.progressTotal > 0
-    readonly property string currentStepText: hasKnownTotal
-        ? qsTr("第 %1 / %2 步").arg(progressModel.progressCurrent).arg(progressModel.progressTotal)
-        : qsTr("进行中")
+    readonly property string counterText: progressModel.progressTotal > 0
+        ? qsTr("%1 / %2").arg(progressModel.progressCurrent).arg(progressModel.progressTotal)
+        : ""
     readonly property string detailText: {
         const details = [];
-        if (progressModel.progressElapsed.length > 0)
-            details.push(qsTr("已用时 %1").arg(progressModel.progressElapsed));
+        if (counterText.length > 0)
+            details.push(counterText);
         if (progressModel.progressRemaining.length > 0
                 && progressModel.progressRemaining !== "?")
-            details.push(qsTr("预计剩余 %1").arg(progressModel.progressRemaining));
+            details.push(qsTr("剩余 %1").arg(progressModel.progressRemaining));
         if (progressModel.progressRate.length > 0)
-            details.push(qsTr("速度 %1").arg(progressModel.progressRate));
+            details.push(progressModel.progressRate);
         return details.join("  ·  ");
     }
 
@@ -59,35 +58,22 @@ Rectangle {
             AppLabel {
                 text: root.progressModel.progressLabel.length > 0
                     ? root.progressModel.progressLabel
-                    : qsTr("正在执行")
+                    : qsTr("ComfyUI 处理进度")
                 color: root.darkConsole ? "#f2f2f2" : "#1b1b1b"
                 font.family: root.consoleFontFamily
                 font.pointSize: root.consoleFontSize
                 font.weight: Font.DemiBold
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
+                elide: Text.ElideRight
                 Layout.fillWidth: true
             }
 
-            RowLayout {
-                spacing: Theme.spacingSm
-
-                AppLabel {
-                    text: root.currentStepText
-                    color: Theme.accent
-                    font.family: root.consoleFontFamily
-                    font.pointSize: root.consoleFontSize + 1
-                    font.weight: Font.DemiBold
-                }
-
-                AppLabel {
-                    text: root.progressModel.progressPercent + "%"
-                    color: root.darkConsole ? "#f2f2f2" : "#1b1b1b"
-                    font.family: root.consoleFontFamily
-                    font.pointSize: root.consoleFontSize
-                    font.weight: Font.DemiBold
-                    horizontalAlignment: Text.AlignRight
-                }
+            AppLabel {
+                text: root.progressModel.progressPercent + "%"
+                color: root.darkConsole ? "#f2f2f2" : "#1b1b1b"
+                font.family: root.consoleFontFamily
+                font.pointSize: root.consoleFontSize
+                font.weight: Font.DemiBold
+                horizontalAlignment: Text.AlignRight
             }
         }
 
@@ -95,7 +81,7 @@ Rectangle {
             id: progressBar
 
             Layout.fillWidth: true
-            Layout.preferredHeight: 8
+            Layout.preferredHeight: 4
             from: 0
             to: 1
             value: root.progressModel.progressValue
@@ -104,8 +90,8 @@ Rectangle {
             Accessible.description: root.detailText
 
             background: Rectangle {
-                implicitHeight: 8
-                radius: 4
+                implicitHeight: 4
+                radius: 2
                 color: root.trackColor
             }
 
@@ -118,7 +104,7 @@ Rectangle {
                     visible: !progressBar.indeterminate
                     width: parent.width
                     height: parent.height
-                    radius: 4
+                    radius: 2
                     color: Theme.accent
                     transform: Scale {
                         origin.x: 0
@@ -143,7 +129,7 @@ Rectangle {
                     x: 0
                     width: Math.max(36, parent.width * 0.28)
                     height: parent.height
-                    radius: 4
+                    radius: 2
                     color: Theme.accent
 
                     XAnimator {
@@ -166,8 +152,7 @@ Rectangle {
             color: root.darkConsole ? "#a6a6a6" : "#5d5d5d"
             font.family: root.consoleFontFamily
             font.pointSize: root.consoleFontSize
-            wrapMode: Text.Wrap
-            maximumLineCount: 2
+            elide: Text.ElideRight
             Layout.fillWidth: true
         }
     }
