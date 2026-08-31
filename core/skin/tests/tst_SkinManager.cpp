@@ -1,6 +1,8 @@
 #include "ApplicationSettings.h"
+#include "ConfigurationManager.h"
 #include "SkinManager.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -10,6 +12,24 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTranslator>
+
+class EnglishFirstRunTranslator final : public QTranslator
+{
+public:
+    QString translate(const char *, const char *sourceText,
+                      const char * = nullptr, int = -1) const override
+    {
+        const QString source = QString::fromUtf8(sourceText);
+        if (source == QStringLiteral("默认配置")) {
+            return QStringLiteral("Default Profile");
+        }
+        if (source == QStringLiteral("默认皮肤")) {
+            return QStringLiteral("Default Skin");
+        }
+        return {};
+    }
+};
 
 class SkinManagerTest final : public QObject
 {
@@ -23,7 +43,45 @@ private slots:
     void migratesLegacyBackgroundMaterials();
     void folderItemsAreLimitedAndKeepCustomPaths();
     void externalTargetsAreRestricted();
+    void firstRunDataUsesInstalledLanguageAndBuiltinRetranslates();
 };
+
+void SkinManagerTest::firstRunDataUsesInstalledLanguageAndBuiltinRetranslates()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+
+    EnglishFirstRunTranslator english;
+    QVERIFY(QCoreApplication::installTranslator(&english));
+    ApplicationSettings englishSettings(
+        temporary.filePath(QStringLiteral("settings-en.json")));
+    ConfigurationManager englishConfiguration(
+        temporary.filePath(QStringLiteral("profiles-en.json")));
+    SkinManager englishSkins(
+        &englishSettings, temporary.filePath(QStringLiteral("skins-en")));
+    QCOMPARE(englishConfiguration.currentProfileName(),
+             QStringLiteral("Default Profile"));
+    QCOMPARE(englishSkins.activeSkinName(), QStringLiteral("Default Skin"));
+
+    QCoreApplication::removeTranslator(&english);
+    englishConfiguration.retranslate();
+    englishSkins.retranslate();
+    // Profile names are user data and stay in the language chosen on first
+    // creation. The built-in skin is generated state and follows the current
+    // UI language immediately.
+    QCOMPARE(englishConfiguration.currentProfileName(),
+             QStringLiteral("Default Profile"));
+    QCOMPARE(englishSkins.activeSkinName(), QStringLiteral("默认皮肤"));
+
+    ApplicationSettings chineseSettings(
+        temporary.filePath(QStringLiteral("settings-zh.json")));
+    ConfigurationManager chineseConfiguration(
+        temporary.filePath(QStringLiteral("profiles-zh.json")));
+    SkinManager chineseSkins(
+        &chineseSettings, temporary.filePath(QStringLiteral("skins-zh")));
+    QCOMPARE(chineseConfiguration.currentProfileName(), QStringLiteral("默认配置"));
+    QCOMPARE(chineseSkins.activeSkinName(), QStringLiteral("默认皮肤"));
+}
 
 void SkinManagerTest::createsEditsAndPersistsSkin()
 {

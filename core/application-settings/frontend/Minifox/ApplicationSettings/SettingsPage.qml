@@ -11,6 +11,8 @@ Pane {
 
     required property var appContext
     property int currentSection: 0
+    property bool cleanupPending: false
+    property string cleanupResultMessage: ""
     readonly property var themeModeLabels: [qsTr("跟随系统"), qsTr("浅色"), qsTr("深色")]
     readonly property var themeModeValues: ["system", "light", "dark"]
     readonly property var iconModeLabels: appContext.appIcon.customIconAvailable
@@ -81,7 +83,7 @@ Pane {
 
         PageHeader {
             title: qsTr("应用设置")
-            description: qsTr("调整启动器的主题、字体、控制台输出和网络代理。设置保存在程序旁的隐藏目录中。")
+            description: qsTr("调整启动器的主题、字体、控制台输出、网络代理和版本控制。设置保存在程序旁的隐藏目录中。")
             icon: "\uE770"
             Layout.fillWidth: true
         }
@@ -95,6 +97,7 @@ Pane {
             TabButton { text: qsTr("皮肤") }
             TabButton { text: qsTr("控制台") }
             TabButton { text: qsTr("网络") }
+            TabButton { text: qsTr("版本控制") }
         }
 
         ScrollView {
@@ -556,6 +559,94 @@ Pane {
                     }
                 }
 
+                MaterialPanel {
+                    visible: root.currentSection === 4
+                    Layout.fillWidth: true
+                    padding: Theme.spacingLg
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: Theme.spacingMd
+
+                        AppLabel {
+                            text: qsTr("Git 版本操作")
+                            font.pointSize: Theme.subtitleSize
+                            font.weight: Font.DemiBold
+                        }
+
+                        AppLabel {
+                            Layout.fillWidth: true
+                            text: qsTr("仅影响之后开始的更新或版本切换；正在执行的操作不会改变。默认使用“安全更新”。")
+                            color: Theme.foregroundSecondary
+                            wrapMode: Text.WordWrap
+                        }
+
+                        AppSwitch {
+                            text: checked ? qsTr("重置已跟踪文件") : qsTr("安全更新")
+                            checked: root.appContext.settings.resetTrackedFilesOnUpdate
+                            enabled: !root.appContext.versions.busy
+                            onToggled: root.appContext.settings.resetTrackedFilesOnUpdate = checked
+                        }
+
+                        AppLabel {
+                            Layout.fillWidth: true
+                            text: root.appContext.settings.resetTrackedFilesOnUpdate
+                                  ? qsTr("重置模式：所有被跟踪文件会被重置为与远端仓库保持同步的状态，未被跟踪文件不受影响。")
+                                  : qsTr("安全更新（默认）：被跟踪文件中本地修改的代码行会保留；同一文件的其他代码行和干净的文件会同步到远端版本，未被跟踪文件不受影响。")
+                            color: Theme.foregroundSecondary
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: Theme.materialStroke
+                        }
+
+                        AppLabel {
+                            text: qsTr("Git 完全清理")
+                            font.pointSize: Theme.subtitleSize
+                            font.weight: Font.DemiBold
+                        }
+
+                        AppLabel {
+                            Layout.fillWidth: true
+                            text: qsTr("会依次执行 <font color=\"#ff0000\">git reset --hard HEAD</font> 和 <font color=\"#ff0000\">git clean -ffd</font>，未被 Git 忽略的未跟踪文件会被删除，本地目录恢复为当前 Git 版本的干净状态。")
+                            color: Theme.foregroundSecondary
+                            textFormat: Text.RichText
+                            wrapMode: Text.WordWrap
+                        }
+
+                        AppButton {
+                            text: root.cleanupPending
+                                  ? qsTr("正在完全清理…")
+                                  : qsTr("完全清理…")
+                            destructive: true
+                            enabled: root.appContext.versions.canCheck && !root.cleanupPending
+                            onClicked: cleanupConfirmDialog.open()
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: Theme.materialStroke
+                        }
+
+                        AppLabel {
+                            text: qsTr("备份说明")
+                            font.pointSize: Theme.subtitleSize
+                            font.weight: Font.DemiBold
+                        }
+
+                        AppLabel {
+                            Layout.fillWidth: true
+                            text: qsTr("重置或完全清理前，会先备份将受影响的文件。备份按日期保存在 backup/YYYY-MM-DD/core 与 backup/YYYY-MM-DD/extensions；每天最多保留 3 个内核包和 60 个扩展包，日期目录最多保留 5 个。")
+                            color: Theme.foregroundSecondary
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
                 AppLabel {
                     visible: root.appContext.settings.lastError.length > 0
                     Layout.fillWidth: true
@@ -568,6 +659,57 @@ Pane {
                     Layout.minimumHeight: Theme.spacingLg
                 }
             }
+        }
+    }
+
+    Connections {
+        target: root.appContext.versions
+
+        function onOperationCompleted(success, message) {
+            if (!root.cleanupPending)
+                return;
+            root.cleanupPending = false;
+            root.cleanupResultMessage = message;
+            cleanupResultDialog.title = success ? qsTr("完全清理完成") : qsTr("完全清理失败");
+            cleanupResultDialog.open();
+        }
+    }
+
+    AppDialog {
+        id: cleanupConfirmDialog
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(620, root.width - Theme.spacingXl * 2)
+        modal: true
+        title: qsTr("确认完全清理")
+        standardButtons: Dialog.Yes | Dialog.Cancel
+        acceptText: qsTr("备份并清理")
+        rejectText: qsTr("取消")
+        destructiveAccept: true
+        onAccepted: {
+            root.cleanupPending = true;
+            root.appContext.versions.cleanComfyUiRepository();
+        }
+
+        AppLabel {
+            width: cleanupConfirmDialog.availableWidth
+            text: qsTr("将先创建备份包；只有备份成功后才会丢弃已跟踪文件的本地修改，并删除所有未被 Git 忽略的未跟踪文件和目录。确定继续吗？")
+            wrapMode: Text.WordWrap
+        }
+    }
+
+    AppDialog {
+        id: cleanupResultDialog
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(620, root.width - Theme.spacingXl * 2)
+        modal: true
+        title: qsTr("完全清理完成")
+        standardButtons: Dialog.Ok
+        acceptText: qsTr("确定")
+
+        AppLabel {
+            width: cleanupResultDialog.availableWidth
+            text: root.cleanupResultMessage
+            wrapMode: Text.WordWrap
         }
     }
 

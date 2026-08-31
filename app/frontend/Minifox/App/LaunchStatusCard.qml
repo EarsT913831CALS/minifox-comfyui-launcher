@@ -15,6 +15,10 @@ MaterialPanel {
     readonly property int runtimeStatus: appContext.runtime.status
     readonly property bool serviceReady: appContext.runtime.serviceReady
     readonly property string stateTitle: {
+        if (appContext.versions.interruptedOperation)
+            return qsTr("版本操作未完成");
+        if (appContext.versions.updating)
+            return qsTr("版本操作进行中");
         if (!configurationValid)
             return qsTr("配置需要完善");
         if (serviceReady)
@@ -28,6 +32,10 @@ MaterialPanel {
         }
     }
     readonly property string stateDescription: {
+        if (appContext.versions.interruptedOperation)
+            return qsTr("请到版本管理页点击要执行的操作按钮，从头按当前仓库状态重新执行。完成前无法启动 ComfyUI。");
+        if (appContext.versions.updating)
+            return qsTr("版本更新、安装、切换或清理完成后即可启动 ComfyUI。");
         if (!configurationValid)
             return qsTr("修正启动配置后即可一键启动。");
         if (serviceReady)

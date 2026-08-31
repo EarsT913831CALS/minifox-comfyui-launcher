@@ -1,5 +1,6 @@
 #include "VersionManager.h"
 
+#include "ApplicationSettings.h"
 #include "ConfigurationManager.h"
 #include "PortablePaths.h"
 #include "ProcessTextDecoder.h"
@@ -8,8 +9,10 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -23,7 +26,9 @@
 #include <QSharedPointer>
 #include <QStandardPaths>
 #include <QSysInfo>
+#include <QUuid>
 #include <QTimer>
+#include <QtConcurrentRun>
 #include <QUrl>
 
 #include <utility>
@@ -104,12 +109,139 @@ bool hasMeaningfulCoreWorkingTreeChanges(const QString &output)
     return false;
 }
 
+bool mergeTextFiles(const QString &gitProgram, const QString &localPath,
+                    const QString &basePath, const QString &remotePath,
+                    QByteArray *mergedData, QString *error)
+{
+    QProcess process;
+    process.setProcessChannelMode(QProcess::SeparateChannels);
+    process.setProgram(gitProgram);
+    process.setArguments({QStringLiteral("merge-file"), QStringLiteral("--ours"),
+                          QStringLiteral("--quiet"), QStringLiteral("--stdout"),
+                          localPath, basePath, remotePath});
+    process.start();
+    if (!process.waitForStarted(5000)) {
+        if (error) {
+            *error = process.errorString();
+        }
+        return false;
+    }
+    if (!process.waitForFinished(60000)) {
+        process.kill();
+        process.waitForFinished(2000);
+        if (error) {
+            *error = QStringLiteral("git merge-file timed out: %1").arg(localPath);
+        }
+        return false;
+    }
+
+    // git merge-file returns the conflict count (capped at 127), even when
+    // --ours resolves those conflicts in favor of the local file. Fatal Git
+    // errors use a larger or negative exit code.
+    if (process.exitStatus() != QProcess::NormalExit
+        || process.exitCode() < 0 || process.exitCode() > 127) {
+        if (error) {
+            const QString processError = ProcessTextDecoder::decode(
+                process.readAllStandardError()).trimmed();
+            *error = processError.isEmpty()
+                ? QStringLiteral("git merge-file failed for %1 (exit code %2)")
+                      .arg(localPath).arg(process.exitCode())
+                : processError;
+        }
+        return false;
+    }
+    if (mergedData) {
+        *mergedData = process.readAllStandardOutput();
+    }
+    return true;
+}
+
+bool isRegularSnapshotFile(const QString &path)
+{
+    const QFileInfo info(path);
+    return info.exists() && info.isFile() && !info.isSymLink();
+}
+
+QSet<QString> snapshotFiles(const QString &root)
+{
+    QSet<QString> files;
+    QDirIterator iterator(root, QDir::Files | QDir::Hidden | QDir::System,
+                          QDirIterator::Subdirectories);
+    const QDir directory(root);
+    while (iterator.hasNext()) {
+        iterator.next();
+        files.insert(directory.relativeFilePath(iterator.filePath()).replace(
+            QLatin1Char('\\'), QLatin1Char('/')));
+    }
+    return files;
+}
+
+QByteArray readSnapshotFile(const QString &path, bool *ok)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        if (ok) *ok = false;
+        return {};
+    }
+    if (ok) *ok = true;
+    return file.readAll();
+}
+
+bool writeMergedFile(const QString &path, const QByteArray &data)
+{
+    const QFileInfo info(path);
+    if (!QDir().mkpath(info.absolutePath())) {
+        return false;
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(data) != data.size()
+        || !file.commit()) {
+        return false;
+    }
+    return true;
+}
+
+struct WorkingTreeChange {
+    QString path;
+    QByteArray originalData;
+    QByteArray replacementData;
+    bool originalExists = false;
+    bool remove = false;
+};
+
+struct SafeMergeJob {
+    QString gitProgram;
+    QString workingRoot;
+    QString baseSnapshotRoot;
+    QString localSnapshotRoot;
+    QString targetSnapshotRoot;
+};
+
+enum class SafeMergeError {
+    None,
+    SnapshotRead,
+    MergeProcess,
+    WorkingTreeChanged,
+    FileWrite
+};
+
+struct SafeMergeResult {
+    bool success = false;
+    SafeMergeError error = SafeMergeError::None;
+    QString detail;
+};
+
 } // namespace
 
-VersionManager::VersionManager(ConfigurationManager *configuration, QObject *parent)
+VersionManager::VersionManager(ConfigurationManager *configuration,
+                               ApplicationSettings *settings,
+                               QObject *parent)
     : QObject(parent),
-      m_configuration(configuration)
+      m_configuration(configuration),
+      m_settings(settings)
 {
+    loadVersionTransaction();
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
     m_gitTimeout.setSingleShot(true);
     connect(&m_gitTimeout, &QTimer::timeout, this, [this] {
@@ -119,7 +251,14 @@ VersionManager::VersionManager(ConfigurationManager *configuration, QObject *par
             this, &VersionManager::handleProcessFinished);
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
-            setFailure(tr("无法启动 Git。请安装 Git for Windows 后重试。"));
+            if (m_operation == Operation::CreateBackupArchive) {
+                const QString archivePath = m_backupArchivePath;
+                clearBackupState();
+                QFile::remove(archivePath);
+                setFailure(tr("无法启动 Windows 归档工具，已取消操作且未修改仓库。"));
+            } else {
+                setFailure(tr("无法启动 Git。请安装 Git for Windows 后重试。"));
+            }
         }
     });
     m_dependencyProcess.setProcessChannelMode(QProcess::MergedChannels);
@@ -151,6 +290,8 @@ VersionManager::VersionManager(ConfigurationManager *configuration, QObject *par
             QTimer::singleShot(150, this, &VersionManager::loadLocalState);
         }
     });
+    connect(m_settings, &ApplicationSettings::versionControlChanged,
+            this, &VersionManager::stateChanged);
     QTimer::singleShot(0, this, &VersionManager::loadLocalState);
 }
 
@@ -161,7 +302,10 @@ bool VersionManager::catalogLoading() const { return m_catalogLoading; }
 bool VersionManager::repository() const { return m_repository; }
 bool VersionManager::dirty() const { return m_dirty; }
 bool VersionManager::canCheck() const { return m_repository && !m_busy && !m_gitProgram.isEmpty(); }
-bool VersionManager::canUpdate() const { return canCheck() && !m_dirty; }
+bool VersionManager::canUpdate() const
+{
+    return canCheck();
+}
 QString VersionManager::launcherVersion() const { return QCoreApplication::applicationVersion(); }
 QString VersionManager::qtVersion() const { return QString::fromLatin1(qVersion()); }
 QString VersionManager::platformText() const
@@ -193,6 +337,30 @@ QVariantList VersionManager::availableExtensions() const { return m_availableExt
 QVariantList VersionManager::extensionVersions() const { return m_extensionVersions; }
 QString VersionManager::statusMessage() const { return m_statusMessage; }
 QString VersionManager::lastError() const { return m_lastError; }
+bool VersionManager::interruptedOperation() const { return m_interruptedOperation; }
+
+QString VersionManager::interruptedOperationDescription() const
+{
+    if (m_transactionAction == QStringLiteral("core-update")) {
+        return tr("ComfyUI 核心更新");
+    }
+    if (m_transactionAction == QStringLiteral("core-switch-version")) {
+        return tr("ComfyUI 核心版本切换");
+    }
+    if (m_transactionAction == QStringLiteral("core-switch-branch")) {
+        return tr("ComfyUI 核心分支切换");
+    }
+    if (m_transactionAction == QStringLiteral("core-full-clean")) {
+        return tr("ComfyUI 完全清理");
+    }
+    if (m_transactionAction == QStringLiteral("extension-update")) {
+        return tr("扩展更新");
+    }
+    if (m_transactionAction == QStringLiteral("extension-switch-version")) {
+        return tr("扩展版本切换");
+    }
+    return tr("版本操作");
+}
 int VersionManager::aheadCount() const { return m_aheadCount; }
 int VersionManager::behindCount() const { return m_behindCount; }
 
@@ -346,25 +514,29 @@ void VersionManager::checkForUpdates()
 
 void VersionManager::updateComfyUi(int channel)
 {
+    resetOperationBackupSummary();
     m_notifyOnFinish = true;
     m_requestedCoreChannel = channel == 1 ? 1 : 0;
     m_pendingCompletionMessage = m_requestedCoreChannel == 0
         ? tr("ComfyUI 稳定版已更新到最新版本。")
         : tr("ComfyUI 开发版已更新到最新版本。");
-    if (!canCheck()) {
+    if (!canUpdate()) {
         setFailure(tr("当前 ComfyUI 状态不允许更新，请先刷新内核列表。"));
         return;
     }
     m_lastError.clear();
-    startGit(Operation::ResetCoreForUpdate,
+    m_operationTrackedChanges = false;
+    startGit(Operation::ValidateCoreUpdate,
              repositoryArguments(m_comfyRoot,
-                 {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+                 {QStringLiteral("status"), QStringLiteral("--porcelain"),
+                  QStringLiteral("--untracked-files=no")}));
 }
 
 void VersionManager::switchCoreVersion(const QString &commit, int channel)
 {
     if (commit.trimmed().isEmpty()) return;
-    if (!canCheck()) {
+    resetOperationBackupSummary();
+    if (!canUpdate()) {
         setFailure(tr("当前 ComfyUI 状态不允许切换版本，请先刷新内核列表。"));
         return;
     }
@@ -372,20 +544,23 @@ void VersionManager::switchCoreVersion(const QString &commit, int channel)
     m_pendingCompletionMessage = tr("核心版本已切换。");
     m_requestedCoreChannel = channel == 1 ? 1 : 0;
     m_pendingCommit = commit.trimmed();
-    startGit(Operation::ResetCoreForVersion,
+    m_operationTrackedChanges = false;
+    startGit(Operation::ValidateCoreVersion,
              repositoryArguments(m_comfyRoot,
-                 {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+                 {QStringLiteral("status"), QStringLiteral("--porcelain"),
+                  QStringLiteral("--untracked-files=no")}));
 }
 
 void VersionManager::switchBranch(const QString &branch, int repositorySource)
 {
+    resetOperationBackupSummary();
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("分支已切换。");
     if (branch.trimmed().isEmpty()) {
         setFailure(tr("请输入有效的分支名称。"));
         return;
     }
-    if (!canCheck()) {
+    if (!canUpdate()) {
         setFailure(tr("当前 ComfyUI 状态不允许切换分支，请先刷新内核列表。"));
         return;
     }
@@ -393,14 +568,29 @@ void VersionManager::switchBranch(const QString &branch, int repositorySource)
     m_pendingBranchRemoteUrl = repositorySource == 1
         ? QString::fromLatin1(kCnbComfyUiRemote)
         : QString::fromLatin1(kOfficialComfyUiRemote);
-    startGit(Operation::ResetCoreForBranch,
+    m_operationTrackedChanges = false;
+    startGit(Operation::ValidateCoreBranch,
              repositoryArguments(m_comfyRoot,
-                 {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+                 {QStringLiteral("status"), QStringLiteral("--porcelain"),
+                  QStringLiteral("--untracked-files=no")}));
+}
+
+void VersionManager::cleanComfyUiRepository()
+{
+    resetOperationBackupSummary();
+    m_notifyOnFinish = true;
+    if (!canCheck()) {
+        setFailure(tr("当前 ComfyUI 状态不允许完全清理，请先刷新内核列表。"));
+        return;
+    }
+    m_lastError.clear();
+    beginResetAction(PendingCoreAction::FullClean, m_comfyRoot);
 }
 
 void VersionManager::updateExtension(const QString &path)
 {
     if (m_busy || !QFileInfo::exists(QDir(path).filePath(QStringLiteral(".git")))) return;
+    resetOperationBackupSummary();
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("扩展更新完成。");
     m_updatingAllExtensions = false;
@@ -411,6 +601,7 @@ void VersionManager::updateExtension(const QString &path)
 void VersionManager::updateAllExtensions()
 {
     if (m_busy) return;
+    resetOperationBackupSummary();
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("全部扩展更新完成。");
     if (m_gitProgram.isEmpty()) {
@@ -440,9 +631,11 @@ void VersionManager::startExtensionUpdate(const QString &path)
 {
     m_operationPath = path;
     m_targetRemoteBranch.clear();
+    m_safeMergeRequested = false;
     startGit(Operation::ValidateExtensionUpdate,
              repositoryArguments(path,
-                 {QStringLiteral("status"), QStringLiteral("--porcelain")}));
+                 {QStringLiteral("status"), QStringLiteral("--porcelain"),
+                  QStringLiteral("--untracked-files=no")}));
 }
 
 void VersionManager::loadExtensionVersions(const QString &path, const QString &currentCommit)
@@ -465,13 +658,15 @@ void VersionManager::switchExtensionVersion(const QString &path, const QString &
 {
     if (m_busy || commit.trimmed().isEmpty()
         || !QFileInfo::exists(QDir(path).filePath(QStringLiteral(".git")))) return;
+    resetOperationBackupSummary();
     m_notifyOnFinish = true;
     m_pendingCompletionMessage = tr("扩展版本已切换。");
     m_operationPath = path;
     m_pendingCommit = commit.trimmed();
     startGit(Operation::ValidateExtensionCheckout,
              repositoryArguments(path,
-                 {QStringLiteral("status"), QStringLiteral("--porcelain")}));
+                 {QStringLiteral("status"), QStringLiteral("--porcelain"),
+                  QStringLiteral("--untracked-files=no")}));
 }
 
 void VersionManager::installExtension(const QString &url)
@@ -508,13 +703,15 @@ void VersionManager::removeExtension(const QString &path)
     if (m_busy || !isManagedExtensionDirectory(customNodesPath, path)) {
         return;
     }
+    m_notifyOnFinish = true;
+    m_pendingCompletionMessage = tr("扩展已卸载：%1").arg(target.fileName());
     QDir directory(target.absoluteFilePath());
     if (!directory.removeRecursively()) {
         setFailure(tr("无法卸载扩展：%1").arg(target.fileName()));
         return;
     }
     scanExtensions();
-    finish(tr("扩展已卸载：%1").arg(target.fileName()));
+    finish(m_pendingCompletionMessage);
 }
 
 void VersionManager::setExtensionEnabled(const QString &path, bool enabled)
@@ -546,7 +743,415 @@ void VersionManager::retranslate()
     emit stateChanged();
 }
 
+QString VersionManager::transactionActionKey(PendingCoreAction action) const
+{
+    switch (action) {
+    case PendingCoreAction::Update: return QStringLiteral("core-update");
+    case PendingCoreAction::SwitchVersion: return QStringLiteral("core-switch-version");
+    case PendingCoreAction::SwitchBranch: return QStringLiteral("core-switch-branch");
+    case PendingCoreAction::FullClean: return QStringLiteral("core-full-clean");
+    case PendingCoreAction::UpdateExtension: return QStringLiteral("extension-update");
+    case PendingCoreAction::SwitchExtensionVersion:
+        return QStringLiteral("extension-switch-version");
+    case PendingCoreAction::None:
+        return {};
+    }
+    return {};
+}
+
+void VersionManager::loadVersionTransaction()
+{
+    QFile marker(PortablePaths::versionOperationFile());
+    if (!marker.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(marker.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        return;
+    }
+    const QJsonObject object = document.object();
+    const QString action = object.value(QStringLiteral("action")).toString().trimmed();
+    const QString root = object.value(QStringLiteral("root")).toString().trimmed();
+    if (object.value(QStringLiteral("version")).toInt() != 1
+        || action.isEmpty() || root.isEmpty()) {
+        return;
+    }
+    m_interruptedOperation = true;
+    m_transactionAction = action;
+    m_transactionRoot = root;
+    m_transactionTargetRef = object.value(QStringLiteral("targetRef")).toString();
+    m_transactionTargetBranch = object.value(QStringLiteral("targetBranch")).toString();
+    m_transactionPhase = object.value(QStringLiteral("phase")).toString();
+}
+
+bool VersionManager::beginVersionTransaction(PendingCoreAction action,
+                                              const QString &repositoryRoot,
+                                              const QString &targetRef,
+                                              const QString &targetBranch,
+                                              const QString &phase)
+{
+    const QString actionKey = transactionActionKey(action);
+    if (actionKey.isEmpty() || repositoryRoot.trimmed().isEmpty()) {
+        setFailure(tr("无法记录版本操作状态，已取消操作且未修改仓库。"));
+        return false;
+    }
+
+    QString directoryError;
+    if (!PortablePaths::ensureDataDirectory(&directoryError)) {
+        setFailure(tr("无法记录版本操作状态，已取消操作且未修改仓库：%1")
+                       .arg(directoryError));
+        return false;
+    }
+
+    const QString markerPath = PortablePaths::versionOperationFile();
+    QSaveFile marker(markerPath);
+    if (!marker.open(QIODevice::WriteOnly)) {
+        setFailure(tr("无法记录版本操作状态，已取消操作且未修改仓库：%1")
+                       .arg(marker.errorString()));
+        return false;
+    }
+    const QJsonObject object {
+        {QStringLiteral("version"), 1},
+        {QStringLiteral("action"), actionKey},
+        {QStringLiteral("root"), QDir::cleanPath(repositoryRoot)},
+        {QStringLiteral("targetRef"), targetRef},
+        {QStringLiteral("targetBranch"), targetBranch},
+        {QStringLiteral("phase"), phase},
+        {QStringLiteral("startedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}
+    };
+    const QByteArray data = QJsonDocument(object).toJson(QJsonDocument::Compact);
+    if (marker.write(data) != data.size() || !marker.commit()) {
+        setFailure(tr("无法记录版本操作状态，已取消操作且未修改仓库：%1")
+                       .arg(marker.errorString()));
+        return false;
+    }
+
+    m_interruptedOperation = true;
+    m_transactionInProgress = true;
+    m_transactionAction = actionKey;
+    m_transactionRoot = QDir::cleanPath(repositoryRoot);
+    m_transactionTargetRef = targetRef;
+    m_transactionTargetBranch = targetBranch;
+    m_transactionPhase = phase;
+    emit stateChanged();
+    return true;
+}
+
+bool VersionManager::clearVersionTransaction()
+{
+    if (!m_transactionInProgress) {
+        return true;
+    }
+    const QString markerPath = PortablePaths::versionOperationFile();
+    if (QFileInfo::exists(markerPath) && !QFile::remove(markerPath)) {
+        return false;
+    }
+    m_interruptedOperation = false;
+    m_transactionInProgress = false;
+    m_transactionAction.clear();
+    m_transactionRoot.clear();
+    m_transactionTargetRef.clear();
+    m_transactionTargetBranch.clear();
+    m_transactionPhase.clear();
+    emit stateChanged();
+    return true;
+}
+
+bool VersionManager::completeVersionTransaction()
+{
+    if (!m_transactionInProgress) {
+        return true;
+    }
+    if (clearVersionTransaction()) {
+        return true;
+    }
+    setFailure(tr("版本操作已完成，但无法清除中断标记。请重试或重启启动器后再试。"));
+    return false;
+}
+
 void VersionManager::startGit(Operation operation, const QStringList &arguments)
+{
+    startProcess(operation, m_gitProgram, arguments);
+}
+
+void VersionManager::beginSafeMerge(PendingCoreAction action,
+                                    const QString &repositoryRoot,
+                                    const QString &targetRef,
+                                    const QString &targetBranch,
+                                    bool trackBranch,
+                                    const QString &upstreamRef)
+{
+    clearSafeMergeState();
+    m_safeMergeAction = action;
+    m_safeMergeRoot = repositoryRoot;
+    m_safeMergeTargetRef = targetRef;
+    m_safeMergeTargetBranch = targetBranch;
+    m_safeMergeUpstreamRef = trackBranch
+        ? (upstreamRef.isEmpty() ? targetRef : upstreamRef)
+        : QString();
+    m_safeMergeTrackBranch = trackBranch;
+    m_safeMergeIndexPath = QDir(QDir::tempPath()).filePath(
+        QStringLiteral("minifox-safe-merge-%1.index")
+            .arg(QUuid::createUuid().toString(QUuid::Id128)));
+    const QString snapshotId = QUuid::createUuid().toString(QUuid::Id128);
+    const QString snapshotRoot = QDir(QDir::tempPath()).filePath(
+        QStringLiteral("minifox-safe-merge-%1").arg(snapshotId));
+    m_safeMergeBaseIndexPath = snapshotRoot + QStringLiteral("-base.index");
+    m_safeMergeTargetIndexPath = snapshotRoot + QStringLiteral("-target.index");
+    m_safeMergeBaseSnapshotPath = snapshotRoot + QStringLiteral("-base");
+    m_safeMergeLocalSnapshotPath = snapshotRoot + QStringLiteral("-local");
+    m_safeMergeTargetSnapshotPath = snapshotRoot + QStringLiteral("-target");
+    if (!QDir().mkpath(m_safeMergeBaseSnapshotPath)
+        || !QDir().mkpath(m_safeMergeLocalSnapshotPath)
+        || !QDir().mkpath(m_safeMergeTargetSnapshotPath)) {
+        clearSafeMergeState();
+        setFailure(tr("无法准备安全更新快照，已保留原工作区。"));
+        return;
+    }
+    startGit(Operation::PrepareSafeMergeIndex,
+             repositoryArguments(repositoryRoot,
+                 {QStringLiteral("read-tree"), QStringLiteral("HEAD")}));
+}
+
+void VersionManager::clearSafeMergeState()
+{
+    if (!m_safeMergeIndexPath.isEmpty()) {
+        QFile::remove(m_safeMergeIndexPath);
+    }
+    if (!m_safeMergeBaseIndexPath.isEmpty()) {
+        QFile::remove(m_safeMergeBaseIndexPath);
+    }
+    if (!m_safeMergeTargetIndexPath.isEmpty()) {
+        QFile::remove(m_safeMergeTargetIndexPath);
+    }
+    for (const QString &path : {m_safeMergeBaseSnapshotPath,
+                                m_safeMergeLocalSnapshotPath,
+                                m_safeMergeTargetSnapshotPath}) {
+        if (!path.isEmpty()) {
+            QDir(path).removeRecursively();
+        }
+    }
+    m_safeMergeRoot.clear();
+    m_safeMergeTargetRef.clear();
+    m_safeMergeTargetBranch.clear();
+    m_safeMergeUpstreamRef.clear();
+    m_safeMergeIndexPath.clear();
+    m_safeMergeBaseIndexPath.clear();
+    m_safeMergeTargetIndexPath.clear();
+    m_safeMergeBaseSnapshotPath.clear();
+    m_safeMergeLocalSnapshotPath.clear();
+    m_safeMergeTargetSnapshotPath.clear();
+    m_safeMergeTrackBranch = false;
+    m_safeMergeRequested = false;
+    m_safeMergeAction = PendingCoreAction::None;
+}
+
+static SafeMergeResult runSafeMerge(const SafeMergeJob &job)
+{
+    const QDir baseRoot(job.baseSnapshotRoot);
+    const QDir localRoot(job.localSnapshotRoot);
+    const QDir targetRoot(job.targetSnapshotRoot);
+    QSet<QString> paths = snapshotFiles(job.baseSnapshotRoot);
+    paths.unite(snapshotFiles(job.localSnapshotRoot));
+    paths.unite(snapshotFiles(job.targetSnapshotRoot));
+    QList<WorkingTreeChange> changes;
+
+    for (const QString &relativePath : std::as_const(paths)) {
+        const QString basePath = baseRoot.filePath(relativePath);
+        const QString localPath = localRoot.filePath(relativePath);
+        const QString targetPath = targetRoot.filePath(relativePath);
+        const QString actualPath = QDir(job.workingRoot).filePath(relativePath);
+        const bool baseExists = isRegularSnapshotFile(basePath);
+        const bool localExists = isRegularSnapshotFile(localPath);
+        const bool targetExists = isRegularSnapshotFile(targetPath);
+
+        // A path that is absent from both tracked snapshots is an untracked
+        // file. Leave it untouched, even when the remote tree adds a file at
+        // the same path.
+        if (!baseExists && !localExists) {
+            if (!targetExists || QFileInfo::exists(actualPath)) {
+                continue;
+            }
+            bool ok = false;
+            const QByteArray targetData = readSnapshotFile(targetPath, &ok);
+            if (!ok) {
+                return {false, SafeMergeError::SnapshotRead, relativePath};
+            }
+            changes.append({actualPath, {}, targetData, false, false});
+            continue;
+        }
+
+        bool baseOk = false;
+        bool localOk = false;
+        bool targetOk = false;
+        const QByteArray baseData = baseExists ? readSnapshotFile(basePath, &baseOk) : QByteArray();
+        const QByteArray localData = localExists ? readSnapshotFile(localPath, &localOk) : QByteArray();
+        const QByteArray targetData = targetExists ? readSnapshotFile(targetPath, &targetOk) : QByteArray();
+        if ((baseExists && !baseOk) || (localExists && !localOk)
+            || (targetExists && !targetOk)) {
+            return {false, SafeMergeError::SnapshotRead, relativePath};
+        }
+
+        const bool localChanged = baseExists != localExists || baseData != localData;
+        const bool targetChanged = baseExists != targetExists || baseData != targetData;
+        if (!targetChanged) {
+            continue;
+        }
+        if (!localChanged) {
+            if (!targetExists) {
+                changes.append({actualPath, localData, {}, localExists, true});
+            } else {
+                changes.append({actualPath, localData, targetData, localExists, false});
+            }
+            continue;
+        }
+        if (!targetExists || !localExists) {
+            // A local deletion or a local edit wins over a remote deletion or
+            // replacement. The existing worktree already contains that local
+            // state, so no write is necessary.
+            continue;
+        }
+        if (baseData.contains('\0') || localData.contains('\0')
+            || targetData.contains('\0')) {
+            // Binary conflicts keep the complete local file. There is no
+            // reliable line-level merge for binary data.
+            continue;
+        }
+        QByteArray mergedData;
+        QString mergeError;
+        if (!mergeTextFiles(job.gitProgram, localPath, basePath, targetPath,
+                            &mergedData, &mergeError)) {
+            return {false, SafeMergeError::MergeProcess,
+                    mergeError.isEmpty() ? relativePath : mergeError};
+        }
+        if (mergedData != localData) {
+            changes.append({actualPath, localData, mergedData, true, false});
+        }
+    }
+
+    // The snapshots were prepared asynchronously. Do not overwrite edits
+    // made after snapshot creation; the next retry will take a fresh snapshot.
+    for (const WorkingTreeChange &change : std::as_const(changes)) {
+        if (!change.originalExists) {
+            if (QFileInfo::exists(change.path)) {
+                return {false, SafeMergeError::WorkingTreeChanged, change.path};
+            }
+            continue;
+        }
+        if (!isRegularSnapshotFile(change.path)) {
+            return {false, SafeMergeError::WorkingTreeChanged, change.path};
+        }
+        bool ok = false;
+        if (readSnapshotFile(change.path, &ok) != change.originalData || !ok) {
+            return {false, SafeMergeError::WorkingTreeChanged, change.path};
+        }
+    }
+
+    QList<WorkingTreeChange> applied;
+    for (const WorkingTreeChange &change : std::as_const(changes)) {
+        const bool changed = change.remove
+            ? (!QFileInfo::exists(change.path) || QFile::remove(change.path))
+            : writeMergedFile(change.path, change.replacementData);
+        if (changed) {
+            applied.append(change);
+            continue;
+        }
+
+        // Best-effort rollback keeps the worktree at the local snapshot if a
+        // later filesystem write fails. The transaction marker remains on
+        // disk, so startup stays blocked if rollback itself cannot finish.
+        for (auto iterator = applied.crbegin(); iterator != applied.crend(); ++iterator) {
+            if (iterator->originalExists) {
+                writeMergedFile(iterator->path, iterator->originalData);
+            } else if (isRegularSnapshotFile(iterator->path)) {
+                QFile::remove(iterator->path);
+            }
+        }
+        return {false, SafeMergeError::FileWrite, change.path};
+    }
+    return {true, SafeMergeError::None, {}};
+}
+
+void VersionManager::startSafeSnapshotMerge()
+{
+    const SafeMergeJob job {
+        m_gitProgram,
+        m_safeMergeRoot,
+        m_safeMergeBaseSnapshotPath,
+        m_safeMergeLocalSnapshotPath,
+        m_safeMergeTargetSnapshotPath
+    };
+    auto *watcher = new QFutureWatcher<SafeMergeResult>(this);
+    connect(watcher, &QFutureWatcher<SafeMergeResult>::finished, this,
+            [this, watcher] {
+        const SafeMergeResult result = watcher->result();
+        watcher->deleteLater();
+        QString error;
+        switch (result.error) {
+        case SafeMergeError::SnapshotRead: error = tr("无法读取安全更新快照：%1").arg(result.detail); break;
+        case SafeMergeError::MergeProcess: error = tr("无法合并本地文件：%1").arg(result.detail); break;
+        case SafeMergeError::WorkingTreeChanged: error = tr("安全更新期间文件再次发生变化：%1").arg(result.detail); break;
+        case SafeMergeError::FileWrite: error = tr("无法写入安全更新结果：%1").arg(result.detail); break;
+        case SafeMergeError::None: break;
+        }
+        handleSafeSnapshotMergeFinished(result.success, error);
+    });
+    watcher->setFuture(QtConcurrent::run(runSafeMerge, job));
+}
+
+void VersionManager::handleSafeSnapshotMergeFinished(bool success, const QString &error)
+{
+    if (!success) {
+        QString message = tr("无法合并本地修改与远端更新；仓库未切换到目标版本，请从当前仓库状态重试。");
+        if (!error.isEmpty()) {
+            message += QLatin1Char(' ') + error;
+        }
+        setFailure(message);
+        return;
+    }
+    startGit(Operation::UpdateSafeMergeRef,
+             repositoryArguments(m_safeMergeRoot,
+                 m_safeMergeTargetBranch.isEmpty()
+                     ? QStringList {QStringLiteral("reset"), QStringLiteral("--mixed"),
+                                    m_safeMergeTargetRef}
+                     : QStringList {QStringLiteral("update-ref"),
+                                    QStringLiteral("refs/heads/") + m_safeMergeTargetBranch,
+                                    m_safeMergeTargetRef}));
+}
+
+void VersionManager::finishSafeMerge()
+{
+    const PendingCoreAction action = m_safeMergeAction;
+    const QString root = m_safeMergeRoot;
+    if (!completeVersionTransaction()) {
+        clearSafeMergeState();
+        return;
+    }
+    clearSafeMergeState();
+    if (action == PendingCoreAction::UpdateExtension) {
+        queueDependencyCheck(root);
+        setExtensionStatus(root, QStringLiteral("latest"));
+        if (m_updatingAllExtensions && !m_extensionUpdateQueue.isEmpty()) {
+            m_operationPath = m_extensionUpdateQueue.takeFirst();
+            startExtensionUpdate(m_operationPath);
+            return;
+        }
+        scanExtensions();
+        if (m_updatingAllExtensions) {
+            m_updatingAllExtensions = false;
+        }
+        finish(m_pendingCompletionMessage);
+    } else {
+        queueDependencyCheck(root);
+        m_busy = false;
+        emit stateChanged();
+        refresh();
+    }
+}
+
+void VersionManager::startProcess(Operation operation, const QString &program,
+                                  const QStringList &arguments)
 {
     m_operation = operation;
     m_busy = true;
@@ -556,8 +1161,25 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::Fetch: m_statusMessage = tr("正在检查远程更新…"); break;
     case Operation::ResolveCoreCompareBranch: m_statusMessage = tr("正在匹配远端分支…"); break;
     case Operation::Compare: m_statusMessage = tr("正在比较版本…"); break;
+    case Operation::CollectTrackedBackup:
+    case Operation::CollectUntrackedBackup:
+    case Operation::CreateBackupArchive: m_statusMessage = tr("正在备份将受影响的文件…"); break;
+    case Operation::ValidateCoreUpdate:
+    case Operation::ValidateCoreVersion:
+    case Operation::ValidateCoreBranch: m_statusMessage = tr("正在检查当前仓库状态…"); break;
+    case Operation::PrepareSafeMergeIndex:
+    case Operation::StageSafeMergeChanges:
+    case Operation::WriteSafeMergeTree:
+    case Operation::PrepareSafeMergeBaseSnapshot:
+    case Operation::CheckoutSafeMergeBaseSnapshot:
+    case Operation::CheckoutSafeMergeLocalSnapshot:
+    case Operation::PrepareSafeMergeTargetSnapshot:
+    case Operation::CheckoutSafeMergeTargetSnapshot:
+    case Operation::UpdateSafeMergeRef:
+    case Operation::SwitchSafeMergeHead:
+    case Operation::ResetSafeMergeIndex:
+    case Operation::SetSafeMergeUpstream: m_statusMessage = tr("正在合并本地修改并同步远端…"); break;
     case Operation::ResetCoreForUpdate:
-    case Operation::CleanCoreForUpdate:
     case Operation::PrepareCoreUpdateFetch:
     case Operation::ResolveStableUpdateCommit:
     case Operation::ResolveDevelopmentUpdateBranch:
@@ -569,15 +1191,16 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::LoadCoreHistory: m_statusMessage = tr("正在读取版本列表…"); break;
     case Operation::LoadStableHistory: m_statusMessage = tr("正在读取稳定版本…"); break;
     case Operation::ResetCoreForVersion:
-    case Operation::CleanCoreForVersion:
     case Operation::CheckoutCore: m_statusMessage = tr("正在切换核心版本…"); break;
     case Operation::ResetCoreForBranch: m_statusMessage = tr("正在重置核心目录…"); break;
-    case Operation::CleanCoreForBranch: m_statusMessage = tr("正在清理核心目录…"); break;
+    case Operation::ResetCoreForCleanup:
+    case Operation::CleanCore: m_statusMessage = tr("正在完全清理核心目录…"); break;
     case Operation::SetCoreBranchRemote:
     case Operation::FetchCoreBranchRemote:
     case Operation::CheckoutBranch: m_statusMessage = tr("正在切换分支…"); break;
     case Operation::NormalizeBranch: m_statusMessage = tr("正在校正分支…"); break;
     case Operation::ValidateExtensionUpdate:
+    case Operation::ResetExtensionForUpdate:
     case Operation::PrepareExtensionUpdateFetch:
     case Operation::ResolveExtensionUpdateBranch:
     case Operation::AttachExtensionUpdateBranch:
@@ -585,6 +1208,7 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     case Operation::UpdateExtension: m_statusMessage = tr("正在更新扩展…"); break;
     case Operation::LoadExtensionHistory: m_statusMessage = tr("正在读取扩展版本列表…"); break;
     case Operation::ValidateExtensionCheckout:
+    case Operation::ResetExtensionForCheckout:
     case Operation::CheckoutExtension: m_statusMessage = tr("正在切换扩展版本…"); break;
     case Operation::InstallExtension: m_statusMessage = tr("正在安装扩展…"); break;
     default: break;
@@ -598,13 +1222,345 @@ void VersionManager::startGit(Operation operation, const QStringList &arguments)
     } else {
         m_gitTimeout.stop();
     }
-    m_process.setProgram(m_gitProgram);
+    m_process.setProgram(program);
     m_process.setArguments(arguments);
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
     environment.insert(QStringLiteral("GCM_INTERACTIVE"), QStringLiteral("Never"));
+    QString safeMergeIndexPath;
+    if (operation == Operation::PrepareSafeMergeIndex
+        || operation == Operation::StageSafeMergeChanges
+        || operation == Operation::WriteSafeMergeTree
+        || operation == Operation::CheckoutSafeMergeLocalSnapshot) {
+        safeMergeIndexPath = m_safeMergeIndexPath;
+    } else if (operation == Operation::PrepareSafeMergeBaseSnapshot
+               || operation == Operation::CheckoutSafeMergeBaseSnapshot) {
+        safeMergeIndexPath = m_safeMergeBaseIndexPath;
+    } else if (operation == Operation::PrepareSafeMergeTargetSnapshot
+               || operation == Operation::CheckoutSafeMergeTargetSnapshot) {
+        safeMergeIndexPath = m_safeMergeTargetIndexPath;
+    }
+    if (!safeMergeIndexPath.isEmpty()) {
+        environment.insert(QStringLiteral("GIT_INDEX_FILE"), safeMergeIndexPath);
+    }
     m_process.setProcessEnvironment(environment);
     m_process.start();
+}
+
+void VersionManager::beginResetAction(PendingCoreAction action,
+                                      const QString &repositoryRoot)
+{
+    clearBackupState();
+    m_pendingCoreAction = action;
+    m_backupSourceRoot = repositoryRoot;
+    startGit(Operation::CollectTrackedBackup,
+             repositoryArguments(repositoryRoot,
+                 {QStringLiteral("diff"), QStringLiteral("--name-only"),
+                  QStringLiteral("--diff-filter=ACMRTUXB"), QStringLiteral("-z"),
+                  QStringLiteral("HEAD"), QStringLiteral("--")}));
+}
+
+void VersionManager::collectBackupPaths(const QByteArray &output)
+{
+    if (output.isEmpty()) {
+        return;
+    }
+    m_backupPaths.append(output);
+    if (!m_backupPaths.endsWith('\0')) {
+        m_backupPaths.append('\0');
+    }
+}
+
+void VersionManager::createBackupArchivesOrContinue()
+{
+    QSet<QString> seen;
+    QByteArray coreFiles;
+    QByteArray extensionFiles;
+    const QList<QByteArray> paths = m_backupPaths.split('\0');
+    const QDir root(m_backupSourceRoot);
+    for (const QByteArray &encodedPath : paths) {
+        if (encodedPath.isEmpty()) {
+            continue;
+        }
+        const QString relativePath = QDir::cleanPath(
+            QDir::fromNativeSeparators(QString::fromUtf8(encodedPath)));
+        if (relativePath.isEmpty() || relativePath == QStringLiteral(".")
+            || relativePath == QStringLiteral("..")
+            || relativePath.startsWith(QStringLiteral("../"))
+            || QDir::isAbsolutePath(relativePath)
+            || !QFileInfo::exists(root.filePath(relativePath))) {
+            continue;
+        }
+        if (seen.contains(relativePath)) {
+            continue;
+        }
+        const QByteArray archivePath = relativePath.toLocal8Bit();
+        if (QString::fromLocal8Bit(archivePath) != relativePath) {
+            clearBackupState();
+            setFailure(tr("文件名无法用当前 Windows 系统编码保存到备份包，已取消操作且未修改仓库：%1")
+                       .arg(relativePath));
+            return;
+        }
+        seen.insert(relativePath);
+        QByteArray &target = m_pendingCoreAction == PendingCoreAction::FullClean
+                && (relativePath == QStringLiteral("custom_nodes")
+                    || relativePath.startsWith(QStringLiteral("custom_nodes/")))
+            ? extensionFiles : coreFiles;
+        target.append(archivePath);
+        target.append('\0');
+    }
+
+    if (!coreFiles.isEmpty()) {
+        const bool extensionAction = m_pendingCoreAction == PendingCoreAction::UpdateExtension
+            || m_pendingCoreAction == PendingCoreAction::SwitchExtensionVersion;
+        const QString label = m_pendingCoreAction == PendingCoreAction::FullClean
+            ? QStringLiteral("core_full-clean")
+            : QFileInfo(m_backupSourceRoot).fileName() + QStringLiteral("_reset-tracked");
+        m_backupArchiveQueue.append({m_backupSourceRoot,
+                                     extensionAction ? QStringLiteral("extensions")
+                                                     : QStringLiteral("core"),
+                                     label, coreFiles});
+    }
+    if (!extensionFiles.isEmpty()) {
+        m_backupArchiveQueue.append({m_backupSourceRoot, QStringLiteral("extensions"),
+                                     QStringLiteral("extensions_full-clean"), extensionFiles});
+    }
+
+    if (m_backupArchiveQueue.isEmpty()) {
+        continuePendingCoreAction();
+        return;
+    }
+
+    startNextBackupArchive();
+}
+
+void VersionManager::startNextBackupArchive()
+{
+    if (m_backupArchiveQueue.isEmpty()) {
+        QString pruneError;
+        if (!pruneBackupDays(m_backupRootPath, &pruneError)) {
+            setFailure(pruneError);
+            return;
+        }
+        continuePendingCoreAction();
+        return;
+    }
+
+    const BackupArchiveRequest request = m_backupArchiveQueue.takeFirst();
+    const QDir rootParent(QFileInfo(m_comfyRoot).absolutePath());
+    m_backupRootPath = rootParent.filePath(QStringLiteral("backup"));
+    const QString dayDirectory = QDir(m_backupRootPath).filePath(
+        QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd")));
+    m_currentBackupCategoryDirectory = QDir(dayDirectory).filePath(request.category);
+    if (!QDir().mkpath(m_currentBackupCategoryDirectory)) {
+        setFailure(tr("无法创建备份目录：%1").arg(m_currentBackupCategoryDirectory));
+        return;
+    }
+
+    int nextSequence = 1;
+    const QFileInfoList existingArchives = QDir(m_currentBackupCategoryDirectory).entryInfoList(
+        {QStringLiteral("*.zip")}, QDir::Files, QDir::Name);
+    const QRegularExpression sequenceExpression(QStringLiteral("^(\\d+)_"));
+    for (const QFileInfo &archive : existingArchives) {
+        if (archive.fileName().endsWith(QStringLiteral(".part.zip"),
+                                        Qt::CaseInsensitive)) {
+            continue;
+        }
+        const QRegularExpressionMatch match = sequenceExpression.match(archive.fileName());
+        if (match.hasMatch()) {
+            nextSequence = qMax(nextSequence, match.captured(1).toInt() + 1);
+        }
+    }
+
+    QString label = request.label;
+    label.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]+")),
+                  QStringLiteral("_"));
+    if (label.isEmpty()) {
+        label = request.category;
+    }
+    m_backupArchivePath = QDir(m_currentBackupCategoryDirectory).filePath(
+        QStringLiteral("%1_%2.zip").arg(nextSequence, 4, 10, QLatin1Char('0')).arg(label));
+    while (QFileInfo::exists(m_backupArchivePath)) {
+        ++nextSequence;
+        m_backupArchivePath = QDir(m_currentBackupCategoryDirectory).filePath(
+            QStringLiteral("%1_%2.zip").arg(nextSequence, 4, 10, QLatin1Char('0')).arg(label));
+    }
+    m_backupArchiveTempPath = m_backupArchivePath
+        + QStringLiteral(".")
+        + QUuid::createUuid().toString(QUuid::Id128)
+        + QStringLiteral(".part.zip");
+
+    m_backupListPath = QDir(QDir::tempPath()).filePath(
+        QStringLiteral("minifox-backup-%1.lst").arg(QUuid::createUuid().toString(QUuid::Id128)));
+
+    QSaveFile listFile(m_backupListPath);
+    if (!listFile.open(QIODevice::WriteOnly)
+        || listFile.write(request.fileList) != request.fileList.size()
+        || !listFile.commit()) {
+        const QString error = listFile.errorString();
+        setFailure(tr("无法准备备份文件列表：%1").arg(error));
+        return;
+    }
+
+    QString tarProgram = QStandardPaths::findExecutable(QStringLiteral("tar.exe"));
+    if (tarProgram.isEmpty()) {
+        tarProgram = QStandardPaths::findExecutable(QStringLiteral("tar"));
+    }
+    if (tarProgram.isEmpty()) {
+        setFailure(tr("未找到 Windows 归档工具 tar.exe，已取消操作且未修改仓库。"));
+        return;
+    }
+    startProcess(Operation::CreateBackupArchive, tarProgram,
+                 {QStringLiteral("-a"), QStringLiteral("-c"), QStringLiteral("-f"),
+                  m_backupArchiveTempPath, QStringLiteral("-C"), request.sourceRoot,
+                  QStringLiteral("--null"), QStringLiteral("-T"), m_backupListPath});
+}
+
+bool VersionManager::pruneBackupArchives(const QString &categoryDirectory,
+                                         int maximum, QString *error)
+{
+    const QFileInfoList candidates = QDir(categoryDirectory).entryInfoList(
+        {QStringLiteral("*.zip")}, QDir::Files,
+        QDir::Time | QDir::Reversed);
+    QFileInfoList backups;
+    const QRegularExpression archivePattern(QStringLiteral("^\\d+_.+\\.zip$"));
+    for (const QFileInfo &candidate : candidates) {
+        if (!candidate.fileName().endsWith(QStringLiteral(".part.zip"),
+                                           Qt::CaseInsensitive)
+            && archivePattern.match(candidate.fileName()).hasMatch()) {
+            backups.append(candidate);
+        }
+    }
+    const int removeCount = qMax(0, backups.size() - maximum);
+    for (int index = 0; index < removeCount; ++index) {
+        if (!QFile::remove(backups.at(index).absoluteFilePath())) {
+            if (error) {
+                *error = tr("无法删除旧备份：%1").arg(backups.at(index).absoluteFilePath());
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+bool VersionManager::pruneBackupDays(const QString &backupRoot, QString *error)
+{
+    if (backupRoot.isEmpty()) {
+        return true;
+    }
+    const QRegularExpression dayPattern(QStringLiteral("^\\d{4}-\\d{2}-\\d{2}$"));
+    QFileInfoList dayDirectories;
+    for (const QFileInfo &entry : QDir(backupRoot).entryInfoList(
+             QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+        if (dayPattern.match(entry.fileName()).hasMatch()) {
+            dayDirectories.append(entry);
+        }
+    }
+    const int removeCount = qMax(0, dayDirectories.size() - 5);
+    for (int index = 0; index < removeCount; ++index) {
+        const QString path = dayDirectories.at(index).absoluteFilePath();
+        if (!QDir(path).removeRecursively()) {
+            if (error) {
+                *error = tr("无法删除旧备份日期目录：%1").arg(path);
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+QString VersionManager::backupLocationSummary() const
+{
+    QStringList directories;
+    for (const QString &archive : m_operationBackupArchives) {
+        const QString directory = QFileInfo(archive).absolutePath();
+        if (!directories.contains(directory, Qt::CaseInsensitive)) {
+            directories.append(directory);
+        }
+    }
+    return tr("备份包数量：%1；保存目录：%2")
+        .arg(m_operationBackupArchives.size())
+        .arg(directories.join(QStringLiteral(" · ")));
+}
+
+void VersionManager::resetOperationBackupSummary()
+{
+    m_operationBackupArchives.clear();
+}
+
+void VersionManager::appendBackupSummaryToPendingCompletion()
+{
+    if (!m_operationBackupArchives.isEmpty()) {
+        m_pendingCompletionMessage += tr(" 受影响文件已备份。%1")
+            .arg(backupLocationSummary());
+    }
+}
+
+void VersionManager::continuePendingCoreAction()
+{
+    const PendingCoreAction action = m_pendingCoreAction;
+    m_pendingCoreAction = PendingCoreAction::None;
+    const QString repositoryRoot = action == PendingCoreAction::UpdateExtension
+            || action == PendingCoreAction::SwitchExtensionVersion
+        ? m_operationPath : m_comfyRoot;
+    if (!beginVersionTransaction(action, repositoryRoot, {}, {}, QStringLiteral("reset"))) {
+        return;
+    }
+    switch (action) {
+    case PendingCoreAction::Update:
+        startGit(Operation::ResetCoreForUpdate,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+        break;
+    case PendingCoreAction::SwitchVersion:
+        startGit(Operation::ResetCoreForVersion,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+        break;
+    case PendingCoreAction::SwitchBranch:
+        startGit(Operation::ResetCoreForBranch,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+        break;
+    case PendingCoreAction::FullClean:
+        startGit(Operation::ResetCoreForCleanup,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+        break;
+    case PendingCoreAction::UpdateExtension:
+        startGit(Operation::ResetExtensionForUpdate,
+                 repositoryArguments(m_operationPath,
+                     {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+        break;
+    case PendingCoreAction::SwitchExtensionVersion:
+        startGit(Operation::ResetExtensionForCheckout,
+                 repositoryArguments(m_operationPath,
+                     {QStringLiteral("reset"), QStringLiteral("--hard"), QStringLiteral("HEAD")}));
+        break;
+    case PendingCoreAction::None:
+        setFailure(tr("内部状态无效，已取消 Git 操作。"));
+        break;
+    }
+}
+
+void VersionManager::clearBackupState()
+{
+    if (!m_backupListPath.isEmpty()) {
+        QFile::remove(m_backupListPath);
+    }
+    if (!m_backupArchiveTempPath.isEmpty()) {
+        QFile::remove(m_backupArchiveTempPath);
+    }
+    m_backupPaths.clear();
+    m_backupSourceRoot.clear();
+    m_backupArchiveQueue.clear();
+    m_createdBackupArchives.clear();
+    m_backupListPath.clear();
+    m_backupArchivePath.clear();
+    m_backupArchiveTempPath.clear();
+    m_backupRootPath.clear();
+    m_currentBackupCategoryDirectory.clear();
+    m_pendingCoreAction = PendingCoreAction::None;
 }
 
 void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
@@ -615,11 +1571,29 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     m_gitTimeout.stop();
     const Operation completed = m_operation;
     m_operation = Operation::None;
-    const QString output = ProcessTextDecoder::decode(m_process.readAllStandardOutput()).trimmed();
+    const QByteArray rawOutput = m_process.readAllStandardOutput();
+    const QString output = ProcessTextDecoder::decode(rawOutput).trimmed();
     const QString error = ProcessTextDecoder::decode(m_process.readAllStandardError()).trimmed();
 
     if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-        if (completed == Operation::LoadExtensionHistory) {
+        if (completed == Operation::CreateBackupArchive) {
+            const QString archivePath = m_backupArchivePath;
+            const QString archiveTempPath = m_backupArchiveTempPath;
+            const QString listPath = m_backupListPath;
+            clearBackupState();
+            QFile::remove(archivePath);
+            QFile::remove(archiveTempPath);
+            QFile::remove(listPath);
+            setFailure(error.isEmpty()
+                ? tr("备份压缩包创建失败，已取消操作且未修改仓库。")
+                : tr("备份压缩包创建失败：%1").arg(error));
+        } else if (completed == Operation::CollectTrackedBackup
+                   || completed == Operation::CollectUntrackedBackup) {
+            clearBackupState();
+            setFailure(error.isEmpty()
+                ? tr("无法确定需要备份的文件，已取消操作且未修改仓库。")
+                : error);
+        } else if (completed == Operation::LoadExtensionHistory) {
             const QString message =
                 error.isEmpty() ? tr("无法读取扩展版本历史。") : error;
             setFailure(message);
@@ -648,12 +1622,194 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                      {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--date=format-local:%Y-%m-%d %H:%M:%S"),
                       QStringLiteral("--format=%h%x1f%H%x1f%ad%x1f%s")}));
         break;
-    case Operation::ResetCoreForVersion:
-        startGit(Operation::CleanCoreForVersion,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
+    case Operation::CollectTrackedBackup:
+        collectBackupPaths(rawOutput);
+        if (m_pendingCoreAction == PendingCoreAction::FullClean) {
+            startGit(Operation::CollectUntrackedBackup,
+                     repositoryArguments(m_backupSourceRoot,
+                         {QStringLiteral("ls-files"), QStringLiteral("--others"),
+                          QStringLiteral("--exclude-standard"), QStringLiteral("-z"),
+                          QStringLiteral("--")}));
+        } else {
+            createBackupArchivesOrContinue();
+        }
         break;
-    case Operation::CleanCoreForVersion:
+    case Operation::CollectUntrackedBackup:
+        collectBackupPaths(rawOutput);
+        createBackupArchivesOrContinue();
+        break;
+    case Operation::CreateBackupArchive: {
+        const QString archiveTempPath = m_backupArchiveTempPath;
+        if (archiveTempPath.isEmpty() || !QFile::rename(archiveTempPath, m_backupArchivePath)) {
+            clearBackupState();
+            setFailure(tr("无法完成备份文件保存，已取消操作且未修改仓库。"));
+            break;
+        }
+        m_backupArchiveTempPath.clear();
+        QFile::remove(m_backupListPath);
+        m_backupListPath.clear();
+        QString pruneError;
+        const int maximum = QFileInfo(m_currentBackupCategoryDirectory).fileName()
+                    == QStringLiteral("core") ? 3 : 60;
+        if (!pruneBackupArchives(m_currentBackupCategoryDirectory, maximum, &pruneError)) {
+            const QString archivePath = m_backupArchivePath;
+            clearBackupState();
+            QFile::remove(archivePath);
+            setFailure(pruneError);
+            break;
+        }
+        m_createdBackupArchives.append(m_backupArchivePath);
+        m_operationBackupArchives.append(m_backupArchivePath);
+        m_backupArchivePath.clear();
+        m_currentBackupCategoryDirectory.clear();
+        startNextBackupArchive();
+        break;
+    }
+    case Operation::ValidateCoreUpdate:
+        m_operationTrackedChanges = !output.isEmpty();
+        if (m_settings->resetTrackedFilesOnUpdate() && m_operationTrackedChanges) {
+            beginResetAction(PendingCoreAction::Update, m_comfyRoot);
+        } else {
+            startGit(Operation::PrepareCoreUpdateFetch,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("fetch"), QStringLiteral("--tags"),
+                          QStringLiteral("--quiet")}));
+        }
+        break;
+    case Operation::ValidateCoreVersion:
+        m_operationTrackedChanges = !output.isEmpty();
+        if (m_settings->resetTrackedFilesOnUpdate() && m_operationTrackedChanges) {
+            beginResetAction(PendingCoreAction::SwitchVersion, m_comfyRoot);
+        } else if (m_operationTrackedChanges) {
+            beginSafeMerge(PendingCoreAction::SwitchVersion, m_comfyRoot,
+                           m_pendingCommit,
+                           m_requestedCoreChannel == 0
+                               ? QStringLiteral("master")
+                               : QStringLiteral("dev"),
+                           m_requestedCoreChannel == 1,
+                           m_requestedCoreChannel == 1
+                               ? m_developmentRemoteBranch : QString());
+        } else {
+            if (!beginVersionTransaction(PendingCoreAction::SwitchVersion,
+                                         m_comfyRoot, m_pendingCommit,
+                                         m_requestedCoreChannel == 0
+                                             ? QStringLiteral("master")
+                                             : QStringLiteral("dev"),
+                                         QStringLiteral("checkout"))) {
+                break;
+            }
+            startGit(Operation::CheckoutCore,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("checkout"), QStringLiteral("-B"),
+                          m_requestedCoreChannel == 0
+                              ? QStringLiteral("master")
+                              : QStringLiteral("dev"),
+                          m_pendingCommit}));
+        }
+        break;
+    case Operation::ValidateCoreBranch:
+        m_operationTrackedChanges = !output.isEmpty();
+        if (m_settings->resetTrackedFilesOnUpdate() && m_operationTrackedChanges) {
+            beginResetAction(PendingCoreAction::SwitchBranch, m_comfyRoot);
+        } else {
+            if (!beginVersionTransaction(PendingCoreAction::SwitchBranch,
+                                         m_comfyRoot, m_pendingBranch,
+                                         m_pendingBranch, QStringLiteral("remote"))) {
+                break;
+            }
+            startGit(Operation::SetCoreBranchRemote,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("remote"), QStringLiteral("set-url"),
+                          QStringLiteral("origin"), m_pendingBranchRemoteUrl}));
+        }
+        break;
+    case Operation::PrepareSafeMergeIndex:
+        startGit(Operation::StageSafeMergeChanges,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("add"), QStringLiteral("-u"), QStringLiteral("--")}));
+        break;
+    case Operation::StageSafeMergeChanges:
+        startGit(Operation::WriteSafeMergeTree,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("write-tree")}));
+        break;
+    case Operation::WriteSafeMergeTree: {
+        const QString localTree = output.section(QLatin1Char('\n'), 0, 0).trimmed();
+        if (!QRegularExpression(QStringLiteral("^[0-9a-fA-F]{40}$"))
+                 .match(localTree).hasMatch()) {
+            setFailure(tr("无法记录本地修改，已取消更新且未修改仓库。"));
+            break;
+        }
+        startGit(Operation::PrepareSafeMergeBaseSnapshot,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("read-tree"), QStringLiteral("HEAD")}));
+        break;
+    }
+    case Operation::PrepareSafeMergeBaseSnapshot:
+        startGit(Operation::CheckoutSafeMergeBaseSnapshot,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("checkout-index"), QStringLiteral("-a"),
+                      QStringLiteral("--prefix=") + m_safeMergeBaseSnapshotPath
+                          + QStringLiteral("/")}));
+        break;
+    case Operation::CheckoutSafeMergeBaseSnapshot:
+        startGit(Operation::CheckoutSafeMergeLocalSnapshot,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("checkout-index"), QStringLiteral("-a"),
+                      QStringLiteral("--prefix=") + m_safeMergeLocalSnapshotPath
+                          + QStringLiteral("/")}));
+        break;
+    case Operation::CheckoutSafeMergeLocalSnapshot:
+        startGit(Operation::PrepareSafeMergeTargetSnapshot,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("read-tree"), m_safeMergeTargetRef}));
+        break;
+    case Operation::PrepareSafeMergeTargetSnapshot:
+        startGit(Operation::CheckoutSafeMergeTargetSnapshot,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("checkout-index"), QStringLiteral("-a"),
+                      QStringLiteral("--prefix=") + m_safeMergeTargetSnapshotPath
+                          + QStringLiteral("/")}));
+        break;
+    case Operation::CheckoutSafeMergeTargetSnapshot:
+        if (!beginVersionTransaction(m_safeMergeAction, m_safeMergeRoot,
+                                     m_safeMergeTargetRef, m_safeMergeTargetBranch,
+                                     QStringLiteral("safe-merge"))) {
+            break;
+        }
+        startSafeSnapshotMerge();
+        break;
+    case Operation::UpdateSafeMergeRef:
+        if (!m_safeMergeTargetBranch.isEmpty()) {
+            startGit(Operation::SwitchSafeMergeHead,
+                     repositoryArguments(m_safeMergeRoot,
+                         {QStringLiteral("symbolic-ref"), QStringLiteral("HEAD"),
+                          QStringLiteral("refs/heads/") + m_safeMergeTargetBranch}));
+        } else {
+            finishSafeMerge();
+        }
+        break;
+    case Operation::SwitchSafeMergeHead:
+        startGit(Operation::ResetSafeMergeIndex,
+                 repositoryArguments(m_safeMergeRoot,
+                     {QStringLiteral("reset"), QStringLiteral("--mixed"),
+                      m_safeMergeTargetRef}));
+        break;
+    case Operation::ResetSafeMergeIndex:
+        if (m_safeMergeTrackBranch) {
+            startGit(Operation::SetSafeMergeUpstream,
+                     repositoryArguments(m_safeMergeRoot,
+                         {QStringLiteral("branch"),
+                          QStringLiteral("--set-upstream-to=") + m_safeMergeUpstreamRef,
+                          m_safeMergeTargetBranch}));
+        } else {
+            finishSafeMerge();
+        }
+        break;
+    case Operation::SetSafeMergeUpstream:
+        finishSafeMerge();
+        break;
+    case Operation::ResetCoreForVersion:
         startGit(Operation::CheckoutCore,
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("checkout"), QStringLiteral("-B"),
@@ -663,16 +1819,34 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                       m_pendingCommit}));
         break;
     case Operation::ResetCoreForBranch:
-        startGit(Operation::CleanCoreForBranch,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
-        break;
-    case Operation::CleanCoreForBranch:
         startGit(Operation::SetCoreBranchRemote,
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("remote"), QStringLiteral("set-url"),
                       QStringLiteral("origin"), m_pendingBranchRemoteUrl}));
         break;
+    case Operation::ResetCoreForCleanup:
+        startGit(Operation::CleanCore,
+                 repositoryArguments(m_comfyRoot,
+                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
+        break;
+    case Operation::CleanCore: {
+        const QString message = m_createdBackupArchives.isEmpty()
+            ? tr("完全清理完成；没有需要备份的受影响文件。")
+            : tr("完全清理完成。受影响文件已备份。%1")
+                  .arg(backupLocationSummary());
+        if (!completeVersionTransaction()) {
+            break;
+        }
+        // Keep the operation notification pending until the post-cleanup
+        // refresh finishes. This prevents the generic refresh toast from
+        // replacing the more useful cleanup result.
+        m_statusMessage = message;
+        m_pendingCompletionMessage = message;
+        m_busy = false;
+        emit stateChanged();
+        QTimer::singleShot(0, this, &VersionManager::refreshCore);
+        break;
+    }
     case Operation::SetCoreBranchRemote:
         startGit(Operation::FetchCoreBranchRemote,
                  repositoryArguments(m_comfyRoot,
@@ -681,11 +1855,22 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                       QStringLiteral("origin")}));
         break;
     case Operation::FetchCoreBranchRemote:
-        startGit(Operation::CheckoutBranch,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("checkout"), QStringLiteral("--track"),
-                      QStringLiteral("-B"), m_pendingBranch,
-                      QStringLiteral("origin/") + m_pendingBranch}));
+        if (m_operationTrackedChanges && !m_settings->resetTrackedFilesOnUpdate()) {
+            beginSafeMerge(PendingCoreAction::SwitchBranch, m_comfyRoot,
+                           QStringLiteral("origin/") + m_pendingBranch,
+                           m_pendingBranch, true);
+        } else {
+            if (!beginVersionTransaction(PendingCoreAction::SwitchBranch, m_comfyRoot,
+                                         QStringLiteral("origin/") + m_pendingBranch,
+                                         m_pendingBranch, QStringLiteral("checkout"))) {
+                break;
+            }
+            startGit(Operation::CheckoutBranch,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("checkout"), QStringLiteral("--track"),
+                          QStringLiteral("-B"), m_pendingBranch,
+                          QStringLiteral("origin/") + m_pendingBranch}));
+        }
         break;
     case Operation::RefreshLog: {
         const QStringList parts = output.split(QChar(0x1f));
@@ -783,11 +1968,6 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         break;
     }
     case Operation::ResetCoreForUpdate:
-        startGit(Operation::CleanCoreForUpdate,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("clean"), QStringLiteral("-ffd")}));
-        break;
-    case Operation::CleanCoreForUpdate:
         startGit(Operation::PrepareCoreUpdateFetch,
                  repositoryArguments(m_comfyRoot,
                      {QStringLiteral("fetch"), QStringLiteral("--tags"), QStringLiteral("--quiet")}));
@@ -811,10 +1991,22 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
             setFailure(tr("未找到可用的 ComfyUI 稳定版本，仓库未被修改。"));
             break;
         }
-        startGit(Operation::CheckoutCore,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("checkout"), QStringLiteral("-B"),
-                      QStringLiteral("master"), output.section(QLatin1Char('\n'), 0, 0).trimmed()}));
+        if (m_operationTrackedChanges && !m_settings->resetTrackedFilesOnUpdate()) {
+            beginSafeMerge(PendingCoreAction::Update, m_comfyRoot,
+                           output.section(QLatin1Char('\n'), 0, 0).trimmed(),
+                           QStringLiteral("master"));
+        } else {
+            if (!beginVersionTransaction(PendingCoreAction::Update, m_comfyRoot,
+                                         output.section(QLatin1Char('\n'), 0, 0).trimmed(),
+                                         QStringLiteral("master"),
+                                         QStringLiteral("checkout"))) {
+                break;
+            }
+            startGit(Operation::CheckoutCore,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("checkout"), QStringLiteral("-B"),
+                          QStringLiteral("master"), output.section(QLatin1Char('\n'), 0, 0).trimmed()}));
+        }
         break;
     case Operation::ResolveDevelopmentUpdateBranch:
         m_targetRemoteBranch = selectDevelopmentBranch(output);
@@ -822,11 +2014,21 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
             setFailure(tr("未找到可用的 ComfyUI 开发分支，仓库未被修改。"));
             break;
         }
-        startGit(Operation::CheckoutCore,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("checkout"), QStringLiteral("--track"),
-                      QStringLiteral("-B"),
-                      QStringLiteral("dev"), m_targetRemoteBranch}));
+        if (m_operationTrackedChanges && !m_settings->resetTrackedFilesOnUpdate()) {
+            beginSafeMerge(PendingCoreAction::Update, m_comfyRoot, m_targetRemoteBranch,
+                           QStringLiteral("dev"), true);
+        } else {
+            if (!beginVersionTransaction(PendingCoreAction::Update, m_comfyRoot,
+                                         m_targetRemoteBranch, QStringLiteral("dev"),
+                                         QStringLiteral("checkout"))) {
+                break;
+            }
+            startGit(Operation::CheckoutCore,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("checkout"), QStringLiteral("--track"),
+                          QStringLiteral("-B"),
+                          QStringLiteral("dev"), m_targetRemoteBranch}));
+        }
         break;
     case Operation::ResolveCoreUpdateBranch:
         m_targetRemoteBranch = selectRemoteBranch(output, m_branch);
@@ -835,14 +2037,37 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                 setFailure(tr("无法安全确定当前版本对应的远端分支，已取消更新且未修改仓库。"));
                 break;
             }
-            startGit(Operation::AttachCoreUpdateBranch,
-                     repositoryArguments(m_comfyRoot,
-                         {QStringLiteral("checkout"), QStringLiteral("-B"),
-                          QStringLiteral("minifox/version-core"), QStringLiteral("HEAD")}));
+            if (m_operationTrackedChanges && !m_settings->resetTrackedFilesOnUpdate()) {
+                beginSafeMerge(PendingCoreAction::Update, m_comfyRoot, m_targetRemoteBranch,
+                               QStringLiteral("minifox/version-core"), true);
+            } else {
+                if (!beginVersionTransaction(PendingCoreAction::Update, m_comfyRoot,
+                                             m_targetRemoteBranch,
+                                             QStringLiteral("minifox/version-core"),
+                                             QStringLiteral("attach-branch"))) {
+                    break;
+                }
+                startGit(Operation::AttachCoreUpdateBranch,
+                         repositoryArguments(m_comfyRoot,
+                             {QStringLiteral("checkout"), QStringLiteral("-B"),
+                              QStringLiteral("minifox/version-core"), QStringLiteral("HEAD")}));
+            }
         } else {
-            startGit(Operation::Pull,
-                     repositoryArguments(m_comfyRoot,
-                         {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
+            if (m_operationTrackedChanges && !m_settings->resetTrackedFilesOnUpdate()) {
+                beginSafeMerge(PendingCoreAction::Update, m_comfyRoot, m_targetRemoteBranch.isEmpty()
+                                   ? QStringLiteral("@{upstream}") : m_targetRemoteBranch);
+            } else {
+                if (!beginVersionTransaction(PendingCoreAction::Update, m_comfyRoot,
+                                             m_targetRemoteBranch.isEmpty()
+                                                 ? QStringLiteral("@{upstream}")
+                                                 : m_targetRemoteBranch,
+                                             {}, QStringLiteral("pull"))) {
+                    break;
+                }
+                startGit(Operation::Pull,
+                         repositoryArguments(m_comfyRoot,
+                             {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
+            }
         }
         break;
     case Operation::AttachCoreUpdateBranch:
@@ -852,13 +2077,28 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                       QStringLiteral("minifox/version-core")}));
         break;
     case Operation::SetCoreUpdateUpstream:
-        startGit(Operation::Pull,
-                 repositoryArguments(m_comfyRoot,
-                     {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
+        if (m_operationTrackedChanges && !m_settings->resetTrackedFilesOnUpdate()) {
+            beginSafeMerge(PendingCoreAction::Update, m_comfyRoot, m_targetRemoteBranch,
+                           QStringLiteral("minifox/version-core"), true);
+        } else {
+            if (!beginVersionTransaction(PendingCoreAction::Update, m_comfyRoot,
+                                         m_targetRemoteBranch,
+                                         QStringLiteral("minifox/version-core"),
+                                         QStringLiteral("pull"))) {
+                break;
+            }
+            startGit(Operation::Pull,
+                     repositoryArguments(m_comfyRoot,
+                         {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
+        }
         break;
     case Operation::Pull:
     case Operation::CheckoutCore:
     case Operation::CheckoutBranch:
+        if (!completeVersionTransaction()) {
+            break;
+        }
+        appendBackupSummaryToPendingCompletion();
         queueDependencyCheck(m_comfyRoot);
         m_busy = false;
         emit stateChanged();
@@ -872,6 +2112,9 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     case Operation::UpdateExtension:
     case Operation::CheckoutExtension:
     case Operation::InstallExtension:
+        if (!completeVersionTransaction()) {
+            break;
+        }
         queueDependencyCheck(m_operationPath);
         if (completed == Operation::UpdateExtension) {
             setExtensionStatus(m_operationPath, QStringLiteral("latest"));
@@ -888,19 +2131,31 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         } else if (completed == Operation::InstallExtension) {
             setExtensionStatus(m_operationPath, QStringLiteral("latest"));
         }
-        if (completed == Operation::InstallExtension) finish(tr("扩展安装完成。"));
-        else if (completed == Operation::CheckoutExtension) finish(tr("扩展版本已切换。"));
+        appendBackupSummaryToPendingCompletion();
+        if (completed == Operation::InstallExtension) finish(m_pendingCompletionMessage);
+        else if (completed == Operation::CheckoutExtension) finish(m_pendingCompletionMessage);
         else if (m_updatingAllExtensions) {
             m_updatingAllExtensions = false;
-            finish(tr("全部扩展更新完成。"));
-        } else finish(tr("扩展更新完成。"));
+            finish(m_pendingCompletionMessage);
+        } else finish(m_pendingCompletionMessage);
         break;
     case Operation::ValidateExtensionUpdate:
         if (!output.isEmpty()) {
-            setFailure(tr("扩展 %1 存在未提交更改，已跳过且未修改仓库。")
-                       .arg(QFileInfo(m_operationPath).fileName()));
+            if (m_settings->resetTrackedFilesOnUpdate()) {
+                beginResetAction(PendingCoreAction::UpdateExtension, m_operationPath);
+            } else {
+                m_safeMergeRequested = true;
+                startGit(Operation::PrepareExtensionUpdateFetch,
+                         repositoryArguments(m_operationPath,
+                             {QStringLiteral("fetch"), QStringLiteral("--quiet")}));
+            }
             break;
         }
+        startGit(Operation::PrepareExtensionUpdateFetch,
+                  repositoryArguments(m_operationPath,
+                      {QStringLiteral("fetch"), QStringLiteral("--quiet")}));
+        break;
+    case Operation::ResetExtensionForUpdate:
         startGit(Operation::PrepareExtensionUpdateFetch,
                  repositoryArguments(m_operationPath,
                      {QStringLiteral("fetch"), QStringLiteral("--quiet")}));
@@ -921,14 +2176,40 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                            .arg(QFileInfo(m_operationPath).fileName()));
                 break;
             }
-            startGit(Operation::AttachExtensionUpdateBranch,
-                     repositoryArguments(m_operationPath,
-                         {QStringLiteral("checkout"), QStringLiteral("-B"),
-                          QStringLiteral("minifox/version-extension"), QStringLiteral("HEAD")}));
+            if (m_safeMergeRequested && !m_settings->resetTrackedFilesOnUpdate()) {
+                beginSafeMerge(PendingCoreAction::UpdateExtension, m_operationPath,
+                               m_targetRemoteBranch,
+                               QStringLiteral("minifox/version-extension"), true);
+            } else {
+                if (!beginVersionTransaction(PendingCoreAction::UpdateExtension,
+                                             m_operationPath, m_targetRemoteBranch,
+                                             QStringLiteral("minifox/version-extension"),
+                                             QStringLiteral("attach-branch"))) {
+                    break;
+                }
+                startGit(Operation::AttachExtensionUpdateBranch,
+                         repositoryArguments(m_operationPath,
+                             {QStringLiteral("checkout"), QStringLiteral("-B"),
+                              QStringLiteral("minifox/version-extension"), QStringLiteral("HEAD")}));
+            }
         } else {
-            startGit(Operation::UpdateExtension,
-                     repositoryArguments(m_operationPath,
-                         {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
+            if (m_safeMergeRequested && !m_settings->resetTrackedFilesOnUpdate()) {
+                beginSafeMerge(PendingCoreAction::UpdateExtension, m_operationPath,
+                               m_targetRemoteBranch.isEmpty()
+                                   ? QStringLiteral("@{upstream}") : m_targetRemoteBranch);
+            } else {
+                if (!beginVersionTransaction(PendingCoreAction::UpdateExtension,
+                                             m_operationPath,
+                                             m_targetRemoteBranch.isEmpty()
+                                                 ? QStringLiteral("@{upstream}")
+                                                 : m_targetRemoteBranch,
+                                             {}, QStringLiteral("pull"))) {
+                    break;
+                }
+                startGit(Operation::UpdateExtension,
+                         repositoryArguments(m_operationPath,
+                             {QStringLiteral("pull"), QStringLiteral("--ff-only")}));
+            }
         }
         break;
     }
@@ -952,10 +2233,27 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         break;
     case Operation::ValidateExtensionCheckout:
         if (!output.isEmpty()) {
-            setFailure(tr("扩展 %1 存在未提交更改，已取消版本切换。")
-                       .arg(QFileInfo(m_operationPath).fileName()));
+            if (m_settings->resetTrackedFilesOnUpdate()) {
+                beginResetAction(PendingCoreAction::SwitchExtensionVersion, m_operationPath);
+            } else {
+                beginSafeMerge(PendingCoreAction::SwitchExtensionVersion, m_operationPath,
+                               m_pendingCommit,
+                               QStringLiteral("minifox/version-extension"));
+            }
             break;
         }
+        if (!beginVersionTransaction(PendingCoreAction::SwitchExtensionVersion,
+                                     m_operationPath, m_pendingCommit,
+                                     QStringLiteral("minifox/version-extension"),
+                                     QStringLiteral("checkout"))) {
+            break;
+        }
+        startGit(Operation::CheckoutExtension,
+                 repositoryArguments(m_operationPath,
+                     {QStringLiteral("checkout"), QStringLiteral("-B"),
+                      QStringLiteral("minifox/version-extension"), m_pendingCommit}));
+        break;
+    case Operation::ResetExtensionForCheckout:
         startGit(Operation::CheckoutExtension,
                  repositoryArguments(m_operationPath,
                      {QStringLiteral("checkout"), QStringLiteral("-B"),
@@ -1093,7 +2391,7 @@ QString VersionManager::readGitValue(const QString &repositoryRoot, const QStrin
     if (key == QStringLiteral("remote")) {
         QFile config(QDir(repositoryRoot).filePath(QStringLiteral(".git/config")));
         if (!config.open(QIODevice::ReadOnly | QIODevice::Text)) return {};
-        const QString text = QString::fromUtf8(config.readAll());
+        const QString text = ProcessTextDecoder::decode(config.readAll());
         const QRegularExpression expression(
             QStringLiteral("\\[remote \\\"origin\\\"\\][^\\[]*?url\\s*=\\s*([^\\r\\n]+)"),
             QRegularExpression::DotMatchesEverythingOption);
@@ -1109,7 +2407,8 @@ QString VersionManager::readExtensionDescription(const QString &path)
     for (const QString &name : names) {
         QFile file(QDir(path).filePath(name));
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
-        for (QString line : QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'))) {
+        for (QString line : ProcessTextDecoder::decode(file.readAll())
+                                .split(QLatin1Char('\n'))) {
             line.remove(QRegularExpression(QStringLiteral("^[#>*\\s]+")));
             if (line.size() >= 12 && !line.startsWith(QStringLiteral("!["))) return line.left(240).trimmed();
         }
@@ -1596,7 +2895,7 @@ QString VersionManager::readComfyVersion(const QString &root) const
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
             continue;
         }
-        const QString text = QString::fromUtf8(file.readAll());
+        const QString text = ProcessTextDecoder::decode(file.readAll());
         const QRegularExpressionMatch match = versionExpression.match(text);
         if (match.hasMatch()) {
             return match.captured(1);
@@ -1608,32 +2907,55 @@ QString VersionManager::readComfyVersion(const QString &root) const
 void VersionManager::setFailure(const QString &message)
 {
     const bool notify = m_notifyOnFinish;
+    const bool refreshAfterFailure = notify && m_refreshScope == RefreshScope::None;
+    QString effectiveMessage = message;
+    if (!m_operationBackupArchives.isEmpty()) {
+        effectiveMessage += tr(" 受影响文件已备份。%1").arg(backupLocationSummary());
+    }
     m_gitTimeout.stop();
+    clearSafeMergeState();
+    clearBackupState();
     m_extensionUpdateQueue.clear();
     m_extensionCheckQueue.clear();
     m_updatingAllExtensions = false;
     m_fullRefresh = false;
     m_operation = Operation::None;
     m_busy = false;
-    m_lastError = message;
-    m_statusMessage = message;
+    m_operationTrackedChanges = false;
+    // Keep the marker on disk so a restart still blocks launching until the
+    // user explicitly starts a version action again. A new action overwrites it.
+    m_transactionInProgress = false;
+    m_lastError = effectiveMessage;
+    m_statusMessage = effectiveMessage;
     emit stateChanged();
     if (m_refreshScope != RefreshScope::None) {
         m_refreshScope = RefreshScope::None;
-        emit refreshCompleted(false, message);
+        emit refreshCompleted(false, effectiveMessage);
     }
     if (notify) {
         m_notifyOnFinish = false;
         m_pendingCompletionMessage.clear();
-        emit operationCompleted(false, message);
+        emit operationCompleted(false, effectiveMessage);
+    }
+    // A Git process can fail after changing part of the worktree. Refresh the
+    // real repository state before allowing the user to retry the same action.
+    // This refresh is deliberately not used for refresh failures themselves.
+    if (refreshAfterFailure) {
+        QTimer::singleShot(0, this, &VersionManager::loadLocalState);
     }
 }
 
 void VersionManager::finish(const QString &message)
 {
+    if (!completeVersionTransaction()) {
+        return;
+    }
     m_gitTimeout.stop();
+    clearSafeMergeState();
+    clearBackupState();
     m_operation = Operation::None;
     m_busy = false;
+    m_operationTrackedChanges = false;
     m_statusMessage = message;
     emit stateChanged();
     if (m_notifyOnFinish) {
@@ -1646,6 +2968,7 @@ void VersionManager::finish(const QString &message)
 void VersionManager::completeRefresh(bool success, const QString &message)
 {
     m_gitTimeout.stop();
+    clearBackupState();
     m_operation = Operation::None;
     m_busy = false;
     m_fullRefresh = false;

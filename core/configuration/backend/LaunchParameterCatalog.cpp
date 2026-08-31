@@ -62,7 +62,10 @@ QString englishTitle(const QString &key)
         {QStringLiteral("verbose"), QStringLiteral("Log Level")},
         {QStringLiteral("logStdout"), QStringLiteral("Write Regular Logs to stdout")},
         {QStringLiteral("windowsStandalone"), QStringLiteral("Windows Portable Compatibility")},
+        {QStringLiteral("tlsKeyfile"), QStringLiteral("TLS Key File")},
+        {QStringLiteral("tlsCertfile"), QStringLiteral("TLS Certificate File")},
         {QStringLiteral("oneapiSelector"), QStringLiteral("oneAPI Device Selector")},
+        {QStringLiteral("supportsFp8"), QStringLiteral("Declare FP8 Compute Support")},
         {QStringLiteral("cudaMalloc"), QStringLiteral("cudaMallocAsync")},
         {QStringLiteral("channelsLast"), QStringLiteral("Channels Last")},
         {QStringLiteral("mmap"), QStringLiteral("Memory Mapping Policy")},
@@ -114,14 +117,14 @@ QString englishOptionLabel(const QString &source, const QString &value)
 {
     static const QHash<QString, QString> labels {
         {QStringLiteral("默认"), QStringLiteral("Default")},
-        {QStringLiteral("默认（遵循 ComfyUI 设置）"), QStringLiteral("Default (follow ComfyUI setting)")},
+        {QStringLiteral("默认（遵循 ComfyUI 设置）"), QStringLiteral("Default (use ComfyUI setting)")},
         {QStringLiteral("默认（新版界面）"), QStringLiteral("Default (new UI)")},
 
         {QStringLiteral("默认（Torch 2.0+ 启用）"), QStringLiteral("Default (enabled on Torch 2.0+)")},
         {QStringLiteral("默认（NVIDIA 关闭，ROCm 自动）"), QStringLiteral("Default (off on NVIDIA, automatic on ROCm)")},
         {QStringLiteral("默认（自动选择）"), QStringLiteral("Default (automatic selection)")},
         {QStringLiteral("默认（RAM 压力缓存）"), QStringLiteral("Default (RAM pressure cache)")},
-        {QStringLiteral("默认（按平台自动）"), QStringLiteral("Default (platform automatic)")},
+        {QStringLiteral("默认（按平台自动）"), QStringLiteral("Default (platform-dependent)")},
         {QStringLiteral("默认（NVIDIA 启用）"), QStringLiteral("Default (enabled on NVIDIA)")},
         {QStringLiteral("默认（启用固定内存）"), QStringLiteral("Default (pinned memory enabled)")},
         {QStringLiteral("默认（safetensors mmap）"), QStringLiteral("Default (safetensors mmap)")},

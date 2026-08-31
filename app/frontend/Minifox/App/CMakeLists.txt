@@ -43,6 +43,7 @@ qt_add_qml_module(minifox_launcher
 target_link_libraries(minifox_launcher
     PRIVATE
         Qt6::Core
+        Qt6::Concurrent
         Qt6::Gui
         Qt6::Qml
         Qt6::Network

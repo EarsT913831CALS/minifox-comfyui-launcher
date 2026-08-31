@@ -400,7 +400,8 @@ bool RuntimeManager::canStart() const
         && m_process.state() == QProcess::NotRunning
         && m_dependencyCheck.state() == QProcess::NotRunning
         && m_dependencyInstall.state() == QProcess::NotRunning
-        && !m_processJob.isAttached();
+        && !m_processJob.isAttached()
+        && !m_versionOperationBlocked;
 }
 
 bool RuntimeManager::canStop() const
@@ -427,6 +428,15 @@ QString RuntimeManager::commandPreview() const { return m_commandPreview; }
 LogModel *RuntimeManager::logModel() const { return m_logModel; }
 QString RuntimeManager::lastError() const { return m_lastError; }
 int RuntimeManager::lastExitCode() const { return m_lastExitCode; }
+
+void RuntimeManager::setVersionOperationBlocked(bool blocked)
+{
+    if (m_versionOperationBlocked == blocked) {
+        return;
+    }
+    m_versionOperationBlocked = blocked;
+    emit statusChanged();
+}
 
 void RuntimeManager::retranslate()
 {

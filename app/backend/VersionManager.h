@@ -10,6 +10,7 @@
 #include <QVariantList>
 
 class ConfigurationManager;
+class ApplicationSettings;
 class QNetworkReply;
 
 class VersionManager final : public QObject
@@ -44,11 +45,15 @@ class VersionManager final : public QObject
     Q_PROPERTY(QString updateState READ updateState NOTIFY stateChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY stateChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY stateChanged)
+    Q_PROPERTY(bool interruptedOperation READ interruptedOperation NOTIFY stateChanged)
+    Q_PROPERTY(QString interruptedOperationDescription READ interruptedOperationDescription NOTIFY stateChanged)
     Q_PROPERTY(int aheadCount READ aheadCount NOTIFY stateChanged)
     Q_PROPERTY(int behindCount READ behindCount NOTIFY stateChanged)
 
 public:
-    explicit VersionManager(ConfigurationManager *configuration, QObject *parent = nullptr);
+    explicit VersionManager(ConfigurationManager *configuration,
+                            ApplicationSettings *settings,
+                            QObject *parent = nullptr);
 
     bool busy() const;
     bool installingDependencies() const;
@@ -80,6 +85,8 @@ public:
     QString updateState() const;
     QString statusMessage() const;
     QString lastError() const;
+    bool interruptedOperation() const;
+    QString interruptedOperationDescription() const;
     int aheadCount() const;
     int behindCount() const;
 
@@ -91,6 +98,7 @@ public:
     Q_INVOKABLE void updateComfyUi(int channel);
     Q_INVOKABLE void switchCoreVersion(const QString &commit, int channel);
     Q_INVOKABLE void switchBranch(const QString &branch, int repositorySource);
+    Q_INVOKABLE void cleanComfyUiRepository();
     Q_INVOKABLE void updateExtension(const QString &path);
     Q_INVOKABLE void updateAllExtensions();
     Q_INVOKABLE void loadExtensionVersions(const QString &path, const QString &currentCommit);
@@ -115,8 +123,25 @@ private:
         Fetch,
         ResolveCoreCompareBranch,
         Compare,
+        CollectTrackedBackup,
+        CollectUntrackedBackup,
+        CreateBackupArchive,
+        ValidateCoreUpdate,
+        ValidateCoreVersion,
+        ValidateCoreBranch,
+        PrepareSafeMergeIndex,
+        StageSafeMergeChanges,
+        WriteSafeMergeTree,
+        PrepareSafeMergeBaseSnapshot,
+        CheckoutSafeMergeBaseSnapshot,
+        CheckoutSafeMergeLocalSnapshot,
+        PrepareSafeMergeTargetSnapshot,
+        CheckoutSafeMergeTargetSnapshot,
+        UpdateSafeMergeRef,
+        SwitchSafeMergeHead,
+        ResetSafeMergeIndex,
+        SetSafeMergeUpstream,
         ResetCoreForUpdate,
-        CleanCoreForUpdate,
         PrepareCoreUpdateFetch,
         ResolveStableUpdateCommit,
         ResolveDevelopmentUpdateBranch,
@@ -128,14 +153,15 @@ private:
         LoadCoreHistory,
         LoadStableHistory,
         ResetCoreForVersion,
-        CleanCoreForVersion,
         CheckoutCore,
         ResetCoreForBranch,
-        CleanCoreForBranch,
+        ResetCoreForCleanup,
+        CleanCore,
         SetCoreBranchRemote,
         FetchCoreBranchRemote,
         CheckoutBranch,
         ValidateExtensionUpdate,
+        ResetExtensionForUpdate,
         PrepareExtensionUpdateFetch,
         ResolveExtensionUpdateBranch,
         AttachExtensionUpdateBranch,
@@ -143,6 +169,7 @@ private:
         UpdateExtension,
         LoadExtensionHistory,
         ValidateExtensionCheckout,
+        ResetExtensionForCheckout,
         CheckoutExtension,
         InstallExtension,
         NormalizeBranch
@@ -155,7 +182,51 @@ private:
         AvailableExtensions
     };
 
+    enum class PendingCoreAction {
+        None,
+        Update,
+        SwitchVersion,
+        SwitchBranch,
+        FullClean,
+        UpdateExtension,
+        SwitchExtensionVersion
+    };
+
+    struct BackupArchiveRequest {
+        QString sourceRoot;
+        QString category;
+        QString label;
+        QByteArray fileList;
+    };
+
     void startGit(Operation operation, const QStringList &arguments);
+    void startProcess(Operation operation, const QString &program,
+                      const QStringList &arguments);
+    void beginSafeMerge(PendingCoreAction action, const QString &repositoryRoot,
+                        const QString &targetRef, const QString &targetBranch = {},
+                        bool trackBranch = false, const QString &upstreamRef = {});
+    bool beginVersionTransaction(PendingCoreAction action, const QString &repositoryRoot,
+                                 const QString &targetRef = {}, const QString &targetBranch = {},
+                                 const QString &phase = {});
+    QString transactionActionKey(PendingCoreAction action) const;
+    void loadVersionTransaction();
+    bool clearVersionTransaction();
+    bool completeVersionTransaction();
+    void clearSafeMergeState();
+    void startSafeSnapshotMerge();
+    void handleSafeSnapshotMergeFinished(bool success, const QString &error);
+    void finishSafeMerge();
+    void beginResetAction(PendingCoreAction action, const QString &repositoryRoot);
+    void collectBackupPaths(const QByteArray &output);
+    void createBackupArchivesOrContinue();
+    void startNextBackupArchive();
+    void continuePendingCoreAction();
+    void clearBackupState();
+    bool pruneBackupArchives(const QString &categoryDirectory, int maximum, QString *error);
+    bool pruneBackupDays(const QString &backupRoot, QString *error);
+    QString backupLocationSummary() const;
+    void resetOperationBackupSummary();
+    void appendBackupSummaryToPendingCompletion();
     void startExtensionUpdate(const QString &path);
     void loadLocalState();
     void handleProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -196,6 +267,7 @@ private:
     static QString requirementsFileFor(const QString &targetDir);
 
     ConfigurationManager *m_configuration;
+    ApplicationSettings *m_settings;
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_catalogReply;
     QProcess m_process;
@@ -223,9 +295,17 @@ private:
     QString m_remoteUrl;
     QString m_statusMessage;
     QString m_lastError;
+    bool m_interruptedOperation = false;
+    bool m_transactionInProgress = false;
+    QString m_transactionAction;
+    QString m_transactionRoot;
+    QString m_transactionTargetRef;
+    QString m_transactionTargetBranch;
+    QString m_transactionPhase;
     bool m_busy = false;
     bool m_repository = false;
     bool m_dirty = false;
+    bool m_operationTrackedChanges = false;
     int m_aheadCount = 0;
     int m_behindCount = 0;
     QVariantList m_coreVersions;
@@ -240,6 +320,17 @@ private:
     QString m_pendingCommit;
     QString m_pendingBranch;
     QString m_pendingBranchRemoteUrl;
+    PendingCoreAction m_pendingCoreAction = PendingCoreAction::None;
+    QString m_backupSourceRoot;
+    QByteArray m_backupPaths;
+    QList<BackupArchiveRequest> m_backupArchiveQueue;
+    QStringList m_createdBackupArchives;
+    QStringList m_operationBackupArchives;
+    QString m_backupListPath;
+    QString m_backupArchivePath;
+    QString m_backupArchiveTempPath;
+    QString m_backupRootPath;
+    QString m_currentBackupCategoryDirectory;
     QString m_extensionHistoryCurrentCommit;
     int m_requestedCoreChannel = 0;
     QStringList m_extensionUpdateQueue;
@@ -252,5 +343,18 @@ private:
     bool m_catalogLoading = false;
     bool m_notifyOnFinish = false;
     QString m_pendingCompletionMessage;
+    QString m_safeMergeRoot;
+    QString m_safeMergeTargetRef;
+    QString m_safeMergeTargetBranch;
+    QString m_safeMergeUpstreamRef;
+    QString m_safeMergeIndexPath;
+    QString m_safeMergeBaseIndexPath;
+    QString m_safeMergeTargetIndexPath;
+    QString m_safeMergeBaseSnapshotPath;
+    QString m_safeMergeLocalSnapshotPath;
+    QString m_safeMergeTargetSnapshotPath;
+    bool m_safeMergeTrackBranch = false;
+    bool m_safeMergeRequested = false;
+    PendingCoreAction m_safeMergeAction = PendingCoreAction::None;
     RefreshScope m_refreshScope = RefreshScope::None;
 };

@@ -138,6 +138,16 @@ ApplicationSettings::~ApplicationSettings()
     }
 }
 
+QString ApplicationSettings::effectiveLanguage(const QString &preference,
+                                                QLocale::Language systemLanguage)
+{
+    if (preference == QStringLiteral("zh_CN") || preference == QStringLiteral("en_US")) {
+        return preference;
+    }
+    return systemLanguage == QLocale::Chinese
+        ? QStringLiteral("zh_CN") : QStringLiteral("en_US");
+}
+
 QString ApplicationSettings::themeMode() const { return m_themeMode; }
 
 void ApplicationSettings::setThemeMode(const QString &mode)
@@ -422,6 +432,21 @@ void ApplicationSettings::setProxyPort(int port)
     emit proxyChanged();
 }
 
+bool ApplicationSettings::resetTrackedFilesOnUpdate() const
+{
+    return m_resetTrackedFilesOnUpdate;
+}
+
+void ApplicationSettings::setResetTrackedFilesOnUpdate(bool enabled)
+{
+    if (enabled == m_resetTrackedFilesOnUpdate) {
+        return;
+    }
+    m_resetTrackedFilesOnUpdate = enabled;
+    save();
+    emit versionControlChanged();
+}
+
 QString ApplicationSettings::proxyUrl() const
 {
     if (m_proxyMode != QStringLiteral("manual") || m_proxyHost.isEmpty()) {
@@ -518,6 +543,8 @@ void ApplicationSettings::load()
     m_proxyMode = object.value(QStringLiteral("proxyMode")).toString(m_proxyMode);
     m_proxyHost = object.value(QStringLiteral("proxyHost")).toString(m_proxyHost);
     m_proxyPort = object.value(QStringLiteral("proxyPort")).toInt(m_proxyPort);
+    m_resetTrackedFilesOnUpdate = object.value(
+        QStringLiteral("resetTrackedFilesOnUpdate")).toBool(m_resetTrackedFilesOnUpdate);
 }
 
 bool ApplicationSettings::save()
@@ -552,7 +579,8 @@ bool ApplicationSettings::save()
         {QStringLiteral("windowAspectRatio"), m_windowAspectRatio},
         {QStringLiteral("proxyMode"), m_proxyMode},
         {QStringLiteral("proxyHost"), m_proxyHost},
-        {QStringLiteral("proxyPort"), m_proxyPort}
+        {QStringLiteral("proxyPort"), m_proxyPort},
+        {QStringLiteral("resetTrackedFilesOnUpdate"), m_resetTrackedFilesOnUpdate}
     };
 
     QSaveFile file(m_storagePath);

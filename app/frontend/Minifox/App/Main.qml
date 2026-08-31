@@ -59,6 +59,12 @@ ApplicationWindow {
                 saveErrorDialog.open();
             return;
         }
+        if (appContext.versions.updating) {
+            close.accepted = false;
+            if (!versionOperationDialog.visible)
+                versionOperationDialog.open();
+            return;
+        }
         if (appContext.runtime.active && !allowClose) {
             close.accepted = false;
             if (!closeConfirmation.visible)
@@ -198,6 +204,24 @@ ApplicationWindow {
             AppLabel {
                 width: saveErrorDialog.availableWidth
                 text: window.appContext.configuration.lastError
+                wrapMode: Text.Wrap
+            }
+        }
+
+        AppDialog {
+            id: versionOperationDialog
+
+            parent: designSurface
+            anchors.centerIn: parent
+            title: qsTr("版本操作进行中")
+            modal: true
+            standardButtons: Dialog.Ok
+            acceptText: qsTr("确定")
+            closePolicy: Popup.CloseOnEscape
+
+            AppLabel {
+                width: versionOperationDialog.availableWidth
+                text: qsTr("版本更新、安装、切换或清理正在进行，请等待操作完成后再关闭启动器。")
                 wrapMode: Text.Wrap
             }
         }

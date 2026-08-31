@@ -44,15 +44,16 @@ public:
 
 private:
     void applyLanguage();
+    void installLanguage(const QString &preference);
 
-    ConfigurationManager *m_configuration;
-    ConfigurationPackageManager *m_configurationPackages;
-    ApplicationSettings *m_settings;
-    ApplicationIconManager *m_appIcon;
-    RuntimeManager *m_runtime;
-    SkinManager *m_skins;
-    WindowChromeController *m_windowChrome;
-    VersionManager *m_versions;
+    ConfigurationManager *m_configuration = nullptr;
+    ConfigurationPackageManager *m_configurationPackages = nullptr;
+    ApplicationSettings *m_settings = nullptr;
+    ApplicationIconManager *m_appIcon = nullptr;
+    RuntimeManager *m_runtime = nullptr;
+    SkinManager *m_skins = nullptr;
+    WindowChromeController *m_windowChrome = nullptr;
+    VersionManager *m_versions = nullptr;
     QPointer<QThread> m_zludaPreloadThread;
     QQmlEngine *m_qmlEngine = nullptr;
     QTranslator m_translator;

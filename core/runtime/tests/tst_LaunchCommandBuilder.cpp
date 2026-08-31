@@ -78,6 +78,7 @@ private slots:
     void launchConfigurationEditsUseTargetedNotifications();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
+    void consoleDecodesSplitUtf8AndLocalText();
     void consoleDisplayTextSupportsDocumentSelection();
     void consoleViewRefreshesWhenLogCountChanges();
     void consoleHistoryIsBounded();
@@ -138,6 +139,7 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
 
     QCOMPARE(result.program, QStringLiteral("cmd.exe"));
     QVERIFY(result.nativeArguments.startsWith(QStringLiteral("/D /K ")));
+    QVERIFY(result.nativeArguments.contains(QStringLiteral("chcp 65001")));
     QVERIFY(result.nativeArguments.contains(QStringLiteral("call")));
     QVERIFY(result.nativeArguments.contains(QDir::toNativeSeparators(activationPath)));
     QCOMPARE(QDir::cleanPath(result.environmentRoot),
@@ -539,6 +541,15 @@ void LaunchCommandBuilderTest::directControlPaletteBindingsOverrideStyleDefaults
 
 void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
 {
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("system"), QLocale::Chinese),
+             QStringLiteral("zh_CN"));
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("system"), QLocale::French),
+             QStringLiteral("en_US"));
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("zh_CN"), QLocale::English),
+             QStringLiteral("zh_CN"));
+    QCOMPARE(ApplicationSettings::effectiveLanguage(QStringLiteral("en_US"), QLocale::Chinese),
+             QStringLiteral("en_US"));
+
     QTemporaryDir temporaryDirectory;
     QVERIFY(temporaryDirectory.isValid());
     const QString storagePath = temporaryDirectory.filePath(QStringLiteral("settings.json"));
@@ -546,6 +557,7 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
     {
         ApplicationSettings settings(storagePath);
         QCOMPARE(settings.accentMode(), QStringLiteral("system"));
+        QVERIFY(!settings.resetTrackedFilesOnUpdate());
         QVERIFY(QColor(settings.effectiveAccentColor()).isValid());
         settings.setThemeMode(QStringLiteral("dark"));
         settings.setLanguage(QStringLiteral("en_US"));
@@ -562,6 +574,7 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
         settings.setProxyMode(QStringLiteral("manual"));
         settings.setProxyHost(QStringLiteral("127.0.0.1"));
         settings.setProxyPort(8899);
+        settings.setResetTrackedFilesOnUpdate(true);
     }
 
     ApplicationSettings restored(storagePath);
@@ -581,6 +594,7 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
     QCOMPARE(restored.proxyMode(), QStringLiteral("manual"));
     QCOMPARE(restored.proxyHost(), QStringLiteral("127.0.0.1"));
     QCOMPARE(restored.proxyPort(), 8899);
+    QVERIFY(restored.resetTrackedFilesOnUpdate());
 }
 
 void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()
@@ -1374,6 +1388,29 @@ void LaunchCommandBuilderTest::carriageReturnLineEndingsRemainNormalLogLines()
     model.appendStandardOutput(QByteArrayLiteral("Memory 50% (1/2)\n"));
     QCOMPARE(model.rowCount(), 3);
     QVERIFY(!model.progressActive());
+}
+
+void LaunchCommandBuilderTest::consoleDecodesSplitUtf8AndLocalText()
+{
+    LogModel model;
+    const QString utf8Text = QStringLiteral("模型加载完成");
+    const QByteArray utf8 = utf8Text.toUtf8();
+
+    model.appendStandardOutput(utf8.first(2));
+    QCOMPARE(model.rowCount(), 0);
+    model.appendStandardOutput(utf8.sliced(2) + '\n');
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(), utf8Text);
+
+    model.clear();
+    const QString localText = QStringLiteral("本地编码输出");
+    const QByteArray localBytes = localText.toLocal8Bit();
+    const qsizetype split = qMax<qsizetype>(1, localBytes.size() / 2);
+    model.appendStandardError(localBytes.first(split));
+    model.appendStandardError(localBytes.sliced(split) + '\n');
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(),
+             QString::fromLocal8Bit(localBytes));
 }
 
 void LaunchCommandBuilderTest::consoleDisplayTextSupportsDocumentSelection()

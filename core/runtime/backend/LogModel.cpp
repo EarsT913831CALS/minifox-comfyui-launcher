@@ -1,9 +1,11 @@
 #include "LogModel.h"
+#include "ProcessTextDecoder.h"
 
 #include <QFile>
 #include <QFontMetricsF>
 #include <QQuickTextDocument>
 #include <QRegularExpression>
+#include <QStringConverter>
 #include <QTextBlockFormat>
 #include <QTextCharFormat>
 #include <QTextCursor>
@@ -326,14 +328,14 @@ void LogModel::appendSystemMessage(const QString &message, const QString &color)
 
 void LogModel::flush()
 {
-    if (!m_stdout.partial.isEmpty()) {
-        QString line = std::exchange(m_stdout.partial, {});
+    if (!m_stdout.rawPartial.isEmpty()) {
+        QString line = ProcessTextDecoder::decode(std::exchange(m_stdout.rawPartial, {}));
         if (!updateProgressFromLine(line)) {
             appendLine(m_stdout, std::move(line), QStringLiteral("stdout"));
         }
     }
-    if (!m_stderr.partial.isEmpty()) {
-        QString line = std::exchange(m_stderr.partial, {});
+    if (!m_stderr.rawPartial.isEmpty()) {
+        QString line = ProcessTextDecoder::decode(std::exchange(m_stderr.rawPartial, {}));
         if (!updateProgressFromLine(line)) {
             appendLine(m_stderr, std::move(line), QStringLiteral("stderr"));
         }
@@ -346,14 +348,12 @@ void LogModel::clear()
 {
     beginResetModel();
     m_entries.clear();
-    m_stdout.partial.clear();
+    m_stdout.rawPartial.clear();
     m_stdout.color.clear();
     m_stdout.suppressNextLineFeed = false;
-    m_stdout.decoder.resetState();
-    m_stderr.partial.clear();
+    m_stderr.rawPartial.clear();
     m_stderr.color.clear();
     m_stderr.suppressNextLineFeed = false;
-    m_stderr.decoder.resetState();
     endResetModel();
     emit countChanged();
     resetProgress();
@@ -591,11 +591,15 @@ bool LogModel::exportToFile(const QString &path, bool showTimestamps, QString *e
 
 void LogModel::appendData(StreamState &state, const QByteArray &data, const QString &stream)
 {
-    state.partial.append(state.decoder(data));
+    // Keep bytes until a complete line is available. Decoding each process
+    // chunk independently can split a UTF-8 sequence and permanently insert
+    // replacement characters; decoding complete lines also lets the shared
+    // decoder fall back to the Windows local code page when needed.
+    state.rawPartial.append(data);
 
     while (true) {
-        const qsizetype carriageReturn = state.partial.indexOf(QLatin1Char('\r'));
-        const qsizetype lineFeed = state.partial.indexOf(QLatin1Char('\n'));
+        const qsizetype carriageReturn = state.rawPartial.indexOf('\r');
+        const qsizetype lineFeed = state.rawPartial.indexOf('\n');
         qsizetype delimiter = -1;
         if (carriageReturn >= 0 && lineFeed >= 0) {
             delimiter = std::min(carriageReturn, lineFeed);
@@ -606,21 +610,22 @@ void LogModel::appendData(StreamState &state, const QByteArray &data, const QStr
             break;
         }
 
-        const QChar delimiterCharacter = state.partial.at(delimiter);
-        const bool isCrLf = delimiterCharacter == QLatin1Char('\r')
-            && delimiter + 1 < state.partial.size()
-            && state.partial.at(delimiter + 1) == QLatin1Char('\n');
-        QString line = state.partial.first(delimiter);
-        state.partial.remove(0, delimiter + (isCrLf ? 2 : 1));
+        const char delimiterCharacter = state.rawPartial.at(delimiter);
+        const bool isCrLf = delimiterCharacter == '\r'
+            && delimiter + 1 < state.rawPartial.size()
+            && state.rawPartial.at(delimiter + 1) == '\n';
+        QByteArray rawLine = state.rawPartial.first(delimiter);
+        state.rawPartial.remove(0, delimiter + (isCrLf ? 2 : 1));
+        QString line = ProcessTextDecoder::decode(rawLine);
 
-        if (delimiterCharacter == QLatin1Char('\n')
+        if (delimiterCharacter == '\n'
             && state.suppressNextLineFeed
             && line.isEmpty()) {
             state.suppressNextLineFeed = false;
             continue;
         }
         state.suppressNextLineFeed =
-            delimiterCharacter == QLatin1Char('\r') && !isCrLf;
+            delimiterCharacter == '\r' && !isCrLf;
 
         if (updateProgressFromLine(line)) {
             continue;
@@ -630,15 +635,26 @@ void LogModel::appendData(StreamState &state, const QByteArray &data, const QStr
         }
     }
 
-    while (state.partial.size() > MaximumPartialCharacters) {
-        QString line = state.partial.first(MaximumPartialCharacters);
-        state.partial.remove(0, MaximumPartialCharacters);
+    while (state.rawPartial.size() > MaximumPartialCharacters) {
+        qsizetype split = MaximumPartialCharacters;
+        // Do not split immediately before a UTF-8 continuation byte. This is
+        // only a safety valve for pathological lines; normal output is kept
+        // intact until a newline or carriage return arrives.
+        while (split > 0 && split < state.rawPartial.size()
+               && (static_cast<unsigned char>(state.rawPartial.at(split)) & 0xC0) == 0x80) {
+            --split;
+        }
+        if (split == 0) {
+            split = MaximumPartialCharacters;
+        }
+        QString line = ProcessTextDecoder::decode(state.rawPartial.first(split));
+        state.rawPartial.remove(0, split);
         if (!updateProgressFromLine(line)) {
             appendLine(state, std::move(line), stream);
         }
     }
-    if (!state.partial.isEmpty()) {
-        updateProgressFromLine(state.partial);
+    if (!state.rawPartial.isEmpty()) {
+        updateProgressFromLine(ProcessTextDecoder::decode(state.rawPartial));
     }
 }
 

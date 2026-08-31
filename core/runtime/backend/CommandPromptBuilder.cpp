@@ -78,7 +78,8 @@ CommandPromptBuilder::Result CommandPromptBuilder::build(
     } else {
         activationCommand = QStringLiteral("prompt (ComfyUI) $P$G");
     }
-    const QString commandLine = QStringLiteral("title Minifox ComfyUI Environment & %1 && cd /d %2")
+    const QString commandLine = QStringLiteral(
+        "chcp 65001 >nul && title Minifox ComfyUI Environment & %1 && cd /d %2")
                                     .arg(activationCommand, cmdQuote(workingDirectory));
 
     result.program = QStringLiteral("cmd.exe");

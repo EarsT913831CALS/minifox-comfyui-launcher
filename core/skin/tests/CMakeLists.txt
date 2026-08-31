@@ -9,6 +9,7 @@ target_link_libraries(minifox_skin_tests
         Qt6::Test
         Qt6::Gui
         minifox_application_settings_backend
+        minifox_configuration_backend
         minifox_skin_backend
 )
 

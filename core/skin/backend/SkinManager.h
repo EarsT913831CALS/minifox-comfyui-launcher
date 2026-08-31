@@ -37,6 +37,7 @@ public:
     bool canUndo() const;
     bool canRedo() const;
     QString lastError() const;
+    void retranslate();
     static bool isAllowedLocalFolderPath(const QString &path);
     static bool isAllowedExternalLink(const QUrl &url);
 
