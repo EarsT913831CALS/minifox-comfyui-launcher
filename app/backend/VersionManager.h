@@ -12,6 +12,7 @@
 class ConfigurationManager;
 class ApplicationSettings;
 class QNetworkReply;
+class RepositoryUpdateCoordinator;
 
 class VersionManager final : public QObject
 {
@@ -210,6 +211,7 @@ private:
                                  const QString &phase = {});
     QString transactionActionKey(PendingCoreAction action) const;
     void loadVersionTransaction();
+    void hideInterruptedOperationWhileUpdating();
     bool clearVersionTransaction();
     bool completeVersionTransaction();
     void clearSafeMergeState();
@@ -296,7 +298,9 @@ private:
     QString m_statusMessage;
     QString m_lastError;
     bool m_interruptedOperation = false;
+    QStringList m_interruptedOperationNames;
     bool m_transactionInProgress = false;
+    QString m_transactionId;
     QString m_transactionAction;
     QString m_transactionRoot;
     QString m_transactionTargetRef;
@@ -341,6 +345,10 @@ private:
     bool m_fullRefresh = false;
     bool m_remoteUnavailable = false;
     bool m_catalogLoading = false;
+    RepositoryUpdateCoordinator *m_updateCoordinator = nullptr;
+    bool m_repositoryBatchCore = false;
+    QStringList m_repositoryBatchDependencyRoots;
+    bool m_reconcilingVersionTransactions = false;
     bool m_notifyOnFinish = false;
     QString m_pendingCompletionMessage;
     QString m_safeMergeRoot;

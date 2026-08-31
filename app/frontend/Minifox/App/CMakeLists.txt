@@ -8,6 +8,16 @@ qt_add_executable(minifox_launcher WIN32
     ../../../backend/main.cpp
     ../../../backend/VersionManager.cpp
     ../../../backend/VersionManager.h
+    ../../../backend/version/GitProcessRunner.cpp
+    ../../../backend/version/GitProcessRunner.h
+    ../../../backend/version/RepositoryUpdateCoordinator.cpp
+    ../../../backend/version/RepositoryUpdateCoordinator.h
+    ../../../backend/version/RepositoryUpdateJob.cpp
+    ../../../backend/version/RepositoryUpdateJob.h
+    ../../../backend/version/SafeMergeEngine.cpp
+    ../../../backend/version/SafeMergeEngine.h
+    ../../../backend/version/VersionTransactionStore.cpp
+    ../../../backend/version/VersionTransactionStore.h
     resources/app-icon.rc
 )
 

@@ -1465,6 +1465,104 @@
     </message>
 </context>
 <context>
+    <name>RepositoryUpdateJob</name>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="43"/>
+        <source>正在检查 %1 的仓库状态…</source>
+        <translation>Checking the repository state for %1…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="129"/>
+        <source>%1 的 Git 操作长时间无响应，已跳过。</source>
+        <translation>The Git operation for %1 stopped responding and was skipped.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="132"/>
+        <source>无法启动 Git。请安装 Git for Windows 后重试。</source>
+        <translation>Git could not be started. Install Git for Windows and try again.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="137"/>
+        <source>%1 的 Git 操作失败。</source>
+        <translation>The Git operation for %1 failed.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="138"/>
+        <source>%1 的 Git 操作失败：%2</source>
+        <translation>The Git operation for %1 failed: %2</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="151"/>
+        <source>正在读取 %1 的当前版本…</source>
+        <translation>Reading the current version of %1…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="156"/>
+        <source>正在获取 %1 的远端更新…</source>
+        <translation>Fetching remote updates for %1…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="205"/>
+        <source>无法记录 %1 的本地修改，仓库未被修改。</source>
+        <translation>Could not record the local changes in %1. The repository was not modified.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="293"/>
+        <source>无法确定 %1 对应的远端版本，已跳过且未修改仓库。</source>
+        <translation>Could not determine the remote version for %1. It was skipped without modifying the repository.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="315"/>
+        <source>无法记录 %1 的版本操作状态，仓库未被修改：%2</source>
+        <translation>Could not record the version operation state for %1. The repository was not modified: %2</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="324"/>
+        <source>正在同步 %1…</source>
+        <translation>Synchronizing %1…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="339"/>
+        <source>正在合并 %1 的本地修改与远端更新…</source>
+        <translation>Merging local changes in %1 with remote updates…</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="352"/>
+        <source>无法准备 %1 的安全更新快照，仓库未被修改。</source>
+        <translation>Could not prepare Safe Update snapshots for %1. The repository was not modified.</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="380"/>
+        <source>无法读取安全更新快照：%1</source>
+        <translation>Could not read the Safe Update snapshot: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="381"/>
+        <source>无法合并本地文件：%1</source>
+        <translation>Could not merge the local file: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="382"/>
+        <source>安全更新期间文件再次发生变化：%1</source>
+        <translation>The file changed again during the Safe Update: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="383"/>
+        <source>无法写入安全更新结果：%1</source>
+        <translation>Could not write the Safe Update result: %1</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="387"/>
+        <source>%1 的安全更新未完成。%2</source>
+        <translation>The Safe Update for %1 did not finish. %2</translation>
+    </message>
+    <message>
+        <location filename="../../backend/version/RepositoryUpdateJob.cpp" line="405"/>
+        <source>%1 已更新，但无法清除中断标记：%2</source>
+        <translation>%1 was updated, but its interrupted-operation marker could not be removed: %2</translation>
+    </message>
+</context>
+<context>
     <name>RuntimeManager</name>
     <message>
         <location filename="../../../core/runtime/backend/RuntimeManager.cpp" line="388"/>
@@ -2629,611 +2727,621 @@
 <context>
     <name>VersionManager</name>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="345"/>
+        <location filename="../../backend/VersionManager.cpp" line="274"/>
         <source>ComfyUI 核心更新</source>
         <translation>ComfyUI Core Update</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="348"/>
+        <location filename="../../backend/VersionManager.cpp" line="277"/>
         <source>ComfyUI 核心版本切换</source>
         <translation>ComfyUI Core Version Switch</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="351"/>
+        <location filename="../../backend/VersionManager.cpp" line="280"/>
         <source>ComfyUI 核心分支切换</source>
         <translation>ComfyUI Core Branch Switch</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="354"/>
+        <location filename="../../backend/VersionManager.cpp" line="283"/>
         <source>ComfyUI 完全清理</source>
         <translation>ComfyUI Full Cleanup</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="357"/>
+        <location filename="../../backend/VersionManager.cpp" line="286"/>
         <source>扩展更新</source>
         <translation>Extension Update</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="360"/>
+        <location filename="../../backend/VersionManager.cpp" line="289"/>
         <source>扩展版本切换</source>
         <translation>Extension Version Switch</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="362"/>
+        <location filename="../../backend/VersionManager.cpp" line="291"/>
         <source>版本操作</source>
         <translation>Version Operation</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="796"/>
+        <location filename="../../backend/VersionManager.cpp" line="810"/>
         <source>无法记录版本操作状态，已取消操作且未修改仓库。</source>
         <translation>Could not record the version operation state. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="802"/>
-        <location filename="../../backend/VersionManager.cpp" line="810"/>
-        <location filename="../../backend/VersionManager.cpp" line="825"/>
+        <location filename="../../backend/VersionManager.cpp" line="823"/>
         <source>无法记录版本操作状态，已取消操作且未修改仓库：%1</source>
         <translation>Could not record the version operation state: %1. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="869"/>
+        <location filename="../../backend/VersionManager.cpp" line="864"/>
         <source>版本操作已完成，但无法清除中断标记。请重试或重启启动器后再试。</source>
         <translation>The version operation finished, but the interrupted-operation marker could not be removed. Retry or restart the launcher and try again.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1645"/>
+        <location filename="../../backend/VersionManager.cpp" line="1514"/>
         <source>无法完成备份文件保存，已取消操作且未修改仓库。</source>
         <translation>Could not finalize the backup archive. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="909"/>
+        <location filename="../../backend/VersionManager.cpp" line="904"/>
         <source>无法准备安全更新快照，已保留原工作区。</source>
         <translation>Could not prepare the Safe Update snapshots. The original worktree was preserved.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1181"/>
+        <location filename="../../backend/VersionManager.cpp" line="1050"/>
         <source>正在合并本地修改并同步远端…</source>
         <translation>Merging local changes and synchronizing with the remote repository…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1740"/>
+        <location filename="../../backend/VersionManager.cpp" line="1609"/>
         <source>无法记录本地修改，已取消更新且未修改仓库。</source>
         <translation>Could not record local changes. The update was canceled and the repository was not modified.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1106"/>
+        <location filename="../../backend/VersionManager.cpp" line="975"/>
         <source>无法合并本地修改与远端更新；仓库未切换到目标版本，请从当前仓库状态重试。</source>
         <translation>Local changes could not be merged with the remote update. The repository was not switched to the target version; retry from its current state.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="260"/>
+        <location filename="../../backend/VersionManager.cpp" line="186"/>
         <source>无法启动 Git。请安装 Git for Windows 后重试。</source>
         <translation>Git could not be started. Install Git for Windows and try again.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="370"/>
+        <location filename="../../backend/VersionManager.cpp" line="299"/>
         <source>未检测到 Git 仓库</source>
         <translation>No Git repository detected</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="372"/>
+        <location filename="../../backend/VersionManager.cpp" line="301"/>
         <source>有未提交更改</source>
         <translation>Uncommitted changes</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="372"/>
+        <location filename="../../backend/VersionManager.cpp" line="301"/>
         <source>工作区干净</source>
         <translation>Working tree clean</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="378"/>
+        <location filename="../../backend/VersionManager.cpp" line="307"/>
         <source>领先 %1 个提交，落后 %2 个提交</source>
         <translation>%1 commits ahead, %2 commits behind</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="381"/>
+        <location filename="../../backend/VersionManager.cpp" line="310"/>
         <source>有 %1 个提交可更新</source>
         <translation>%1 updates available</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="384"/>
+        <location filename="../../backend/VersionManager.cpp" line="313"/>
         <source>本地领先 %1 个提交</source>
         <translation>Local branch is %1 commits ahead</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="386"/>
+        <location filename="../../backend/VersionManager.cpp" line="315"/>
         <source>已是最新版本</source>
         <translation>Up to date</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="418"/>
-        <location filename="../../backend/VersionManager.cpp" line="492"/>
+        <location filename="../../backend/VersionManager.cpp" line="347"/>
+        <location filename="../../backend/VersionManager.cpp" line="436"/>
         <source>请先在高级选项中选择 ComfyUI 根目录。</source>
         <translation>Select the ComfyUI root directory in Advanced Options first.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="422"/>
+        <location filename="../../backend/VersionManager.cpp" line="351"/>
         <source>未找到 Git for Windows，无法刷新核心版本列表。</source>
         <translation>Git for Windows was not found, so the core version list cannot be refreshed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="441"/>
+        <location filename="../../backend/VersionManager.cpp" line="370"/>
         <source>未找到 ComfyUI 的 custom_nodes 目录。</source>
         <translation>The ComfyUI custom_nodes directory was not found.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="445"/>
+        <location filename="../../backend/VersionManager.cpp" line="374"/>
         <source>未找到 Git for Windows，无法检测扩展更新。</source>
         <translation>Git for Windows was not found, so extension updates cannot be checked.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="450"/>
+        <location filename="../../backend/VersionManager.cpp" line="379"/>
         <source>正在检测已安装扩展…</source>
         <translation>Checking installed extensions…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="496"/>
+        <location filename="../../backend/VersionManager.cpp" line="440"/>
         <source>已读取本地版本；安装 Git for Windows 后可检查和更新版本。</source>
         <translation>Local version detected. Install Git for Windows to check for and install updates.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="524"/>
+        <location filename="../../backend/VersionManager.cpp" line="468"/>
         <source>当前 ComfyUI 状态不允许更新，请先刷新内核列表。</source>
         <translation>ComfyUI cannot be updated in its current state. Refresh the core list first.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="540"/>
+        <location filename="../../backend/VersionManager.cpp" line="501"/>
         <source>当前 ComfyUI 状态不允许切换版本，请先刷新内核列表。</source>
         <translation>The current ComfyUI state does not allow switching versions. Refresh the core list first.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="544"/>
+        <location filename="../../backend/VersionManager.cpp" line="505"/>
         <source>核心版本已切换。</source>
         <translation>Core version switched.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="583"/>
+        <location filename="../../backend/VersionManager.cpp" line="544"/>
         <source>当前 ComfyUI 状态不允许完全清理，请先刷新内核列表。</source>
         <translation>ComfyUI cannot be fully cleaned in its current state. Refresh the core list first.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="608"/>
+        <location filename="../../backend/VersionManager.cpp" line="585"/>
         <source>未找到 Git for Windows，无法更新扩展。</source>
         <translation>Git for Windows was not found, so extensions cannot be updated.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="622"/>
+        <location filename="../../backend/VersionManager.cpp" line="610"/>
         <source>没有可更新的扩展。</source>
         <translation>No extensions can be updated.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="678"/>
+        <location filename="../../backend/VersionManager.cpp" line="687"/>
         <source>请输入有效的扩展 URL。</source>
         <translation>Enter a valid extension URL.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="682"/>
+        <location filename="../../backend/VersionManager.cpp" line="691"/>
         <source>未找到 Git for Windows，无法安装扩展。</source>
         <translation>Git for Windows was not found, so the extension cannot be installed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="688"/>
+        <location filename="../../backend/VersionManager.cpp" line="697"/>
         <source>扩展 URL 无效。</source>
         <translation>Invalid extension URL.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="710"/>
+        <location filename="../../backend/VersionManager.cpp" line="719"/>
         <source>无法卸载扩展：%1</source>
         <translation>Could not uninstall extension: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="707"/>
+        <location filename="../../backend/VersionManager.cpp" line="716"/>
         <source>扩展已卸载：%1</source>
         <translation>Extension uninstalled: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="734"/>
+        <location filename="../../backend/VersionManager.cpp" line="164"/>
+        <source>%1 个仓库更新失败，%2 个已完成：%3</source>
+        <translation>%1 repositories failed to update; %2 completed: %3</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="478"/>
+        <location filename="../../backend/VersionManager.cpp" line="794"/>
+        <location filename="../../backend/VersionManager.cpp" line="816"/>
+        <source>ComfyUI 核心</source>
+        <translation>ComfyUI Core</translation>
+    </message>
+    <message>
+        <location filename="../../backend/VersionManager.cpp" line="743"/>
         <source>无法更改扩展启用状态。</source>
         <translation>Could not change the extension state.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1092"/>
+        <location filename="../../backend/VersionManager.cpp" line="961"/>
         <source>无法读取安全更新快照：%1</source>
         <translation>Could not read the safe-update snapshot: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1093"/>
+        <location filename="../../backend/VersionManager.cpp" line="962"/>
         <source>无法合并本地文件：%1</source>
         <translation>Could not merge the local file: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1094"/>
+        <location filename="../../backend/VersionManager.cpp" line="963"/>
         <source>安全更新期间文件再次发生变化：%1</source>
         <translation>The file changed again during the safe update: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1095"/>
+        <location filename="../../backend/VersionManager.cpp" line="964"/>
         <source>无法写入安全更新结果：%1</source>
         <translation>Could not write the safe-update result: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1159"/>
+        <location filename="../../backend/VersionManager.cpp" line="1028"/>
         <source>正在读取 ComfyUI 版本…</source>
         <translation>Reading the ComfyUI version…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1160"/>
+        <location filename="../../backend/VersionManager.cpp" line="1029"/>
         <source>正在读取提交信息…</source>
         <translation>Reading commit information…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1161"/>
+        <location filename="../../backend/VersionManager.cpp" line="1030"/>
         <source>正在检查远程更新…</source>
         <translation>Checking for remote updates…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1162"/>
+        <location filename="../../backend/VersionManager.cpp" line="1031"/>
         <source>正在匹配远端分支…</source>
         <translation>Matching a remote branch…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1163"/>
+        <location filename="../../backend/VersionManager.cpp" line="1032"/>
         <source>正在比较版本…</source>
         <translation>Comparing versions…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1166"/>
+        <location filename="../../backend/VersionManager.cpp" line="1035"/>
         <source>正在备份将受影响的文件…</source>
         <translation>Backing up affected files…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1169"/>
+        <location filename="../../backend/VersionManager.cpp" line="1038"/>
         <source>正在检查当前仓库状态…</source>
         <translation>Checking the current repository state…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1189"/>
+        <location filename="../../backend/VersionManager.cpp" line="1058"/>
         <source>正在更新 ComfyUI…</source>
         <translation>Updating ComfyUI…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1191"/>
+        <location filename="../../backend/VersionManager.cpp" line="1060"/>
         <source>正在读取版本列表…</source>
         <translation>Loading version list…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1192"/>
+        <location filename="../../backend/VersionManager.cpp" line="1061"/>
         <source>正在读取稳定版本…</source>
         <translation>Loading stable versions…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1194"/>
+        <location filename="../../backend/VersionManager.cpp" line="1063"/>
         <source>正在切换核心版本…</source>
         <translation>Switching core version…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1195"/>
+        <location filename="../../backend/VersionManager.cpp" line="1064"/>
         <source>正在重置核心目录…</source>
         <translation>Resetting the core directory…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1200"/>
+        <location filename="../../backend/VersionManager.cpp" line="1069"/>
         <source>正在切换分支…</source>
         <translation>Switching branch…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1201"/>
+        <location filename="../../backend/VersionManager.cpp" line="1070"/>
         <source>正在校正分支…</source>
         <translation>Normalizing branch…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1208"/>
+        <location filename="../../backend/VersionManager.cpp" line="1077"/>
         <source>正在更新扩展…</source>
         <translation>Updating extension…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1209"/>
+        <location filename="../../backend/VersionManager.cpp" line="1078"/>
         <source>正在读取扩展版本列表…</source>
         <translation>Loading the extension version list…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1212"/>
+        <location filename="../../backend/VersionManager.cpp" line="1081"/>
         <source>正在切换扩展版本…</source>
         <translation>Switching extension version…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1213"/>
+        <location filename="../../backend/VersionManager.cpp" line="1082"/>
         <source>正在安装扩展…</source>
         <translation>Installing extension…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1300"/>
+        <location filename="../../backend/VersionManager.cpp" line="1169"/>
         <source>文件名无法用当前 Windows 系统编码保存到备份包，已取消操作且未修改仓库：%1</source>
         <translation>The file name cannot be represented in the current Windows system encoding. The operation was canceled without modifying the repository: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1356"/>
+        <location filename="../../backend/VersionManager.cpp" line="1225"/>
         <source>无法创建备份目录：%1</source>
         <translation>Could not create the backup directory: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1401"/>
+        <location filename="../../backend/VersionManager.cpp" line="1270"/>
         <source>无法准备备份文件列表：%1</source>
         <translation>Could not prepare the backup file list: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1410"/>
+        <location filename="../../backend/VersionManager.cpp" line="1279"/>
         <source>未找到 Windows 归档工具 tar.exe，已取消操作且未修改仓库。</source>
         <translation>Windows archive tool tar.exe was not found. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1438"/>
+        <location filename="../../backend/VersionManager.cpp" line="1307"/>
         <source>无法删除旧备份：%1</source>
         <translation>Could not delete the old backup: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1464"/>
+        <location filename="../../backend/VersionManager.cpp" line="1333"/>
         <source>无法删除旧备份日期目录：%1</source>
         <translation>Could not delete the old backup date directory: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1481"/>
+        <location filename="../../backend/VersionManager.cpp" line="1350"/>
         <source>备份包数量：%1；保存目录：%2</source>
         <translation>Backup archives: %1; saved under: %2</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1494"/>
-        <location filename="../../backend/VersionManager.cpp" line="2913"/>
+        <location filename="../../backend/VersionManager.cpp" line="1363"/>
+        <location filename="../../backend/VersionManager.cpp" line="2746"/>
         <source> 受影响文件已备份。%1</source>
         <translation> Affected files were backed up. %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1541"/>
+        <location filename="../../backend/VersionManager.cpp" line="1410"/>
         <source>内部状态无效，已取消 Git 操作。</source>
         <translation>Invalid internal state. The Git operation was canceled.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1588"/>
+        <location filename="../../backend/VersionManager.cpp" line="1457"/>
         <source>备份压缩包创建失败，已取消操作且未修改仓库。</source>
         <translation>Could not create the backup archive. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1589"/>
+        <location filename="../../backend/VersionManager.cpp" line="1458"/>
         <source>备份压缩包创建失败：%1</source>
         <translation>Could not create the backup archive: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1594"/>
+        <location filename="../../backend/VersionManager.cpp" line="1463"/>
         <source>无法确定需要备份的文件，已取消操作且未修改仓库。</source>
         <translation>Could not determine which files require backup. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1598"/>
+        <location filename="../../backend/VersionManager.cpp" line="1467"/>
         <source>无法读取扩展版本历史。</source>
         <translation>Unable to read the extension version history.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1602"/>
+        <location filename="../../backend/VersionManager.cpp" line="1471"/>
         <source>核心版本列表刷新失败：ComfyUI 目录不是 Git 仓库。</source>
         <translation>Could not refresh the core version list: the ComfyUI directory is not a Git repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1604"/>
+        <location filename="../../backend/VersionManager.cpp" line="1473"/>
         <source>无法访问远程 Git 仓库。</source>
         <translation>The remote Git repository could not be reached.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1834"/>
+        <location filename="../../backend/VersionManager.cpp" line="1703"/>
         <source>完全清理完成；没有需要备份的受影响文件。</source>
         <translation>Full cleanup completed. There were no affected files to back up.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1835"/>
+        <location filename="../../backend/VersionManager.cpp" line="1704"/>
         <source>完全清理完成。受影响文件已备份。%1</source>
         <translation>Full cleanup completed. Affected files were backed up. %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1905"/>
+        <location filename="../../backend/VersionManager.cpp" line="1774"/>
         <source>无法确定 ComfyUI 开发主线，版本列表未更新。</source>
         <translation>The ComfyUI development mainline could not be determined, so the version list was not updated.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1991"/>
+        <location filename="../../backend/VersionManager.cpp" line="1860"/>
         <source>未找到可用的 ComfyUI 稳定版本，仓库未被修改。</source>
         <translation>No available ComfyUI stable version was found. The repository was not modified.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2014"/>
+        <location filename="../../backend/VersionManager.cpp" line="1883"/>
         <source>未找到可用的 ComfyUI 开发分支，仓库未被修改。</source>
         <translation>No available ComfyUI development branch was found. The repository was not modified.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2037"/>
+        <location filename="../../backend/VersionManager.cpp" line="1906"/>
         <source>无法安全确定当前版本对应的远端分支，已取消更新且未修改仓库。</source>
         <translation>No remote branch could be safely matched to the current version. The update was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2175"/>
+        <location filename="../../backend/VersionManager.cpp" line="2044"/>
         <source>扩展 %1 无法安全确定远端分支，已跳过且未修改仓库。</source>
         <translation>No remote branch could be safely matched for extension %1. It was skipped without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2614"/>
+        <location filename="../../backend/VersionManager.cpp" line="2483"/>
         <source>无法确定对应的远端分支。</source>
         <translation>No matching remote branch could be determined.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2620"/>
+        <location filename="../../backend/VersionManager.cpp" line="2489"/>
         <source>%1：%2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2545"/>
+        <location filename="../../backend/VersionManager.cpp" line="2414"/>
         <source>已安装扩展列表刷新成功。</source>
         <translation>Installed extensions refreshed successfully.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="258"/>
+        <location filename="../../backend/VersionManager.cpp" line="184"/>
         <source>无法启动 Windows 归档工具，已取消操作且未修改仓库。</source>
         <translation>Could not start the Windows archive tool. The operation was canceled without modifying the repository.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="521"/>
+        <location filename="../../backend/VersionManager.cpp" line="465"/>
         <source>ComfyUI 稳定版已更新到最新版本。</source>
         <translation>The ComfyUI stable version was updated to the latest version.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="522"/>
+        <location filename="../../backend/VersionManager.cpp" line="466"/>
         <source>ComfyUI 开发版已更新到最新版本。</source>
         <translation>The ComfyUI development version was updated to the latest version.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1197"/>
+        <location filename="../../backend/VersionManager.cpp" line="1066"/>
         <source>正在完全清理核心目录…</source>
         <translation>Running full cleanup on the core directory…</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2230"/>
+        <location filename="../../backend/VersionManager.cpp" line="2099"/>
         <source>扩展版本列表已加载。</source>
         <translation>The extension version list has been loaded.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2549"/>
+        <location filename="../../backend/VersionManager.cpp" line="2418"/>
         <source>已安装扩展列表刷新失败：%1</source>
         <translation>Could not refresh installed extensions: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2551"/>
+        <location filename="../../backend/VersionManager.cpp" line="2420"/>
         <source>；另有 %1 个扩展检测失败。</source>
         <translation>; %1 additional extension checks failed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2612"/>
+        <location filename="../../backend/VersionManager.cpp" line="2481"/>
         <source>检测超时。</source>
         <translation>The check timed out.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2729"/>
+        <location filename="../../backend/VersionManager.cpp" line="2598"/>
         <source>服务器返回了无法识别的扩展索引。</source>
         <translation>The server returned an unrecognized extension index.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2731"/>
+        <location filename="../../backend/VersionManager.cpp" line="2600"/>
         <source>可安装扩展列表刷新失败：%1</source>
         <translation>Could not refresh available extensions: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2737"/>
+        <location filename="../../backend/VersionManager.cpp" line="2606"/>
         <source>可安装扩展列表刷新成功，共 %1 条。</source>
         <translation>Available extensions refreshed successfully. %1 entries loaded.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2728"/>
+        <location filename="../../backend/VersionManager.cpp" line="2597"/>
         <source>扩展索引超过 16 MB 限制。</source>
         <translation>The extension catalog exceeds the 16 MB limit.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1611"/>
+        <location filename="../../backend/VersionManager.cpp" line="1480"/>
         <source>Git 操作失败。</source>
         <translation>The Git operation failed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1929"/>
+        <location filename="../../backend/VersionManager.cpp" line="1798"/>
         <source>核心版本列表刷新失败：%1</source>
         <translation>Could not refresh the core version list: %1</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1931"/>
+        <location filename="../../backend/VersionManager.cpp" line="1800"/>
         <source>核心版本列表刷新成功。</source>
         <translation>Core version list refreshed successfully.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="1934"/>
+        <location filename="../../backend/VersionManager.cpp" line="1803"/>
         <source>已读取本地版本信息。</source>
         <translation>Local version information loaded.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="676"/>
+        <location filename="../../backend/VersionManager.cpp" line="685"/>
         <source>扩展安装完成。</source>
         <translation>Extension installed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="663"/>
+        <location filename="../../backend/VersionManager.cpp" line="672"/>
         <source>扩展版本已切换。</source>
         <translation>Extension version switched.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="606"/>
+        <location filename="../../backend/VersionManager.cpp" line="583"/>
         <source>全部扩展更新完成。</source>
         <translation>All extensions updated.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="595"/>
+        <location filename="../../backend/VersionManager.cpp" line="556"/>
         <source>扩展更新完成。</source>
         <translation>Extension updated.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="2416"/>
+        <location filename="../../backend/VersionManager.cpp" line="2285"/>
         <source>ComfyUI 自定义节点扩展</source>
         <translation>ComfyUI custom node extension</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="558"/>
+        <location filename="../../backend/VersionManager.cpp" line="519"/>
         <source>分支已切换。</source>
         <translation>Branch switched.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="564"/>
+        <location filename="../../backend/VersionManager.cpp" line="525"/>
         <source>当前 ComfyUI 状态不允许切换分支，请先刷新内核列表。</source>
         <translation>The current ComfyUI state does not allow switching branches. Refresh the core version list first.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="560"/>
+        <location filename="../../backend/VersionManager.cpp" line="521"/>
         <source>请输入有效的分支名称。</source>
         <translation>Please enter a valid branch name.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3017"/>
+        <location filename="../../backend/VersionManager.cpp" line="2850"/>
         <source>未配置有效的 Python 环境，无法检查 %1 的依赖。</source>
         <translation>No valid Python environment is configured, so dependencies for %1 could not be checked.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3048"/>
+        <location filename="../../backend/VersionManager.cpp" line="2881"/>
         <source>%1 的依赖检查超时。</source>
         <translation>Dependency check for %1 timed out.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3055"/>
+        <location filename="../../backend/VersionManager.cpp" line="2888"/>
         <source>pip 无法运行。</source>
         <translation>pip could not be run.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3056"/>
+        <location filename="../../backend/VersionManager.cpp" line="2889"/>
         <source>%1 的依赖检查失败：%2</source>
         <translation>Dependency check for %1 failed: %2</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3094"/>
+        <location filename="../../backend/VersionManager.cpp" line="2927"/>
         <source>无法创建 %1 的依赖安装脚本。</source>
         <translation>Could not create the dependency installation script for %1.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3118"/>
+        <location filename="../../backend/VersionManager.cpp" line="2951"/>
         <source>无法将 %1 的依赖安装窗口加入安全作业。</source>
         <translation>Could not add the dependency installation window for %1 to the protected job.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3141"/>
+        <location filename="../../backend/VersionManager.cpp" line="2974"/>
         <source>%1：依赖安装完成。</source>
         <translation>%1: dependencies installed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3144"/>
+        <location filename="../../backend/VersionManager.cpp" line="2977"/>
         <source>%1：依赖安装窗口被关闭，无法确认安装结果。</source>
         <translation>%1: the dependency installation window was closed, so the result could not be confirmed.</translation>
     </message>
     <message>
-        <location filename="../../backend/VersionManager.cpp" line="3147"/>
+        <location filename="../../backend/VersionManager.cpp" line="2980"/>
         <source>%1：依赖安装失败（退出码 %2）。</source>
         <translation>%1: dependency installation failed (exit code %2).</translation>
     </message>

@@ -30,6 +30,11 @@ find_package(
 
 qt_standard_project_setup(REQUIRES 6.8)
 
+if(MINIFOX_BUILD_TESTS)
+    find_package(Qt6 6.8 REQUIRED COMPONENTS Test)
+    enable_testing()
+endif()
+
 if(NOT WIN32)
     message(FATAL_ERROR "Minifox Launcher currently supports Windows only.")
 endif()
@@ -65,8 +70,6 @@ add_subdirectory(core/runtime/frontend/Minifox/Runtime)
 add_subdirectory(app)
 
 if(MINIFOX_BUILD_TESTS)
-    enable_testing()
-    find_package(Qt6 6.8 REQUIRED COMPONENTS Test)
     add_subdirectory(core/runtime/tests)
     add_subdirectory(core/skin/tests)
     add_subdirectory(platform/windows/tests)
