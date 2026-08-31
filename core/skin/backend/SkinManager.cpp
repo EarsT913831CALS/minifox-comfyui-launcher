@@ -385,6 +385,22 @@ QString SkinManager::activeSkinName() const
     return entry ? entry->name : tr("默认皮肤");
 }
 
+void SkinManager::retranslate()
+{
+    if (m_entries.isEmpty()
+        || m_entries.first().id != QString::fromLatin1(kBuiltinId)) {
+        return;
+    }
+    m_entries.first().name = tr("默认皮肤");
+    m_entries.first().document = defaultSkinDocument(m_settings);
+    emit skinsChanged();
+    if (m_activeIndex == 0) {
+        emit activeSkinChanged();
+        emit appearanceChanged();
+        emit homeItemsChanged();
+    }
+}
+
 bool SkinManager::activeSkinBuiltin() const
 {
     const SkinEntry *entry = activeEntry();

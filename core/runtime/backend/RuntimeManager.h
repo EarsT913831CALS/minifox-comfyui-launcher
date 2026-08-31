@@ -73,6 +73,7 @@ public:
     Q_INVOKABLE void shutdown();
     Q_INVOKABLE bool openCommandPrompt();
     Q_INVOKABLE bool exportLog(const QUrl &fileUrl);
+    void setVersionOperationBlocked(bool blocked);
     void retranslate();
 
 signals:
@@ -142,4 +143,5 @@ private:
     int m_lastExitCode = 0;
     bool m_stopRequested = false;
     bool m_startupAborted = false;
+    bool m_versionOperationBlocked = false;
 };

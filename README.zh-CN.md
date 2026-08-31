@@ -13,13 +13,13 @@
 
 Minifox 是面向 Windows 10/11 x64 的便携式 ComfyUI 启动器，专门用于配置、启动和管理 ComfyUI。程序使用 Qt 6、Qt Quick、C++20、QML 和 CMake 开发，可构建为无需附带 Qt DLL 的单文件 EXE，直接放入现有 ComfyUI 整合包使用。
 
-Minifox 不使用注册表也不修改 ComfyUI 文件，只在同级文件夹下产生缓存目录。
+Minifox 不使用 Windows 注册表。常规配置和启动过程不会修改 ComfyUI 文件；启动器只会在 EXE 同级目录创建便携数据和缓存目录。只有用户明确执行版本更新、版本切换或清理操作时，才会修改对应的 ComfyUI 文件。
 
 ## 主要功能
 
 - 几乎没有预设启动参数（完全由 ComfyUI 决定），支持多套启动配置无缝切换
 - 启动、停止并实时监控 ComfyUI 进程、运行状态与控制台输出
-- 管理 ComfyUI 核心与扩展 / 自定义节点（Custom Nodes）版本，配有一键刷新与一键更新按钮
+- 管理 ComfyUI 核心与扩展/自定义节点（Custom Nodes）版本，配有“刷新列表”和“一键更新”按钮
 - 自动识别 CUDA、ROCm 及适用的 ZLUDA 环境
 - 提供模块化与可自定义的组件以个性化首页
 
@@ -42,18 +42,18 @@ ComfyUI-Package/
 
 ## GPU 与 ZLUDA
 
-启动器刚打开后不会显示环境信息，在启动ComfyUI时会截获日志并将相关信息展示在首页卡片上。启动ComfyUI时可在控制台看到检测逻辑：
+启动器打开后不会立即显示环境信息。启动 ComfyUI 时，启动器会截获日志并将相关信息展示在首页卡片上，同时可在控制台中查看检测过程：
 
 | 环境 | 行为 |
 |---|---|
-| CUDA 或 ROCM | 使用原生PyTorch |
+| CUDA 或 ROCm | 使用原生 PyTorch |
 | 仅 AMD 显卡与 CUDA PyTorch | 自动准备 ZLUDA |
 
-ZLUDA注入是最低优先级。
+ZLUDA 注入的优先级最低。
 
-> **兼容性说明：** HIP SDK 5.7 + ZLUDA 已通过测试。任何使用 CK (Composable Kernel) 或 MIOpen 的内容均未测试，不应视为已受支持或稳定可用。
+> **兼容性说明：** HIP SDK 5.7 + ZLUDA 已通过测试。任何使用 CK（Composable Kernel）或 MIOpen 的内容均未测试，不应视为已受支持或稳定可用。
 
-> **另附建议：** HIP SDK 7.1 + ZLUDA 的组合受支持但不如 HIP SDK 5.7 组占用稳定。强烈推荐 AMD 显卡使用原生 Pytorch (正式版或 Rocm Preview 7.14 及之后版本) 。如果使用 ZLUDA，建议配合兼容的 Triton wheel 使用，以获得更好的算子兼容性与速度提升。
+> **另附建议：** HIP SDK 7.1 + ZLUDA 的组合受支持，但其显存占用不如 HIP SDK 5.7 组合稳定。强烈建议 AMD 显卡使用原生 PyTorch（正式版或 ROCm Preview 7.14 及之后版本）。如果使用 ZLUDA，建议搭配兼容的 Triton wheel，以获得更好的算子兼容性和性能。
 
 ### AMD ZLUDA 前置条件
 
@@ -65,26 +65,25 @@ ZLUDA注入是最低优先级。
    ```
 
    > [!NOTE]
-   > 如果您的显卡架构不在官方支持列表中，需要在该目录下手动补充对应的 Tensile / rocBLAS 文件。
+   > 如果您的显卡架构不在官方支持列表中，需要在该目录下手动补充对应的 Tensile/rocBLAS 文件。
 
 3. 使用原本面向 NVIDIA 显卡的 ComfyUI 整合包（PyTorch 需要重装为兼容版本）。
 
 Minifox 内置了 HIP SDK 5.7 和 HIP SDK 7.1 的 ZLUDA 运行组件，但不内置针对特定 `gfx` 架构的 rocBLAS/Tensile 补丁。
 
-启动器不会修改 ComfyUI、HIP 安装文件或系统环境变量。ZLUDA 本身作为 PyTorch 的临时补丁运行：它会在运行时替换部分必要文件，并在启动器关闭后自动恢复原样。已释放且版本未变化的运行包不会重复解压，已有缓存会继续复用。
+除用户明确执行的版本管理操作和临时 ZLUDA 部署外，启动器不会修改 ComfyUI 源文件、HIP 安装文件或系统环境变量。ZLUDA 会作为 PyTorch 的运行时补丁，临时替换部分必要文件，并在启动器关闭时恢复原文件。已解压且版本未变化的运行包不会重复解压，已有缓存会继续复用。
 
 ## 版本管理
 
 内核页可查看稳定版、开发版、远程分支和历史提交；扩展页可查看已安装扩展的当前分支、版本、日期和远程仓库。
 
 - 刷新列表只读取远程信息，不修改工作目录。
-- 默认使用“安全更新”：核心或插件工作区存在 Git 改动时，拒绝更新或切换版本，不执行重置或清理操作。
+- 安全更新（默认）：被跟踪文件中本地修改的代码行会保留；同一文件的其他代码行和干净的文件会同步到远端版本，未被跟踪文件不受影响。
 - 开启“重置已跟踪文件”后，更新或切换版本会把被跟踪文件重置为与远端仓库同步的状态；未被跟踪文件不受影响。
-- “完全清理”按钮会依次执行 `git reset --hard HEAD` 和 `git clean -ffd`，删除未被跟踪的文件和目录，使本地目录恢复为干净的远端仓库状态。
-- 扩展版本切换会显示提交说明、日期和当前版本，不需要手工输入 commit ID。
-- 远程仓库地址可通过 `Ctrl + 左键` 在默认浏览器中打开。
-
-> **注意：** “重置已跟踪文件”和“完全清理”会修改 Git 工作区；“完全清理”还会删除未被 Git 忽略的未跟踪文件和目录。需要保留的内容请提前备份。
+- “完全清理”按钮会依次执行 `git reset --hard HEAD` 和 `git clean -ffd`，删除未被 Git 忽略的未跟踪文件和目录，使本地目录恢复为当前 Git 版本的干净状态。
+- 如果更新、切换或清理过程中启动器被中断，会保留中断标记并暂时禁止启动 ComfyUI；回到版本管理页后，点击想执行的操作按钮即可从头按当前仓库状态重新执行，不会接续上次中断的内部步骤。
+- 扩展版本切换会显示提交说明、日期和当前版本，不需要手动输入提交 ID。
+- 按住 `Ctrl` 并左键单击远程仓库地址，可在默认浏览器中打开该地址。
 
 ### 备份位置
 
@@ -99,7 +98,7 @@ ComfyUI-Package/
         └── extensions/
 ```
 
-每个日期目录最多保留 3 个内核备份包和 60 个插件备份包；最多保留最近 5 个日期目录。备份包会自动编号，避免同一天内重名导致保存失败。
+每个日期目录最多保留 3 个内核备份包和 60 个扩展备份包；最多保留最近 5 个日期目录。备份包会自动编号，避免同一天内重名导致保存失败。
 
 ## 便携数据
 
@@ -109,6 +108,7 @@ ComfyUI-Package/
 .minifox/
 ├─ application-settings.json
 ├─ launch-profiles.json
+├─ version-operation.json
 ├─ icons/
 │  └─ custom.png
 ├─ skins/
@@ -127,7 +127,7 @@ ComfyUI-Package/
 - Windows 10/11 x64
 - MSYS2 UCRT64 GCC，支持 C++20
 - CMake 3.25+ 与 Ninja
-- Qt 6.8+：Core、Gui、Network、Qml、Quick、QuickControls2、LinguistTools，以及仅测试时需要的 Test
+- Qt 6.8+：Core、Concurrent、Gui、Network、Qml、Quick、QuickControls2、LinguistTools，以及仅测试时需要的 Test
 
 当前已使用 Qt 6.11.1、GCC 16.1.0、CMake 4.4.0 和 Ninja 1.13.2 验证。
 

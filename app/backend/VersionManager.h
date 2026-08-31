@@ -45,6 +45,8 @@ class VersionManager final : public QObject
     Q_PROPERTY(QString updateState READ updateState NOTIFY stateChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY stateChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY stateChanged)
+    Q_PROPERTY(bool interruptedOperation READ interruptedOperation NOTIFY stateChanged)
+    Q_PROPERTY(QString interruptedOperationDescription READ interruptedOperationDescription NOTIFY stateChanged)
     Q_PROPERTY(int aheadCount READ aheadCount NOTIFY stateChanged)
     Q_PROPERTY(int behindCount READ behindCount NOTIFY stateChanged)
 
@@ -83,6 +85,8 @@ public:
     QString updateState() const;
     QString statusMessage() const;
     QString lastError() const;
+    bool interruptedOperation() const;
+    QString interruptedOperationDescription() const;
     int aheadCount() const;
     int behindCount() const;
 
@@ -122,6 +126,21 @@ private:
         CollectTrackedBackup,
         CollectUntrackedBackup,
         CreateBackupArchive,
+        ValidateCoreUpdate,
+        ValidateCoreVersion,
+        ValidateCoreBranch,
+        PrepareSafeMergeIndex,
+        StageSafeMergeChanges,
+        WriteSafeMergeTree,
+        PrepareSafeMergeBaseSnapshot,
+        CheckoutSafeMergeBaseSnapshot,
+        CheckoutSafeMergeLocalSnapshot,
+        PrepareSafeMergeTargetSnapshot,
+        CheckoutSafeMergeTargetSnapshot,
+        UpdateSafeMergeRef,
+        SwitchSafeMergeHead,
+        ResetSafeMergeIndex,
+        SetSafeMergeUpstream,
         ResetCoreForUpdate,
         PrepareCoreUpdateFetch,
         ResolveStableUpdateCommit,
@@ -183,6 +202,20 @@ private:
     void startGit(Operation operation, const QStringList &arguments);
     void startProcess(Operation operation, const QString &program,
                       const QStringList &arguments);
+    void beginSafeMerge(PendingCoreAction action, const QString &repositoryRoot,
+                        const QString &targetRef, const QString &targetBranch = {},
+                        bool trackBranch = false, const QString &upstreamRef = {});
+    bool beginVersionTransaction(PendingCoreAction action, const QString &repositoryRoot,
+                                 const QString &targetRef = {}, const QString &targetBranch = {},
+                                 const QString &phase = {});
+    QString transactionActionKey(PendingCoreAction action) const;
+    void loadVersionTransaction();
+    bool clearVersionTransaction();
+    bool completeVersionTransaction();
+    void clearSafeMergeState();
+    void startSafeSnapshotMerge();
+    void handleSafeSnapshotMergeFinished(bool success, const QString &error);
+    void finishSafeMerge();
     void beginResetAction(PendingCoreAction action, const QString &repositoryRoot);
     void collectBackupPaths(const QByteArray &output);
     void createBackupArchivesOrContinue();
@@ -262,9 +295,17 @@ private:
     QString m_remoteUrl;
     QString m_statusMessage;
     QString m_lastError;
+    bool m_interruptedOperation = false;
+    bool m_transactionInProgress = false;
+    QString m_transactionAction;
+    QString m_transactionRoot;
+    QString m_transactionTargetRef;
+    QString m_transactionTargetBranch;
+    QString m_transactionPhase;
     bool m_busy = false;
     bool m_repository = false;
     bool m_dirty = false;
+    bool m_operationTrackedChanges = false;
     int m_aheadCount = 0;
     int m_behindCount = 0;
     QVariantList m_coreVersions;
@@ -287,6 +328,7 @@ private:
     QStringList m_operationBackupArchives;
     QString m_backupListPath;
     QString m_backupArchivePath;
+    QString m_backupArchiveTempPath;
     QString m_backupRootPath;
     QString m_currentBackupCategoryDirectory;
     QString m_extensionHistoryCurrentCommit;
@@ -301,5 +343,18 @@ private:
     bool m_catalogLoading = false;
     bool m_notifyOnFinish = false;
     QString m_pendingCompletionMessage;
+    QString m_safeMergeRoot;
+    QString m_safeMergeTargetRef;
+    QString m_safeMergeTargetBranch;
+    QString m_safeMergeUpstreamRef;
+    QString m_safeMergeIndexPath;
+    QString m_safeMergeBaseIndexPath;
+    QString m_safeMergeTargetIndexPath;
+    QString m_safeMergeBaseSnapshotPath;
+    QString m_safeMergeLocalSnapshotPath;
+    QString m_safeMergeTargetSnapshotPath;
+    bool m_safeMergeTrackBranch = false;
+    bool m_safeMergeRequested = false;
+    PendingCoreAction m_safeMergeAction = PendingCoreAction::None;
     RefreshScope m_refreshScope = RefreshScope::None;
 };

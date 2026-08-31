@@ -19,6 +19,7 @@ find_package(
     Qt6 6.8
     REQUIRED COMPONENTS
         Core
+        Concurrent
         Gui
         LinguistTools
         Network

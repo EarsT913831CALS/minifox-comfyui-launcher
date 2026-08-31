@@ -34,6 +34,12 @@ AppContext::AppContext(QObject *parent)
     m_skins = new SkinManager(m_settings, {}, this);
     m_windowChrome = new WindowChromeController(this);
     m_versions = new VersionManager(m_configuration, m_settings, this);
+    connect(m_versions, &VersionManager::stateChanged, this, [this] {
+        m_runtime->setVersionOperationBlocked(
+            m_versions->updating() || m_versions->interruptedOperation());
+    });
+    m_runtime->setVersionOperationBlocked(
+        m_versions->updating() || m_versions->interruptedOperation());
 
     QString portableError;
     if (!PortablePaths::ensureDataDirectory(&portableError)) {
@@ -84,6 +90,7 @@ void AppContext::applyLanguage()
 
     if (m_configuration) m_configuration->retranslate();
     if (m_runtime) m_runtime->retranslate();
+    if (m_skins) m_skins->retranslate();
     if (m_versions) m_versions->retranslate();
     if (m_qmlEngine) {
         m_qmlEngine->retranslate();

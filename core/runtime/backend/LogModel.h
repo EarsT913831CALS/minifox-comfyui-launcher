@@ -1,10 +1,10 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QByteArray>
 #include <QColor>
 #include <QDateTime>
 #include <QQuickTextDocument>
-#include <QStringConverter>
 #include <QTimer>
 
 class LogModel final : public QAbstractListModel
@@ -101,8 +101,7 @@ private:
     };
 
     struct StreamState {
-        QStringDecoder decoder {QStringDecoder::Utf8};
-        QString partial;
+        QByteArray rawPartial;
         QString color;
         bool suppressNextLineFeed = false;
     };

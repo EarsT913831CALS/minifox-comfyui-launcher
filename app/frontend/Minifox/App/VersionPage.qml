@@ -96,6 +96,13 @@ Pane {
         return value;
     }
 
+    function showRefreshNotice(success, message) {
+        refreshNotice.success = success;
+        refreshNotice.message = message;
+        refreshNotice.open();
+        refreshNoticeTimer.restart();
+    }
+
     component CtrlRemoteLink: AppLabel {
         id: remoteLink
 
@@ -179,15 +186,11 @@ Pane {
         target: root.versions
 
         function onRefreshCompleted(success, message) {
-            refreshNotice.success = success;
-            refreshNotice.message = message;
-            refreshNotice.open();
+            root.showRefreshNotice(success, message);
         }
 
         function onOperationCompleted(success, message) {
-            refreshNotice.success = success;
-            refreshNotice.message = message;
-            refreshNotice.open();
+            root.showRefreshNotice(success, message);
             if (root.branchSwitchPending) {
                 if (success) root.coreChannel = 0;
                 root.branchSwitchPending = false;
@@ -196,9 +199,13 @@ Pane {
         }
 
         function onDependencyInstallCompleted(success, message) {
-            refreshNotice.success = success;
-            refreshNotice.message = message;
-            refreshNotice.open();
+            root.showRefreshNotice(success, message);
+        }
+
+        function onExtensionVersionsLoaded(success, message) {
+            if (success)
+                return;
+            root.showRefreshNotice(false, message);
         }
     }
 
@@ -297,6 +304,22 @@ Pane {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Theme.materialStroke
+        }
+
+        MaterialPanel {
+            visible: root.versions.interruptedOperation
+            Layout.fillWidth: true
+            Layout.margins: Theme.spacingLg
+            padding: Theme.spacingMd
+            strong: true
+
+            AppLabel {
+                width: parent.width
+                text: qsTr("上次版本操作“%1”未完成。请点击要执行的操作按钮，从头按当前仓库状态重新执行；完成前无法启动 ComfyUI。")
+                      .arg(root.versions.interruptedOperationDescription)
+                color: Theme.error
+                wrapMode: Text.WordWrap
+            }
         }
 
         StackLayout {

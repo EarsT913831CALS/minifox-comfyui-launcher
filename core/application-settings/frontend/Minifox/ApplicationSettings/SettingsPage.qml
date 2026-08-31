@@ -592,7 +592,7 @@ Pane {
                             Layout.fillWidth: true
                             text: root.appContext.settings.resetTrackedFilesOnUpdate
                                   ? qsTr("重置模式：所有被跟踪文件会被重置为与远端仓库保持同步的状态，未被跟踪文件不受影响。")
-                                  : qsTr("安全模式（默认）：被跟踪文件中有修改的代码行不会继承远端仓库的代码更新，未被跟踪文件不受影响。")
+                                  : qsTr("安全更新（默认）：被跟踪文件中本地修改的代码行会保留；同一文件的其他代码行和干净的文件会同步到远端版本，未被跟踪文件不受影响。")
                             color: Theme.foregroundSecondary
                             wrapMode: Text.WordWrap
                         }
@@ -611,7 +611,7 @@ Pane {
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: qsTr("会依次执行 <font color=\"#ff0000\">git reset --hard HEAD</font> 和 <font color=\"#ff0000\">git clean -ffd</font>，未被跟踪文件会被删除，本地目录恢复为完全干净的远端仓库。")
+                            text: qsTr("会依次执行 <font color=\"#ff0000\">git reset --hard HEAD</font> 和 <font color=\"#ff0000\">git clean -ffd</font>，未被 Git 忽略的未跟踪文件会被删除，本地目录恢复为当前 Git 版本的干净状态。")
                             color: Theme.foregroundSecondary
                             textFormat: Text.RichText
                             wrapMode: Text.WordWrap
@@ -640,7 +640,7 @@ Pane {
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: qsTr("重置或完全清理前，会先备份将受影响的文件。备份按日期保存在 backup/日期/core 与 backup/日期/extensions；每天最多保留 3 个内核包和 60 个插件包，日期目录最多保留 5 个。")
+                            text: qsTr("重置或完全清理前，会先备份将受影响的文件。备份按日期保存在 backup/YYYY-MM-DD/core 与 backup/YYYY-MM-DD/extensions；每天最多保留 3 个内核包和 60 个扩展包，日期目录最多保留 5 个。")
                             color: Theme.foregroundSecondary
                             wrapMode: Text.WordWrap
                         }

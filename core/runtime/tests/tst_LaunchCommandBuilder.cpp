@@ -78,6 +78,7 @@ private slots:
     void launchConfigurationEditsUseTargetedNotifications();
     void tqdmProgressIsSeparatedFromConsoleLog();
     void carriageReturnLineEndingsRemainNormalLogLines();
+    void consoleDecodesSplitUtf8AndLocalText();
     void consoleDisplayTextSupportsDocumentSelection();
     void consoleViewRefreshesWhenLogCountChanges();
     void consoleHistoryIsBounded();
@@ -138,6 +139,7 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
 
     QCOMPARE(result.program, QStringLiteral("cmd.exe"));
     QVERIFY(result.nativeArguments.startsWith(QStringLiteral("/D /K ")));
+    QVERIFY(result.nativeArguments.contains(QStringLiteral("chcp 65001")));
     QVERIFY(result.nativeArguments.contains(QStringLiteral("call")));
     QVERIFY(result.nativeArguments.contains(QDir::toNativeSeparators(activationPath)));
     QCOMPARE(QDir::cleanPath(result.environmentRoot),
@@ -1386,6 +1388,29 @@ void LaunchCommandBuilderTest::carriageReturnLineEndingsRemainNormalLogLines()
     model.appendStandardOutput(QByteArrayLiteral("Memory 50% (1/2)\n"));
     QCOMPARE(model.rowCount(), 3);
     QVERIFY(!model.progressActive());
+}
+
+void LaunchCommandBuilderTest::consoleDecodesSplitUtf8AndLocalText()
+{
+    LogModel model;
+    const QString utf8Text = QStringLiteral("模型加载完成");
+    const QByteArray utf8 = utf8Text.toUtf8();
+
+    model.appendStandardOutput(utf8.first(2));
+    QCOMPARE(model.rowCount(), 0);
+    model.appendStandardOutput(utf8.sliced(2) + '\n');
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(), utf8Text);
+
+    model.clear();
+    const QString localText = QStringLiteral("本地编码输出");
+    const QByteArray localBytes = localText.toLocal8Bit();
+    const qsizetype split = qMax<qsizetype>(1, localBytes.size() / 2);
+    model.appendStandardError(localBytes.first(split));
+    model.appendStandardError(localBytes.sliced(split) + '\n');
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(),
+             QString::fromLocal8Bit(localBytes));
 }
 
 void LaunchCommandBuilderTest::consoleDisplayTextSupportsDocumentSelection()

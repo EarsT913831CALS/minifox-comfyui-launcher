@@ -13,13 +13,13 @@
 
 Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs and can be placed directly into an existing ComfyUI portable package.
 
-Minifox does not use the Windows Registry or modify ComfyUI files; it only creates cache directories alongside the executable.
+Minifox does not use the Windows Registry. Normal configuration and launch operations do not modify ComfyUI files; the launcher creates portable data and cache directories alongside the executable. ComfyUI files are changed only when the user explicitly runs a version update, version switch, or cleanup operation.
 
 ## Features
 
 - Switch seamlessly between multiple configurations with minimal preset launch arguments (fully managed by ComfyUI)
 - Launch, stop, and monitor ComfyUI processes, status, and live console output
-- Manage ComfyUI core and extension / custom node versions, featuring one-click refresh and update buttons
+- Manage ComfyUI core and extension/custom node versions, featuring “Refresh List” and “Update All” buttons
 - Automatically detect CUDA, ROCm, and eligible ZLUDA environments
 - Personalize the home page with modular and customizable widgets
 
@@ -42,7 +42,7 @@ The launcher detects common portable directory layouts automatically. Python and
 
 ## GPU and ZLUDA
 
-The launcher does not show environment info upon opening. When ComfyUI starts, it captures the logs and displays the relevant information on the home page card. You can see the detection logic in the console during startup:
+The launcher does not display environment information immediately after opening. When ComfyUI starts, it captures the logs and displays the relevant information on the home page card. You can see the detection logic in the console during startup:
 
 | Environment | Behavior |
 |---|---|
@@ -53,7 +53,7 @@ ZLUDA injection has the lowest priority.
 
 > **Compatibility:** HIP SDK 5.7 + ZLUDA has been tested. Anything that uses CK (Composable Kernel) or MIOpen has not been tested and should not be considered supported or stable.
 
-> **Additional recommendation:** HIP SDK 7.1 + ZLUDA is supported, but its memory usage is less stable than the HIP SDK 5.7 combination. Native PyTorch (either a stable release or ROCm Preview 7.14 and later) is strongly recommended for AMD GPUs. If you use ZLUDA, pair it with a compatible Triton wheel for better operator compatibility and performance speedups.
+> **Additional recommendation:** HIP SDK 7.1 + ZLUDA is supported, but its memory usage is less stable than the HIP SDK 5.7 combination. Native PyTorch (either a stable release or ROCm Preview 7.14 and later) is strongly recommended for AMD GPUs. If you use ZLUDA, pair it with a compatible Triton wheel for better operator compatibility and performance.
 
 ### AMD ZLUDA prerequisites
 
@@ -71,24 +71,23 @@ ZLUDA injection has the lowest priority.
 
 Minifox bundles HIP SDK 5.7 and HIP SDK 7.1 ZLUDA runtime components. It does not include rocBLAS/Tensile patches for specific `gfx` architectures.
 
-The launcher does not modify ComfyUI, HIP files, or system environment variables. ZLUDA itself acts as a patch for PyTorch: it temporarily replaces certain files and automatically restores them to their original state once the launcher is closed. Runtime packages are not re-extracted if their versions have not changed, and existing caches are reused.
+Outside explicit version-management operations and temporary ZLUDA staging, the launcher does not modify ComfyUI source files, HIP installation files, or system environment variables. ZLUDA acts as a runtime patch for PyTorch: it temporarily replaces certain required files and restores the originals when the launcher closes. Runtime packages are not re-extracted when their versions are unchanged, and existing caches are reused.
 
 ## Version Management
 
 The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, and remote repository.
 
 - Refreshing lists reads remote information without modifying the working tree.
-- Safe Update is enabled by default: updates and version switches are refused when the core or an extension worktree has Git changes; no reset or cleanup is run.
+- Safe Update (default): local changes to tracked code lines are preserved; other lines in the same files and clean files are synchronized with the remote version. Untracked files are unaffected.
 - With Reset Tracked Files enabled, updates and version switches reset tracked files to match the remote repository; untracked files are unaffected.
-- The Full Cleanup button runs `git reset --hard HEAD` followed by `git clean -ffd`, deleting untracked files and directories and restoring a clean remote-repository state locally.
+- The Full Cleanup button runs `git reset --hard HEAD` followed by `git clean -ffd`, deleting untracked files and directories not ignored by Git and restoring the working tree to a clean state at the current Git revision.
+- If an update, switch, or cleanup is interrupted, the launcher keeps an interruption marker and temporarily blocks ComfyUI startup. Return to Version Management and click the operation you want to run; it starts again from the current repository state rather than resuming an internal step.
 - Extension version switching presents commit descriptions, dates, and the current version without requiring a commit ID.
 - Hold `Ctrl` and left-click a remote repository URL to open it in the default browser.
 
-> **Warning:** Reset Tracked Files and Full Cleanup modify the Git worktree. Full Cleanup also deletes untracked files and directories that are not ignored by Git. Back up anything that must be preserved.
-
 ### Backup location
 
-Before Reset Tracked Files or Full Cleanup runs, the launcher backs up affected files. Backups are stored **in the directory above the ComfyUI folder**, alongside `ComfyUI/`:
+Before the launcher runs Reset Tracked Files or Full Cleanup, it backs up the affected files. Backups are stored **in the directory above the ComfyUI folder**, alongside `ComfyUI/`:
 
 ```text
 ComfyUI-Package/
@@ -109,6 +108,7 @@ The following directories are created beside the executable when needed:
 .minifox/
 ├─ application-settings.json
 ├─ launch-profiles.json
+├─ version-operation.json
 ├─ icons/
 │  └─ custom.png
 ├─ skins/
@@ -127,7 +127,7 @@ The following directories are created beside the executable when needed:
 - Windows 10/11 x64
 - MSYS2 UCRT64 GCC with C++20 support
 - CMake 3.25+ and Ninja
-- Qt 6.8+: Core, Gui, Network, Qml, Quick, QuickControls2, LinguistTools, plus Test for test builds only
+- Qt 6.8+: Core, Concurrent, Gui, Network, Qml, Quick, QuickControls2, LinguistTools, plus Test for test builds only
 
 The project has been verified with Qt 6.11.1, GCC 16.1.0, CMake 4.4.0, and Ninja 1.13.2.
 

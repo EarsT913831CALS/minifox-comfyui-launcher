@@ -22,6 +22,11 @@ QString PortablePaths::settingsFile()
     return QDir(dataDirectory()).filePath(QStringLiteral("application-settings.json"));
 }
 
+QString PortablePaths::versionOperationFile()
+{
+    return QDir(dataDirectory()).filePath(QStringLiteral("version-operation.json"));
+}
+
 QString PortablePaths::skinsDirectory()
 {
     return QDir(dataDirectory()).filePath(QStringLiteral("skins"));
