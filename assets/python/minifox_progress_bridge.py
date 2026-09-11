@@ -7,9 +7,16 @@ handler without changing ComfyUI's source tree or taking over its browser
 WebSocket session.
 """
 
+import sys
+
+# The bridge directory is launcher storage, never a Python module search root.
+# Do this before importing runpy/pkgutil (works with ordinary, venv and embedded
+# Python without requiring newer interpreter-specific isolation switches).
+_bridge_directory = __file__.replace("\\", "/").rsplit("/", 1)[0].rstrip("/").casefold()
+sys.path[:] = [p for p in sys.path
+               if p.replace("\\", "/").rstrip("/").casefold() != _bridge_directory]
 import os
 import runpy
-import sys
 
 
 def enable_comfy_argument_parsing() -> None:

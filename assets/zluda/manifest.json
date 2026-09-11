@@ -1,0 +1,22 @@
+{
+  "zluda-hip57.extpack": {
+    "archiveSha256": "06be6e5d7d1970d08437d2f8958bb9080216fdece8b536d5bbcb8dd26026ea13",
+    "files": {
+      "cublas64_11.dll": "61f846b85f3c63002f6e13dad14a4dd039b46cea8f8915e99a221384ebbed1ae",
+      "cusparse64_11.dll": "aad3dc16addbceb46cd9b8aa246888b82462737a8ac497ef8b25187fbbe49da3",
+      "nvcuda.dll": "348574276ff281da4b898fe901139b83ac6a282dd55d6a738f830e796f980532",
+      "nvml.dll": "733606de2d1018b6020a93c40a029c2a0925c1da8bbcad6000dd268818ce5ca5",
+      "nvrtc64_112_0.dll": "f37ad71d28c79d892ee790cc6ee56328219d3467a864c4aedf6a315542bd1ea2"
+    }
+  },
+  "zluda-hip71.extpack": {
+    "archiveSha256": "fe9335a2148d04c3694a2d45ce2dd9d1fd45021d68900d6d3fc3e0a551302043",
+    "files": {
+      "cublas64_11.dll": "b5868fb8c0cbdaaddeb3d198ea56679e98cad1de1142e304d31927963ff13678",
+      "cusparse64_11.dll": "1b9ff30ca6c86ff7e350dba1f71226f78786756192b24e9a43e571cfec52462e",
+      "nvcuda.dll": "36c122fa0e304e366c7e2ce3b86d33a3b6d4684df3b366cef1149134f533d45d",
+      "nvml.dll": "983a8054d299d8c13b7c8db7fda30380aa34c80a1155e4fe5358cba048199d9f",
+      "nvrtc64_112_0.dll": "6b84070911c1b3c275fc89cac1d7135f0c07784005a373c3e051e7c5e3789a29"
+    }
+  }
+}

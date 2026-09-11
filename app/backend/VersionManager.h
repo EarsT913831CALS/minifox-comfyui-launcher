@@ -1,6 +1,9 @@
 #pragma once
+#include "OperationLease.h"
+#include "version/RepositoryGitContext.h"
 
 #include "ProcessJob.h"
+#include "version/SafeMergeEngine.h"
 
 #include <QObject>
 #include <QNetworkAccessManager>
@@ -100,6 +103,7 @@ public:
     Q_INVOKABLE void switchCoreVersion(const QString &commit, int channel);
     Q_INVOKABLE void switchBranch(const QString &branch, int repositorySource);
     Q_INVOKABLE void cleanComfyUiRepository();
+    Q_INVOKABLE void recoverInterruptedOperations();
     Q_INVOKABLE void updateExtension(const QString &path);
     Q_INVOKABLE void updateAllExtensions();
     Q_INVOKABLE void loadExtensionVersions(const QString &path, const QString &currentCommit);
@@ -117,6 +121,7 @@ signals:
     void extensionVersionsLoaded(bool success, const QString &message);
 
 private:
+    friend class VersionManagerTest;
     enum class Operation {
         None,
         RefreshStatus,
@@ -130,6 +135,7 @@ private:
         ValidateCoreUpdate,
         ValidateCoreVersion,
         ValidateCoreBranch,
+        ResolveSafeMergePaths,
         PrepareSafeMergeIndex,
         StageSafeMergeChanges,
         WriteSafeMergeTree,
@@ -170,10 +176,10 @@ private:
         UpdateExtension,
         LoadExtensionHistory,
         ValidateExtensionCheckout,
+        ResolveExtensionCheckoutBranch,
         ResetExtensionForCheckout,
         CheckoutExtension,
-        InstallExtension,
-        NormalizeBranch
+        InstallExtension
     };
 
     enum class RefreshScope {
@@ -200,9 +206,14 @@ private:
         QByteArray fileList;
     };
 
-    void startGit(Operation operation, const QStringList &arguments);
+    void startGit(Operation operation, const QStringList &arguments,
+                  const QByteArray &standardInput = QByteArray());
     void startProcess(Operation operation, const QString &program,
-                      const QStringList &arguments);
+                      const QStringList &arguments,
+                      const QByteArray &standardInput = QByteArray());
+    // Skip Git when a snapshot has no paths.
+    void startSafeMergeCheckoutIndex(Operation operation, const QString &snapshotPath,
+                                     const QStringList &paths);
     void beginSafeMerge(PendingCoreAction action, const QString &repositoryRoot,
                         const QString &targetRef, const QString &targetBranch = {},
                         bool trackBranch = false, const QString &upstreamRef = {});
@@ -218,6 +229,7 @@ private:
     void startSafeSnapshotMerge();
     void handleSafeSnapshotMergeFinished(bool success, const QString &error);
     void finishSafeMerge();
+    void finishVerifiedSafeMerge();
     void beginResetAction(PendingCoreAction action, const QString &repositoryRoot);
     void collectBackupPaths(const QByteArray &output);
     void createBackupArchivesOrContinue();
@@ -258,10 +270,8 @@ private:
     QString findGit() const;
     QString readComfyVersion(const QString &root) const;
     void setFailure(const QString &message);
-    void finish(const QString &message = {});
+    void finish(QString message = {});
     void completeRefresh(bool success, const QString &message);
-    QString normalizedBranchName() const;
-    bool commitHasVersionTag(const QString &commitFull) const;
     void queueDependencyCheck(const QString &targetDir);
     void startNextDependencyCheck();
     void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -269,6 +279,12 @@ private:
     static QString requirementsFileFor(const QString &targetDir);
 
     ConfigurationManager *m_configuration;
+    bool acquireMutationLease(const QString &repository = {});
+    RepositoryGitContext gitContext() const;
+    OperationLease m_mutationLease;
+    RepositoryGitContext m_operationGit;
+    QString m_operationPython;
+    bool m_operationReset = false;
     ApplicationSettings *m_settings;
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_catalogReply;
@@ -279,8 +295,6 @@ private:
     QTimer m_dependencyTimeout;
     QStringList m_dependencyQueue;
     QString m_dependencyDir;
-    QString m_dependencyMarkerPath;
-    QString m_dependencyBatPath;
     bool m_dependencyInstallPhase = false;
     bool m_dependencyTimedOut = false;
     bool m_installingDependencies = false;
@@ -300,6 +314,7 @@ private:
     bool m_interruptedOperation = false;
     QStringList m_interruptedOperationNames;
     bool m_transactionInProgress = false;
+    bool m_resetBackupReady = false;
     QString m_transactionId;
     QString m_transactionAction;
     QString m_transactionRoot;
@@ -362,6 +377,8 @@ private:
     QString m_safeMergeLocalSnapshotPath;
     QString m_safeMergeTargetSnapshotPath;
     bool m_safeMergeTrackBranch = false;
+    QList<LocalPathEntry> m_safeMergeLocalEntries;
+    SparseSnapshotPaths m_safeMergePlan;
     bool m_safeMergeRequested = false;
     PendingCoreAction m_safeMergeAction = PendingCoreAction::None;
     RefreshScope m_refreshScope = RefreshScope::None;

@@ -1,4 +1,8 @@
+#include "ExternalContent.h"
+#include "LaunchParameterCatalog.h"
 #include "RuntimeManager.h"
+#include "DependencyInstaller.h"
+#include "SafeDataPath.h"
 
 #include "ApplicationSettings.h"
 #include "CommandPromptBuilder.h"
@@ -55,7 +59,9 @@ QString materializeProgressBridge(QString *error)
     const QByteArray contents = resource.readAll();
     const QString runtimeDirectory = QDir(PortablePaths::dataDirectory())
                                          .filePath(QStringLiteral("runtime"));
-    if (!QDir().mkpath(runtimeDirectory)) {
+    SafeDataPath guard;
+    if (!guard.lock(runtimeDirectory, error) || !QDir().mkpath(runtimeDirectory)
+        || !guard.lock(runtimeDirectory, error)) {
         if (error) {
             *error = QStringLiteral("Unable to create the Minifox runtime directory.");
         }
@@ -64,6 +70,7 @@ QString materializeProgressBridge(QString *error)
 
     const QString path = QDir(runtimeDirectory).filePath(
         QStringLiteral("minifox_progress_bridge.py"));
+    if (!guard.lock(path, error)) return {};
     QFile existing(path);
     if (existing.open(QIODevice::ReadOnly) && existing.readAll() == contents) {
         return path;
@@ -334,6 +341,12 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
     });
 
     m_dependencyInstall.setProcessChannelMode(QProcess::SeparateChannels);
+    connect(&m_dependencyInstall, &QProcess::readyReadStandardOutput, this, [this] {
+        m_logModel->appendStandardOutput(m_dependencyInstall.readAllStandardOutput());
+    });
+    connect(&m_dependencyInstall, &QProcess::readyReadStandardError, this, [this] {
+        m_logModel->appendStandardError(m_dependencyInstall.readAllStandardError());
+    });
     connect(&m_dependencyInstall, &QProcess::started,
             this, &RuntimeManager::handleDependencyInstallStarted);
     connect(&m_dependencyInstall, &QProcess::finished,
@@ -341,7 +354,7 @@ RuntimeManager::RuntimeManager(ConfigurationManager *configuration,
     connect(&m_dependencyInstall, &QProcess::errorOccurred, this,
             [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart && !m_stopRequested) {
-            setLastError(tr("无法启动依赖安装窗口：%1").arg(m_dependencyInstall.errorString()));
+            setLastError(tr("无法启动依赖安装进程：%1").arg(m_dependencyInstall.errorString()));
             setStatus(Failed);
             m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
         }
@@ -455,6 +468,18 @@ void RuntimeManager::start()
         return;
     }
 
+    m_operationLease.release();
+    m_startProfile = m_configuration->currentProfileSnapshot();
+    QString leaseError;
+    if (!m_operationLease.acquire(OperationLease::repositoryResources(m_startProfile.value("comfyRoot").toString(),
+            m_startProfile.value("pythonPath").toString()), &leaseError)) {
+        setLastError(leaseError); return;
+    }
+    m_startCommand = LaunchCommandBuilder::build(m_startProfile);
+    m_settings->applyToProcessEnvironment(m_startCommand.environment);
+    m_startProxyMode = m_settings->proxyMode();
+    m_startProxyUrl = m_settings->proxyUrl();
+    updateCommandPreview();
     m_logModel->clear();
     m_logModel->appendSystemMessage(tr("正在启动配置“%1”…").arg(m_configuration->currentProfileName()),
                                     QStringLiteral("#0067c0"));
@@ -553,8 +578,7 @@ void RuntimeManager::beginZludaBootstrap()
     }
 
     LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
-    m_settings->applyToProcessEnvironment(command.environment);
+        operationCommand();
     const QString mode =
         command.environment.value(QStringLiteral("MINIFOX_ZLUDA_BOOTSTRAP"),
                                   QStringLiteral("auto"));
@@ -607,8 +631,7 @@ bool RuntimeManager::prepareZludaRuntime()
         return true;
     }
     LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
-    m_settings->applyToProcessEnvironment(command.environment);
+        operationCommand();
     m_zludaPreparation = ZludaBootstrap::prepare(
         command.program, command.workingDirectory, command.environment);
     if (!m_zludaPreparation.valid) {
@@ -676,7 +699,7 @@ bool RuntimeManager::openCommandPrompt()
     }
 
     LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+        operationCommand();
     if (command.workingDirectory.isEmpty() || !QDir(command.workingDirectory).exists()) {
         setLastError(tr("ComfyUI 工作目录不存在。"));
         return false;
@@ -689,7 +712,6 @@ bool RuntimeManager::openCommandPrompt()
         return false;
     }
 
-    m_settings->applyToProcessEnvironment(command.environment);
     const CommandPromptBuilder::Result promptCommand = CommandPromptBuilder::build(
         python.absoluteFilePath(), command.workingDirectory, command.environment);
 
@@ -738,7 +760,7 @@ bool RuntimeManager::exportLog(const QUrl &fileUrl)
 void RuntimeManager::beginDependencyCheck()
 {
     const LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+        operationCommand();
     const QString requirementsPath =
         QDir(command.workingDirectory).filePath(QStringLiteral("requirements.txt"));
     if (!QFileInfo::exists(requirementsPath)) {
@@ -751,7 +773,6 @@ void RuntimeManager::beginDependencyCheck()
 
     const QStringList requirementFiles = collectRequirementFiles();
     QProcessEnvironment environment = command.environment;
-    m_settings->applyToProcessEnvironment(environment);
     m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
     m_dependencyCheck.setProcessEnvironment(environment);
     m_dependencyCheck.setProgram(command.program);
@@ -868,7 +889,7 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
             return;
         }
         m_logModel->appendSystemMessage(
-            tr("发现 %1 个依赖清单不满足，正在打开安装窗口…").arg(failingPaths.size()),
+            tr("发现 %1 个依赖清单不满足，正在安装依赖…").arg(failingPaths.size()),
             QStringLiteral("#9d5d00"));
         m_dependencyPendingInstalls = failingPaths;
         m_dependencyRecheckPaths = failingPaths;
@@ -892,7 +913,7 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
 QStringList RuntimeManager::collectRequirementFiles() const
 {
     const LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+        operationCommand();
     const QDir root(command.workingDirectory);
     QStringList files;
     const QString kernelRequirements = root.filePath(QStringLiteral("requirements.txt"));
@@ -926,10 +947,9 @@ void RuntimeManager::startNextDependencyInstall()
         // before ComfyUI is allowed to start.
         m_dependencyRecheckPhase = true;
         const LaunchCommandBuilder::Result command =
-            LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+            operationCommand();
         QProcessEnvironment environment = command.environment;
-        m_settings->applyToProcessEnvironment(environment);
-        m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
+            m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
         m_dependencyCheck.setProcessEnvironment(environment);
         m_dependencyCheck.setProgram(command.program);
         QStringList arguments{QStringLiteral("-c"), dependencyCheckerScript()};
@@ -944,63 +964,14 @@ void RuntimeManager::startNextDependencyInstall()
     m_dependencyCurrentPath = m_dependencyPendingInstalls.takeFirst();
     const QString name = requirementDisplayName(m_dependencyCurrentPath);
     const LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
-
-    QString directoryError;
-    if (!PortablePaths::ensureDataDirectory(&directoryError)) {
-        setLastError(tr("无法创建数据目录，依赖安装已中止：%1").arg(directoryError));
-        setStatus(Failed);
-        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
-        return;
-    }
-    const QString stamp = QStringLiteral("%1-%2")
-        .arg(QCoreApplication::applicationPid())
-        .arg(QDateTime::currentMSecsSinceEpoch());
-    m_dependencyBatPath = QDir(PortablePaths::dataDirectory())
-        .filePath(QStringLiteral("dep-startup-%1.bat").arg(stamp));
-
-    // A failing install leaves the console open so the pip error stays readable;
-    // the exit code still reaches the launcher through cmd.exe.
-    const QString bat = QStringLiteral(
-        "@echo off\r\n"
-        "chcp 65001 >nul\r\n"
-        "title Minifox - %1\r\n"
-        "echo [Minifox] 正在安装依赖...\r\n"
-        "echo [Minifox] Python: \"%2\"\r\n"
-        "echo [Minifox] Requirements: \"%3\"\r\n"
-        "echo.\r\n"
-        "\"%2\" -m pip install -r \"%3\"\r\n"
-        "set CODE=%ERRORLEVEL%\r\n"
-        "if not \"%CODE%\"==\"0\" (\r\n"
-        "    echo.\r\n"
-        "    echo [Minifox] 依赖安装失败，按任意键关闭窗口…\r\n"
-        "    pause >nul\r\n"
-        ")\r\n"
-        "exit /b %CODE%\r\n").arg(name,
-                                QDir::toNativeSeparators(command.program),
-                                QDir::toNativeSeparators(m_dependencyCurrentPath));
-    QFile batFile(m_dependencyBatPath);
-    if (!batFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        setLastError(tr("无法创建 %1 的依赖安装脚本。").arg(name));
-        setStatus(Failed);
-        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
-        return;
-    }
-    batFile.write(bat.toUtf8());
-    batFile.close();
+        operationCommand();
 
     QProcessEnvironment environment = command.environment;
-    m_settings->applyToProcessEnvironment(environment);
     m_dependencyInstall.setWorkingDirectory(command.workingDirectory);
     m_dependencyInstall.setProcessEnvironment(environment);
-    m_dependencyInstall.setProgram(QStringLiteral("cmd.exe"));
-    m_dependencyInstall.setArguments({QStringLiteral("/c"),
-                                      QDir::toNativeSeparators(m_dependencyBatPath)});
-#ifdef Q_OS_WIN
-    m_dependencyInstall.setCreateProcessArgumentsModifier(configureInteractiveConsole);
-#endif
+    DependencyInstaller::configure(m_dependencyInstall, command.program, m_dependencyCurrentPath);
     m_logModel->appendSystemMessage(
-        tr("正在安装 %1 的依赖（安装窗口关闭后继续）…").arg(name),
+        tr("正在安装 %1 的依赖…").arg(name),
         QStringLiteral("#9d5d00"));
     m_dependencyInstall.start();
 }
@@ -1024,7 +995,6 @@ void RuntimeManager::handleDependencyInstallFinished(int exitCode,
                                                      QProcess::ExitStatus exitStatus)
 {
     m_processJob.reset();
-    QFile::remove(m_dependencyBatPath);
     const QString name = requirementDisplayName(m_dependencyCurrentPath);
 
     if (m_stopRequested) {
@@ -1059,8 +1029,7 @@ void RuntimeManager::launchConfiguredProcess()
     }
 
     LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
-    m_settings->applyToProcessEnvironment(command.environment);
+        operationCommand();
     if (m_zludaEnabled) {
         ZludaBootstrap::apply(m_zludaPreparation, m_zludaRocmBin, command.environment);
     }
@@ -1077,14 +1046,14 @@ void RuntimeManager::launchConfiguredProcess()
         m_logModel->appendSystemMessage(progressBridgeError, QStringLiteral("#9d5d00"));
     }
     m_logModel->appendSystemMessage(command.preview);
-    if (m_settings->proxyMode() == QStringLiteral("manual")) {
-        const QString proxyUrl = m_settings->proxyUrl();
+    if ((m_operationLease.held() ? m_startProxyMode : m_settings->proxyMode()) == QStringLiteral("manual")) {
+        const QString proxyUrl = (m_operationLease.held() ? m_startProxyUrl : m_settings->proxyUrl()).isEmpty() ? QString{} : ExternalContent::redactUrl((m_operationLease.held() ? m_startProxyUrl : m_settings->proxyUrl()));
         m_logModel->appendSystemMessage(proxyUrl.isEmpty()
                                             ? tr("手动代理未启用：代理主机为空或无效。")
                                             : tr("已为 ComfyUI 子进程设置代理：%1").arg(proxyUrl),
                                         proxyUrl.isEmpty() ? QStringLiteral("#9d5d00")
                                                            : QStringLiteral("#0067c0"));
-    } else if (m_settings->proxyMode() == QStringLiteral("none")) {
+    } else if ((m_operationLease.held() ? m_startProxyMode : m_settings->proxyMode()) == QStringLiteral("none")) {
         m_logModel->appendSystemMessage(tr("已移除 ComfyUI 子进程的代理环境变量。"));
     }
 
@@ -1136,6 +1105,9 @@ void RuntimeManager::setStatus(Status status)
         return;
     }
     m_status = status;
+    QTimer::singleShot(0, this, [this] {
+        if (!active()) { m_operationLease.release(); updateCommandPreview(); }
+    });
     emit statusChanged();
 }
 
@@ -1160,10 +1132,10 @@ void RuntimeManager::setServiceReady(bool ready)
 void RuntimeManager::updateCommandPreview()
 {
     const LaunchCommandBuilder::Result command =
-        LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+        operationCommand();
     QStringList proxyCommands;
-    if (m_settings->proxyMode() == QStringLiteral("manual")) {
-        const QString proxyUrl = m_settings->proxyUrl();
+    if ((m_operationLease.held() ? m_startProxyMode : m_settings->proxyMode()) == QStringLiteral("manual")) {
+        const QString proxyUrl = (m_operationLease.held() ? m_startProxyUrl : m_settings->proxyUrl()).isEmpty() ? QString{} : ExternalContent::redactUrl((m_operationLease.held() ? m_startProxyUrl : m_settings->proxyUrl()));
         if (!proxyUrl.isEmpty()) {
             proxyCommands = {
                 QStringLiteral("set \"HTTP_PROXY=%1\"").arg(proxyUrl),
@@ -1171,7 +1143,7 @@ void RuntimeManager::updateCommandPreview()
                 QStringLiteral("set \"ALL_PROXY=%1\"").arg(proxyUrl)
             };
         }
-    } else if (m_settings->proxyMode() == QStringLiteral("none")) {
+    } else if ((m_operationLease.held() ? m_startProxyMode : m_settings->proxyMode()) == QStringLiteral("none")) {
         proxyCommands = {
             QStringLiteral("set \"HTTP_PROXY=\""),
             QStringLiteral("set \"HTTPS_PROXY=\""),
@@ -1181,7 +1153,7 @@ void RuntimeManager::updateCommandPreview()
     proxyCommands.append(command.preview);
     m_commandPreview = proxyCommands.join(QStringLiteral(" && "));
 
-    QString listen = m_configuration->parameterValue(QStringLiteral("listen")).toString();
+    QString listen = operationParameter(QStringLiteral("listen")).toString();
     listen = listen.split(QLatin1Char(','), Qt::SkipEmptyParts).value(0, QStringLiteral("127.0.0.1")).trimmed();
     if (listen.isEmpty() || listen == QStringLiteral("0.0.0.0") || listen == QStringLiteral("::")
         || listen == QStringLiteral("[::]")) {
@@ -1190,9 +1162,9 @@ void RuntimeManager::updateCommandPreview()
     if (listen.contains(QLatin1Char(':')) && !listen.startsWith(QLatin1Char('['))) {
         listen = QStringLiteral("[%1]").arg(listen);
     }
-    const bool tls = !m_configuration->parameterValue(QStringLiteral("tlsKeyfile")).toString().isEmpty()
-        && !m_configuration->parameterValue(QStringLiteral("tlsCertfile")).toString().isEmpty();
-    const int port = m_configuration->parameterValue(QStringLiteral("port")).toInt();
+    const bool tls = !operationParameter(QStringLiteral("tlsKeyfile")).toString().isEmpty()
+        && !operationParameter(QStringLiteral("tlsCertfile")).toString().isEmpty();
+    const int port = operationParameter(QStringLiteral("port")).toInt();
     m_serviceUrl = QStringLiteral("%1://%2:%3").arg(tls ? QStringLiteral("https") : QStringLiteral("http"), listen).arg(port);
     emit commandPreviewChanged();
 }
@@ -1321,4 +1293,20 @@ void RuntimeManager::handleProcessError(QProcess::ProcessError error)
     } else if (error != QProcess::Crashed || !m_stopRequested) {
         setLastError(m_process.errorString());
     }
+}
+
+LaunchCommandBuilder::Result RuntimeManager::operationCommand() const
+{
+    if (m_operationLease.held()) return m_startCommand;
+    auto command = LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
+    m_settings->applyToProcessEnvironment(command.environment);
+    return command;
+}
+QVariant RuntimeManager::operationParameter(const QString &key) const
+{
+    if (!m_operationLease.held()) return m_configuration->parameterValue(key);
+    const auto parameters = m_startProfile.value("parameters").toMap();
+    if (parameters.contains(key)) return parameters.value(key);
+    const auto *definition = LaunchParameterCatalog::find(key);
+    return definition ? definition->defaultValue : QVariant{};
 }

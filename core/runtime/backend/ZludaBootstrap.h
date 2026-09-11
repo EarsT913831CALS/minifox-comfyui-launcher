@@ -4,6 +4,7 @@
 #include <QProcessEnvironment>
 #include <QString>
 #include <QStringList>
+#include <QMap>
 
 class ZludaBootstrap final
 {
@@ -43,6 +44,7 @@ public:
         QString gfxArchitecture;
         QString tensileLibraryDirectory;
         QStringList preloadNames;
+        QMap<QString, QString> preloadHashes;
         QStringList rocmBinCandidates;
         QString error;
     };

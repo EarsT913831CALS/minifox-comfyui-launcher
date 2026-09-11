@@ -2,6 +2,9 @@
 
 #include "ConfigurationManager.h"
 #include "PortablePaths.h"
+#include "SafeDataPath.h"
+#include <QLockFile>
+#include <QRegularExpression>
 
 #include <QCoreApplication>
 #include <QDataStream>
@@ -37,24 +40,26 @@ QString cleanLocalPath(const QUrl &url)
 
 bool safeArchivePath(const QString &name)
 {
-    const QString normalized = QDir::fromNativeSeparators(name);
-    return !normalized.isEmpty()
-        && !normalized.startsWith(QLatin1Char('/'))
-        && !normalized.contains(QStringLiteral("../"))
-        && normalized != QStringLiteral("..")
-        && !QDir::isAbsolutePath(normalized)
-        && !normalized.contains(QLatin1Char(':'));
+    return SafeDataPath::canonicalRelative(name);
 }
 
-bool excludedStatePath(const QString &relativePath)
+bool portableStatePath(const QString &path)
 {
-    const QString normalized = QDir::fromNativeSeparators(relativePath);
-    const QString topLevel = normalized.section(QLatin1Char('/'), 0, 0);
-    return normalized == QStringLiteral("launch-profiles.json")
-        || normalized == QStringLiteral("dependency-command.bat")
-        || topLevel == QStringLiteral("runtime")
-        || topLevel == QStringLiteral("packages")
-        || topLevel == QStringLiteral("configurations");
+    if (!safeArchivePath(path)) return false;
+    if (path == QStringLiteral("application-settings.json")
+        || path == QStringLiteral("icons/custom.png")
+        || path == QStringLiteral("skins/index.json")) return true;
+    const QStringList parts = path.split('/');
+    if (parts.size() < 3 || parts[0] != QStringLiteral("skins")) return false;
+    // Skin packages may reference nested raster assets and uppercase suffixes.
+    return (parts.size() == 3 && parts[2] == QStringLiteral("skin.json"))
+        || (parts.size() >= 4 && parts[2] == QStringLiteral("assets")
+            && QStringList{"png", "jpg", "jpeg", "webp"}.contains(QFileInfo(path).suffix().toLower()));
+}
+
+QString pendingStatePath()
+{
+    return QDir(PortablePaths::dataDirectory()).filePath("configuration-state.pending.zip");
 }
 
 quint32 crc32Bytes(const QByteArray &bytes)
@@ -230,6 +235,7 @@ bool readStoreZip(const QString &path, QHash<QString, QByteArray> *files, QStrin
         return false;
     }
 
+    QSet<QString> names;
     qsizetype cursor = centralOffset;
     qsizetype totalBytes = 0;
     for (quint16 index = 0; index < count; ++index) {
@@ -257,7 +263,7 @@ bool readStoreZip(const QString &path, QHash<QString, QByteArray> *files, QStrin
             return false;
         }
         const QString name = QString::fromUtf8(data.mid(cursor + 46, nameLength));
-        if (!safeArchivePath(name)
+        if (!safeArchivePath(name) || names.contains(name.toCaseFolded())
             || readU32(data, localOffset) != 0x04034b50
             || localOffset + 30 > static_cast<quint32>(data.size())) {
             if (error) {
@@ -265,6 +271,7 @@ bool readStoreZip(const QString &path, QHash<QString, QByteArray> *files, QStrin
             }
             return false;
         }
+        names.insert(name.toCaseFolded());
         const quint16 localNameLength = readU16(data, localOffset + 26);
         const quint16 localExtraLength = readU16(data, localOffset + 28);
         const quint64 contentOffset = static_cast<quint64>(localOffset) + 30
@@ -273,6 +280,14 @@ bool readStoreZip(const QString &path, QHash<QString, QByteArray> *files, QStrin
             if (error) {
                 *error = QObject::tr("配置包文件内容不完整。");
             }
+            return false;
+        }
+        if (data.mid(localOffset + 30, localNameLength) != name.toUtf8()
+            || readU16(data, localOffset + 8) != method
+            || readU32(data, localOffset + 18) != compressedSize
+            || readU32(data, localOffset + 22) != uncompressedSize
+            || readU32(data, localOffset + 14) != crc) {
+            if (error) *error = QObject::tr("配置包的文件头与目录不一致。");
             return false;
         }
         const QByteArray bytes = data.mid(static_cast<qsizetype>(contentOffset),
@@ -296,15 +311,41 @@ bool collectPortableState(QHash<QString, QByteArray> *state, QString *error)
     if (!root.exists()) {
         return true;
     }
-    QDirIterator iterator(root.absolutePath(), QDir::Files | QDir::NoDotAndDotDot,
-                          QDirIterator::Subdirectories);
-    while (iterator.hasNext()) {
-        const QString path = iterator.next();
-        const QFileInfo info = iterator.fileInfo();
-        const QString relative = QDir::fromNativeSeparators(root.relativeFilePath(path));
-        if (info.isSymLink() || excludedStatePath(relative)) {
-            continue;
+    SafeDataPath guard;
+    if (!guard.lock(root.absolutePath(), error)) return false;
+    QStringList paths{"application-settings.json", "icons/custom.png", "skins/index.json"};
+    const QString skinRoot = root.filePath("skins");
+    if (!guard.lock(skinRoot, error)) return false;
+    for (const QFileInfo &skin : QDir(skinRoot).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        if (!guard.lock(skin.absoluteFilePath(), error)) return false;
+        const QString prefix = "skins/" + skin.fileName() + '/';
+        paths.append(prefix + "skin.json");
+        const QString assets = QDir(skin.absoluteFilePath()).filePath("assets");
+        if (!guard.lock(assets, error)) return false;
+        QStringList pending{assets};
+        while (!pending.isEmpty()) {
+            const QString directory = pending.takeLast();
+            if (!guard.lock(directory, error)) return false;
+            for (const QFileInfo &asset : QDir(directory).entryInfoList(
+                     QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot)) {
+                if (!guard.lock(asset.absoluteFilePath(), error)) return false;
+                if (asset.isDir()) pending.append(asset.absoluteFilePath());
+                else {
+                    const QString relative = root.relativeFilePath(asset.absoluteFilePath());
+                    if (portableStatePath(relative)) paths.append(relative);
+                }
+                if (paths.size() + pending.size() > kMaximumPackageEntries) {
+                    if (error) *error = QObject::tr("配置包含过多资源路径。");
+                    return false;
+                }
+            }
         }
+    }
+    qsizetype totalBytes = 0;
+    for (const QString &relative : paths) {
+        const QString path = root.filePath(relative);
+        if (!guard.lock(path, error)) return false;
+        if (!QFileInfo::exists(path)) continue;
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly)) {
             if (error) {
@@ -312,7 +353,17 @@ bool collectPortableState(QHash<QString, QByteArray> *state, QString *error)
             }
             return false;
         }
-        state->insert(relative, file.readAll());
+        if (file.size() > kMaximumPackageBytes - totalBytes || state->size() >= kMaximumPackageEntries) {
+            if (error) *error = QObject::tr("配置数据超过配置包容量限制。");
+            return false;
+        }
+        const QByteArray bytes = file.read(kMaximumPackageBytes - totalBytes + 1);
+        totalBytes += bytes.size();
+        if (totalBytes > kMaximumPackageBytes || !file.atEnd() || file.error() != QFileDevice::NoError) {
+            if (error) *error = QObject::tr("配置读取失败或读取期间超过容量限制。");
+            return false;
+        }
+        state->insert(relative, bytes);
     }
     return true;
 }
@@ -322,11 +373,14 @@ bool packageState(const QHash<QString, QByteArray> &files,
                   QString *error)
 {
     for (auto iterator = files.cbegin(); iterator != files.cend(); ++iterator) {
+        if (iterator.key() == QStringLiteral("manifest.json")
+            || iterator.key() == QStringLiteral("profile.json")) continue;
         if (!iterator.key().startsWith(QStringLiteral(".minifox/"))) {
-            continue;
+            if (error) *error = QObject::tr("配置包包含未允许的数据文件：%1").arg(iterator.key());
+            return false;
         }
         const QString relative = iterator.key().mid(9);
-        if (relative.isEmpty() || excludedStatePath(relative)) {
+        if (!portableStatePath(relative)) {
             if (error) {
                 *error = QObject::tr("配置包试图写入受保护的运行时目录。");
             }
@@ -337,69 +391,168 @@ bool packageState(const QHash<QString, QByteArray> &files,
     return true;
 }
 
-bool writePortableState(const QHash<QString, QByteArray> &state, QString *error)
+// A durable preimage is published before any destination changes. Recovery
+// rolls back idempotently before settings/managers are constructed on startup.
+bool restoreState(const QHash<QString, QByteArray> &state, const QStringList &remove,
+                  QString *error)
 {
     const QDir root(PortablePaths::dataDirectory());
-    QHash<QString, QByteArray> current;
-    if (!collectPortableState(&current, error)) {
+    SafeDataPath guard;
+    if (!guard.lock(root.absolutePath(), error)) return false;
+    for (const QString &name : state.keys() + remove) {
+        if (!portableStatePath(name) || !guard.lock(root.filePath(name), error)) {
+            if (error && error->isEmpty()) *error = QObject::tr("配置恢复记录包含受保护路径。");
+            return false;
+        }
+    }
+    for (auto it = state.cbegin(); it != state.cend(); ++it) {
+        const QString path = root.filePath(it.key());
+        if (!QDir().mkpath(QFileInfo(path).absolutePath()) || !guard.lock(path, error)) return false;
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(it.value()) != it.value().size()
+            || !file.commit() || !SafeDataPath::flushFile(path, error)) {
+            if (error && error->isEmpty()) *error = QObject::tr("无法写入配置：%1").arg(it.key());
+            return false;
+        }
+        QFile check(path);
+        if (!check.open(QIODevice::ReadOnly) || check.readAll() != it.value()) {
+            if (error) *error = QObject::tr("配置写入后校验失败：%1").arg(it.key());
+            return false;
+        }
+    }
+    for (const QString &name : remove) {
+        if (state.contains(name)) continue;
+        const QString path = root.filePath(name);
+        if (QFileInfo::exists(path) && !QFile::remove(path)) {
+            if (error) *error = QObject::tr("无法移除旧配置：%1").arg(name);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool restoreProfiles(const QByteArray &bytes, QString *error)
+{
+    if (bytes.isEmpty()) return true;
+    if (!QJsonDocument::fromJson(bytes).isObject()) {
+        if (error) *error = QObject::tr("启动配置恢复资料损坏。");
         return false;
     }
+    SafeDataPath guard;
+    const QString path = PortablePaths::configurationFile();
+    if (!guard.lock(path, error)) return false;
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()
+        || !SafeDataPath::flushFile(path, error)) {
+        if (error && error->isEmpty()) *error = QObject::tr("无法提交启动配置选择。");
+        return false;
+    }
+    QFile check(path);
+    return check.open(QIODevice::ReadOnly) && check.readAll() == bytes;
+}
 
-    const auto removeFiles = [&root](const QHash<QString, QByteArray> &files,
-                                     QString *removeError) {
-        for (auto iterator = files.cbegin(); iterator != files.cend(); ++iterator) {
-            const QString path = root.filePath(iterator.key());
-            if (QFileInfo::exists(path) && !QFile::remove(path)) {
-                if (removeError) {
-                    *removeError = QObject::tr("无法替换便携配置文件：%1")
-                                       .arg(iterator.key());
-                }
-                return false;
-            }
+bool recoverPortableState(QString *error)
+{
+    SafeDataPath guard;
+    if (!guard.lock(pendingStatePath(), error)) return false;
+    if (!QFileInfo::exists(pendingStatePath())) return true;
+    QHash<QString, QByteArray> files, before;
+    if (!readStoreZip(pendingStatePath(), &files, error)) return false;
+    QJsonParseError parse;
+    const QJsonDocument document = QJsonDocument::fromJson(files.take("manifest.json"), &parse);
+    if (parse.error != QJsonParseError::NoError || !document.isObject()
+        || document.object().value("format") != "minifox-state-rollback-v1"
+        || !document.object().value("remove").isArray()) {
+        if (error) *error = QObject::tr("配置恢复记录损坏；已保留记录和现有文件。");
+        return false;
+    }
+    QStringList remove;
+    const QByteArray profiles = files.take("profiles-before.json");
+    if (document.object().value("restoreProfiles").toBool()
+        && (profiles.isEmpty() || !QJsonDocument::fromJson(profiles).isObject())) {
+        if (error) *error = QObject::tr("配置恢复记录缺少原启动配置，已停止恢复。");
+        return false;
+    }
+    for (const auto &value : document.object().value("remove").toArray()) {
+        if (!value.isString() || !portableStatePath(value.toString())) {
+            if (error) *error = QObject::tr("配置恢复记录包含无效路径。");
+            return false;
         }
-        return true;
-    };
-    const auto writeFiles = [&root](const QHash<QString, QByteArray> &files,
-                                    QString *writeError) {
-        for (auto iterator = files.cbegin(); iterator != files.cend(); ++iterator) {
-            const QString path = root.filePath(iterator.key());
-            if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
-                if (writeError) {
-                    *writeError = QObject::tr("无法创建便携配置目录：%1")
-                                      .arg(QFileInfo(path).absolutePath());
-                }
-                return false;
-            }
-            QSaveFile file(path);
-            if (!file.open(QIODevice::WriteOnly)
-                || file.write(iterator.value()) != iterator.value().size()
-                || !file.commit()) {
-                if (writeError) {
-                    *writeError = QObject::tr("无法写入便携配置文件：%1")
-                                      .arg(iterator.key());
-                }
-                return false;
-            }
+        remove.append(value.toString());
+    }
+    if (!packageState(files, &before, error) || !restoreState(before, remove, error)
+        || !restoreProfiles(profiles, error)) return false;
+    if (!QFile::remove(pendingStatePath())) {
+        if (error) *error = QObject::tr("无法完成配置恢复；已保留恢复记录。");
+        return false;
+    }
+    return true;
+}
+
+bool writePortableState(const QHash<QString, QByteArray> &state, QString *error,
+                        const QString &targetProfileId = {})
+{
+    SafeDataPath guard;
+    if (!guard.lock(pendingStatePath(), error) || !PortablePaths::ensureDataDirectory(error)) return false;
+    QLockFile lock(QDir(PortablePaths::dataDirectory()).filePath("configuration-state.lock"));
+    if (!lock.tryLock(0)) {
+        if (error) *error = QObject::tr("另一个启动器正在应用配置，请稍后重试。");
+        return false;
+    }
+    if (!recoverPortableState(error)) return false;
+    QHash<QString, QByteArray> current;
+    if (!collectPortableState(&current, error)) return false;
+    QByteArray originalProfiles, targetProfiles;
+    if (!targetProfileId.isEmpty()) {
+        const QString path = PortablePaths::configurationFile();
+        if (!guard.lock(path, error)) return false;
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            if (error) *error = file.errorString();
+            return false;
         }
-        return true;
-    };
-
-    QString operationError;
-    if (removeFiles(current, &operationError) && writeFiles(state, &operationError)) {
-        return true;
+        originalProfiles = file.readAll();
+        auto document = QJsonDocument::fromJson(originalProfiles);
+        bool found = false;
+        for (const auto &profile : document.object().value("profiles").toArray())
+            found |= profile.toObject().value("id").toString() == targetProfileId;
+        if (!found) {
+            if (error) *error = QObject::tr("待切换的启动配置不存在。");
+            return false;
+        }
+        auto object = document.object(); object.insert("currentProfileId", targetProfileId);
+        targetProfiles = QJsonDocument(object).toJson();
     }
-
-    QString rollbackError;
-    QHash<QString, QByteArray> partial;
-    collectPortableState(&partial, nullptr);
-    removeFiles(partial, nullptr);
-    if (!writeFiles(current, &rollbackError) && !rollbackError.isEmpty()) {
-        operationError += QObject::tr("；恢复原配置失败：%1").arg(rollbackError);
+    // Validate the entire target before the journal or any portable file changes.
+    for (const QString &name : state.keys()) {
+        if (!portableStatePath(name) || !guard.lock(QDir(PortablePaths::dataDirectory()).filePath(name), error)) {
+            if (error && error->isEmpty()) *error = QObject::tr("配置包包含受保护路径。");
+            return false;
+        }
     }
-    if (error) {
-        *error = operationError;
+    const QJsonObject metadata{{"format", "minifox-state-rollback-v1"},
+                              {"restoreProfiles", !originalProfiles.isEmpty()},
+                              {"remove", QJsonArray::fromStringList(state.keys())}};
+    QList<QPair<QString, QByteArray>> backup{{"manifest.json", QJsonDocument(metadata).toJson()}};
+    if (!originalProfiles.isEmpty()) backup.append({"profiles-before.json", originalProfiles});
+    for (auto it = current.cbegin(); it != current.cend(); ++it)
+        backup.append({".minifox/" + it.key(), it.value()});
+    if (!writeStoreZip(pendingStatePath(), backup, error)
+        || !SafeDataPath::flushFile(pendingStatePath(), error)) return false;
+    // Read-back validation before publishing any changes.
+    QHash<QString, QByteArray> verified;
+    if (!readStoreZip(pendingStatePath(), &verified, error)) return false;
+    if (!restoreState(state, current.keys(), error) || !restoreProfiles(targetProfiles, error)) {
+        QString rollbackError;
+        if (!recoverPortableState(&rollbackError) && error)
+            *error += QObject::tr("；原配置恢复待完成：%1").arg(rollbackError);
+        return false;
     }
-    return false;
+    if (!QFile::remove(pendingStatePath())) {
+        if (error) *error = QObject::tr("配置提交未完成，已保留恢复记录。");
+        return false;
+    }
+    return true;
 }
 
 bool validPackage(const QHash<QString, QByteArray> &files,
@@ -441,8 +594,26 @@ ConfigurationPackageManager::ConfigurationPackageManager(
 {
 }
 
+bool ConfigurationPackageManager::recoverPendingState(QString *error)
+{
+    SafeDataPath guard;
+    if (!guard.lock(pendingStatePath(), error)) return false;
+    if (!QFileInfo::exists(pendingStatePath())) return true;
+    QLockFile lock(QDir(PortablePaths::dataDirectory()).filePath("configuration-state.lock"));
+    if (!lock.tryLock(0)) {
+        if (error) *error = QObject::tr("另一个启动器正在应用配置。");
+        return false;
+    }
+    return recoverPortableState(error);
+}
+
 bool ConfigurationPackageManager::flushPendingChanges()
 {
+    QString recoveryError;
+    if (!recoverPendingState(&recoveryError)) {
+        setError(recoveryError);
+        return false;
+    }
     if (m_configuration->savePendingChanges()) {
         return true;
     }
@@ -476,12 +647,13 @@ bool ConfigurationPackageManager::captureCurrentProfile(const QString &destinati
 {
     QHash<QString, QByteArray> state;
     QString error;
-    if (!collectPortableState(&state, &error)) {
+    if (includeSensitiveValues && !collectPortableState(&state, &error)) {
         setError(error);
         return false;
     }
 
     const QJsonObject manifest{
+        {QStringLiteral("mode"), includeSensitiveValues ? QStringLiteral("full") : QStringLiteral("shared-profile")},
         {QStringLiteral("format"), QString::fromLatin1(kPackageFormat)},
         {QStringLiteral("schemaVersion"), 1},
         {QStringLiteral("createdAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}
@@ -499,7 +671,10 @@ bool ConfigurationPackageManager::captureCurrentProfile(const QString &destinati
     for (const QString &relative : std::as_const(paths)) {
         files.append({QStringLiteral(".minifox/%1").arg(relative), state.value(relative)});
     }
-    if (!QDir().mkpath(QFileInfo(destination).absolutePath())
+    SafeDataPath destinationGuard;
+    if (!destinationGuard.lock(destination, &error)
+        || !QDir().mkpath(QFileInfo(destination).absolutePath())
+        || !destinationGuard.lock(destination, &error)
         || !writeStoreZip(destination, files, &error)) {
         setError(error.isEmpty() ? tr("无法创建配置包目录。") : error);
         return false;
@@ -507,7 +682,8 @@ bool ConfigurationPackageManager::captureCurrentProfile(const QString &destinati
     return true;
 }
 
-bool ConfigurationPackageManager::applyPackageState(const QString &packagePath, bool *changed)
+bool ConfigurationPackageManager::applyPackageState(const QString &packagePath, bool *changed,
+                                                    const QString &targetId)
 {
     QHash<QString, QByteArray> files;
     QHash<QString, QByteArray> target;
@@ -521,8 +697,12 @@ bool ConfigurationPackageManager::applyPackageState(const QString &packagePath, 
         setError(error);
         return false;
     }
+    if (QJsonDocument::fromJson(files.value("manifest.json")).object().value("mode").toString() == "shared-profile") {
+        if (!target.isEmpty()) { setError(tr("分享配置包不能包含界面状态。")); return false; }
+        target = current;
+    }
     *changed = current != target;
-    if (*changed && !writePortableState(target, &error)) {
+    if (!writePortableState(target, &error, targetId)) {
         setError(error);
         return false;
     }
@@ -551,9 +731,10 @@ bool ConfigurationPackageManager::switchProfile(int index)
     bool changed = false;
     const QString targetSnapshot = snapshotPath(targetId);
     if (QFileInfo::exists(targetSnapshot)
-        && !applyPackageState(targetSnapshot, &changed)) {
+        && !applyPackageState(targetSnapshot, &changed, targetId)) {
         return false;
     }
+    if (QFileInfo::exists(targetSnapshot)) m_configuration->reloadFromDisk();
     m_configuration->setCurrentProfileIndex(index);
     if (!flushPendingChanges()) {
         return false;
@@ -708,9 +889,15 @@ bool ConfigurationPackageManager::importPackage(const QUrl &source)
     root.insert(QStringLiteral("profiles"), profiles);
 
     const QString internalPath = snapshotPath(id);
-    if (!QDir().mkpath(QFileInfo(internalPath).absolutePath())
+    SafeDataPath importGuard;
+    QList<QPair<QString, QByteArray>> validatedFiles;
+    for (auto it = files.cbegin(); it != files.cend(); ++it) validatedFiles.append({it.key(), it.value()});
+    if (!importGuard.lock(internalPath, &error)
+        || !importGuard.lock(PortablePaths::configurationFile(), &error)
+        || !QDir().mkpath(QFileInfo(internalPath).absolutePath())
+        || !importGuard.lock(internalPath, &error)
         || QFileInfo::exists(internalPath)
-        || !QFile::copy(sourcePath, internalPath)) {
+        || !writeStoreZip(internalPath, validatedFiles, &error)) {
         setError(tr("无法保存导入配置的界面状态。"));
         return false;
     }

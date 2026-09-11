@@ -18,6 +18,8 @@ qt_add_executable(minifox_launcher WIN32
     ../../../backend/version/SafeMergeEngine.h
     ../../../backend/version/VersionTransactionStore.cpp
     ../../../backend/version/VersionTransactionStore.h
+    ../../../backend/version/RepositoryRecovery.cpp
+    ../../../backend/version/RepositoryRecovery.h
     resources/app-icon.rc
 )
 

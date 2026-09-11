@@ -22,9 +22,11 @@ public:
     explicit GitProcessRunner(QObject *parent = nullptr);
 
     bool running() const;
+    // Writes optional stdin and closes the channel.
     void start(const QString &program, const QStringList &arguments,
                const QProcessEnvironment &environment = QProcessEnvironment::systemEnvironment(),
-               int inactivityTimeoutMs = 120000);
+               int inactivityTimeoutMs = 120000,
+               const QByteArray &standardInput = QByteArray());
     void cancel();
 
 signals:

@@ -517,14 +517,7 @@ Pane {
         nameFilters: [qsTr("Minifox 配置包 (*.zip)"), qsTr("所有文件 (*)")]
         onAccepted: {
             root.pendingExportUrl = selectedFile;
-            if (root.appContext.configuration.hasSensitiveEnvironmentValues()) {
-                root.sensitiveExportRequested = true;
-            } else if (!root.appContext.configurationPackages.exportPackage(selectedFile, false)) {
-                root.pendingExportUrl = undefined;
-                root.configurationPackageErrorRequested = true;
-            } else {
-                root.pendingExportUrl = undefined;
-            }
+            root.sensitiveExportRequested = true;
         }
     }
 
@@ -563,7 +556,7 @@ Pane {
                 sensitiveExportDialog.close();
             }
 
-            title: qsTr("配置中包含敏感信息")
+            title: qsTr("选择导出内容")
             anchors.centerIn: Overlay.overlay
             width: Math.min(560, root.width - Theme.spacingXl * 2)
             modal: true
@@ -576,7 +569,7 @@ Pane {
                 spacing: Theme.spacingMd
 
                 AppLabel {
-                    text: qsTr("当前配置包含令牌、密码、API Key 或私钥类环境变量。脱敏导出会保留变量名，但清空并禁用其值；完整备份会把这些值以明文写入 ZIP，请勿分享。")
+                    text: qsTr("分享导出仅保留预设选项和数值参数，不含环境变量、自由文本参数和界面状态。完整备份保留原始配置，可能包含明文密码或令牌，请勿分享。")
                     color: Theme.foregroundSecondary
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
@@ -589,12 +582,12 @@ Pane {
                     Item { Layout.fillWidth: true }
 
                     AppButton {
-                        text: qsTr("完整备份")
+                        text: qsTr("完整备份（含明文敏感信息）")
                         onClicked: sensitiveExportDialog.exportSelectedProfile(true)
                     }
 
                     AppButton {
-                        text: qsTr("脱敏导出（推荐）")
+                        text: qsTr("分享启动选项（推荐）")
                         accented: true
                         onClicked: sensitiveExportDialog.exportSelectedProfile(false)
                     }

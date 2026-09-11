@@ -1,3 +1,5 @@
+#include "SafeDataPath.h"
+#include "ExternalContent.h"
 #include "SkinManager.h"
 
 #include "ApplicationSettings.h"
@@ -457,9 +459,15 @@ bool SkinManager::isAllowedLocalFolderPath(const QString &path)
 
 bool SkinManager::isAllowedExternalLink(const QUrl &url)
 {
-    const QString scheme = url.scheme().toLower();
-    return url.isValid() && !url.host().isEmpty()
-        && (scheme == QStringLiteral("http") || scheme == QStringLiteral("https"));
+    return ExternalContent::allowedUrl(url);
+}
+QString SkinManager::safeMarkdown(const QString &source) const
+{
+    return ExternalContent::markdown(source);
+}
+QString SkinManager::repositoryBrowserUrl(const QString &remote) const
+{
+    return ExternalContent::repositoryUrl(remote).toString();
 }
 
 QString SkinManager::createSkin(const QString &name)
@@ -486,6 +494,9 @@ QString SkinManager::createSkin(const QString &name)
 
 QString SkinManager::duplicateActiveSkin(const QString &name)
 {
+    SafeDataPath pathGuard;
+    QString pathError;
+    if (!pathGuard.lock(QDir(m_storageDirectory).filePath("index.json"), &pathError)) { setLastError(pathError); return {}; }
     const SkinEntry *source = activeEntry();
     if (!source) {
         return createSkin(name);
@@ -497,13 +508,16 @@ QString SkinManager::duplicateActiveSkin(const QString &name)
     entry.document = currentDocument();
     entry.document.insert(QStringLiteral("id"), entry.id);
     entry.document.insert(QStringLiteral("name"), entry.name);
-    if (!QDir().mkpath(QDir(entry.directory).filePath(QStringLiteral("assets")))) {
+    if (!pathGuard.lock(QDir(entry.directory).filePath("assets"), &pathError)
+        || !QDir().mkpath(QDir(entry.directory).filePath(QStringLiteral("assets")))
+        || !pathGuard.lock(QDir(entry.directory).filePath("assets"), &pathError)) {
         setLastError(tr("无法创建皮肤资源目录。"));
         return {};
     }
     if (!source->builtin) {
         const QDir sourceAssets(QDir(source->directory).filePath(QStringLiteral("assets")));
         for (const QFileInfo &file : sourceAssets.entryInfoList(QDir::Files)) {
+            if (!pathGuard.lock(file.absoluteFilePath(), &pathError)) { setLastError(pathError); return {}; }
             QFile::copy(file.absoluteFilePath(),
                         QDir(entry.directory).filePath(QStringLiteral("assets/%1").arg(file.fileName())));
         }
@@ -596,6 +610,9 @@ bool SkinManager::selectSkin(const QString &id)
 
 bool SkinManager::importSkin(const QUrl &source)
 {
+    SafeDataPath pathGuard;
+    QString pathError;
+    if (!pathGuard.lock(QDir(m_storageDirectory).filePath("index.json"), &pathError)) { setLastError(pathError); return {}; }
     QHash<QString, QByteArray> files;
     QString error;
     if (!readStoreZip(cleanLocalPath(source), &files, &error)) {
@@ -653,13 +670,15 @@ bool SkinManager::importSkin(const QUrl &source)
         }
     }
 
-    if (!QDir().mkpath(QDir(entry.directory).filePath(QStringLiteral("assets")))) {
+    if (!pathGuard.lock(QDir(entry.directory).filePath("assets"), &pathError)
+        || !QDir().mkpath(QDir(entry.directory).filePath(QStringLiteral("assets")))
+        || !pathGuard.lock(QDir(entry.directory).filePath("assets"), &pathError)) {
         setLastError(tr("无法创建导入皮肤目录。"));
         return false;
     }
     for (const QString &asset : std::as_const(requiredAssets)) {
         const QString destination = QDir(entry.directory).filePath(asset);
-        if (!QDir().mkpath(QFileInfo(destination).absolutePath())) {
+        if (!pathGuard.lock(destination, &pathError) || !QDir().mkpath(QFileInfo(destination).absolutePath()) || !pathGuard.lock(destination, &pathError)) {
             QDir(entry.directory).removeRecursively();
             setLastError(tr("无法创建皮肤资源目录。"));
             return false;
@@ -1413,10 +1432,14 @@ bool SkinManager::loadCustomSkin(const QString &directory, SkinEntry *entry)
 
 bool SkinManager::saveIndex()
 {
+    SafeDataPath pathGuard;
+    QString pathError;
+    if (!pathGuard.lock(QDir(m_storageDirectory).filePath("index.json"), &pathError)) { setLastError(pathError); return {}; }
     if (!QDir().mkpath(m_storageDirectory)) {
         setLastError(tr("无法创建皮肤目录：%1").arg(m_storageDirectory));
         return false;
     }
+    if (!pathGuard.lock(QDir(m_storageDirectory).filePath("index.json"), &pathError)) { setLastError(pathError); return false; }
     QSaveFile file(QDir(m_storageDirectory).filePath(QStringLiteral("index.json")));
     if (!file.open(QIODevice::WriteOnly)) {
         setLastError(tr("无法保存皮肤索引：%1").arg(file.errorString()));
@@ -1437,16 +1460,22 @@ bool SkinManager::saveIndex()
 
 bool SkinManager::saveEntry(SkinEntry &entry)
 {
+    SafeDataPath pathGuard;
+    QString pathError;
+    if (!pathGuard.lock(QDir(m_storageDirectory).filePath("index.json"), &pathError)) { setLastError(pathError); return {}; }
     if (entry.builtin) {
         return false;
     }
-    if (!QDir().mkpath(QDir(entry.directory).filePath(QStringLiteral("assets")))) {
+    if (!pathGuard.lock(QDir(entry.directory).filePath("assets"), &pathError)
+        || !QDir().mkpath(QDir(entry.directory).filePath(QStringLiteral("assets")))
+        || !pathGuard.lock(QDir(entry.directory).filePath("assets"), &pathError)) {
         setLastError(tr("无法创建皮肤目录：%1").arg(entry.directory));
         return false;
     }
     entry.document.insert(QStringLiteral("schemaVersion"), kSkinSchemaVersion);
     entry.document.insert(QStringLiteral("id"), entry.id);
     entry.document.insert(QStringLiteral("name"), entry.name);
+    if (!pathGuard.lock(QDir(entry.directory).filePath("skin.json"), &pathError)) { setLastError(pathError); return false; }
     QSaveFile file(QDir(entry.directory).filePath(QStringLiteral("skin.json")));
     if (!file.open(QIODevice::WriteOnly)) {
         setLastError(tr("无法保存皮肤：%1").arg(file.errorString()));
@@ -1528,6 +1557,9 @@ QString SkinManager::resolveAssetPath(const SkinEntry &entry, const QString &ref
 
 QString SkinManager::copyAssetIntoSkin(const QString &sourcePath)
 {
+    SafeDataPath pathGuard;
+    QString pathError;
+    if (!pathGuard.lock(QDir(m_storageDirectory).filePath("index.json"), &pathError)) { setLastError(pathError); return {}; }
     SkinEntry *entry = activeEntry();
     if (!entry || entry->builtin) {
         return {};
@@ -1571,7 +1603,7 @@ QString SkinManager::copyAssetIntoSkin(const QString &sourcePath)
     if (QFileInfo::exists(destination)) {
         return reference;
     }
-    if (!QDir().mkpath(QFileInfo(destination).absolutePath())) {
+    if (!pathGuard.lock(destination, &pathError) || !QDir().mkpath(QFileInfo(destination).absolutePath()) || !pathGuard.lock(destination, &pathError)) {
         setLastError(tr("无法创建皮肤资源目录。"));
         return {};
     }

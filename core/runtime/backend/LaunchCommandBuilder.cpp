@@ -1,6 +1,5 @@
 #include "LaunchCommandBuilder.h"
 
-#include "ConfigurationManager.h"
 #include "LaunchParameterCatalog.h"
 
 #include <QProcess>
@@ -72,7 +71,7 @@ LaunchCommandBuilder::Result LaunchCommandBuilder::build(const QVariantMap &prof
         }
         result.environment.insert(name, environmentValue);
         environmentPreview.append(QStringLiteral("set \"%1=%2\"")
-                                      .arg(name, maskedEnvironmentValue(name, environmentValue)));
+                                      .arg(name, environmentValue));
     }
 
     QStringList commandParts;
@@ -212,11 +211,4 @@ QStringList LaunchCommandBuilder::parameterArguments(const QVariantMap &paramete
         }
     }
     return arguments;
-}
-
-QString LaunchCommandBuilder::maskedEnvironmentValue(const QString &name, const QString &value)
-{
-    return ConfigurationManager::isSensitiveEnvironmentName(name) && !value.isEmpty()
-        ? QStringLiteral("••••••••")
-        : value;
 }

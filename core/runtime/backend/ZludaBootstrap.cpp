@@ -1,6 +1,11 @@
+#include <QCoreApplication>
 #include "ZludaBootstrap.h"
 
 #include "ProcessTextDecoder.h"
+#include "SafeDataPath.h"
+#include <QCryptographicHash>
+#include <QTemporaryDir>
+#include <QLockFile>
 
 #include <QDir>
 #include <QFile>
@@ -199,7 +204,7 @@ QString extractAkiExtpack(const QString &portableRoot,
     }
     if (!QDir().mkpath(extractedDirectory)) {
         if (error) {
-            *error = QStringLiteral("无法创建 ZLUDA 运行时目录：%1").arg(extractedDirectory);
+            *error = QCoreApplication::translate("ZludaBootstrap", "无法创建 ZLUDA 运行时目录：%1").arg(extractedDirectory);
         }
         return {};
     }
@@ -207,7 +212,7 @@ QString extractAkiExtpack(const QString &portableRoot,
     const QString tar = tarExecutable();
     if (tar.isEmpty()) {
         if (error) {
-            *error = QStringLiteral("找到秋叶 ZLUDA 扩展包，但系统缺少 tar.exe，无法解包。");
+            *error = QCoreApplication::translate("ZludaBootstrap", "找到秋叶 ZLUDA 扩展包，但系统缺少 tar.exe，无法解包。");
         }
         return {};
     }
@@ -229,8 +234,8 @@ QString extractAkiExtpack(const QString &portableRoot,
             const QString detail = ProcessTextDecoder::decode(
                 extractor.readAllStandardError()).trimmed();
             *error = detail.isEmpty()
-                ? QStringLiteral("无法解包秋叶 ZLUDA 扩展包。")
-                : QStringLiteral("无法解包秋叶 ZLUDA 扩展包：%1").arg(detail);
+                ? QCoreApplication::translate("ZludaBootstrap", "无法解包秋叶 ZLUDA 扩展包。")
+                : QCoreApplication::translate("ZludaBootstrap", "无法解包秋叶 ZLUDA 扩展包：%1").arg(detail);
         }
         return {};
     }
@@ -281,7 +286,7 @@ bool copyAtomically(const QString &source, const QString &destination, QString *
     QFile input(source);
     if (!input.open(QIODevice::ReadOnly)) {
         if (error) {
-            *error = QStringLiteral("无法读取 ZLUDA 文件：%1").arg(source);
+            *error = QCoreApplication::translate("ZludaBootstrap", "无法读取 ZLUDA 文件：%1").arg(source);
         }
         return false;
     }
@@ -290,44 +295,73 @@ bool copyAtomically(const QString &source, const QString &destination, QString *
         || output.write(input.readAll()) < 0
         || !output.commit()) {
         if (error) {
-            *error = QStringLiteral("无法写入 ZLUDA 运行时文件：%1").arg(destination);
+            *error = QCoreApplication::translate("ZludaBootstrap", "无法写入 ZLUDA 运行时文件：%1").arg(destination);
         }
         return false;
     }
     return true;
 }
 
+QByteArray fileSha256(const QString &path)
+{
+    QFile file(path);
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!file.open(QIODevice::ReadOnly) || !hash.addData(&file)) return {};
+    return hash.result().toHex();
+}
+
+QJsonObject embeddedManifest(const QString &packageName)
+{
+    initializeZludaPackageResources();
+    QFile file(QStringLiteral(":/minifox/zluda/manifest.json"));
+    if (!file.open(QIODevice::ReadOnly)) return {};
+    return QJsonDocument::fromJson(file.readAll()).object().value(packageName).toObject();
+}
+
 QString materializeEmbeddedArchive(const QString &portableRoot,
                                    const QString &packageName,
                                    QString *error)
 {
-    initializeZludaPackageResources();
-    const QString resourcePath = QStringLiteral(":/minifox/zluda/%1").arg(packageName);
-    QFile resource(resourcePath);
-    if (!resource.open(QIODevice::ReadOnly)) {
-        if (error) {
-            *error = QStringLiteral("启动器内置运行包缺失：%1").arg(packageName);
-        }
+    const QJsonObject manifest = embeddedManifest(packageName);
+    const QByteArray expected = manifest.value("archiveSha256").toString().toLatin1();
+    const QString resource = QStringLiteral(":/minifox/zluda/%1").arg(packageName);
+    if (expected.size() != 64 || fileSha256(resource) != expected) {
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "内置 ZLUDA 运行包与可信清单不一致：%1").arg(packageName);
         return {};
     }
+    const QString directory = QDir(portableRoot).filePath(".minifox/packages");
+    const QString archive = QDir(directory).filePath(packageName);
+    SafeDataPath guard;
+    if (!guard.lock(archive, error) || !QDir().mkpath(directory) || !guard.lock(archive, error)) return {};
+    if (fileSha256(archive) == expected) return archive;
+    if (!copyAtomically(resource, archive, error) || fileSha256(archive) != expected) {
+        if (error && error->isEmpty()) *error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 缓存归档校验失败。");
+        return {};
+    }
+    return archive;
+}
 
-    const QString packageDirectory =
-        QDir(portableRoot).filePath(QStringLiteral(".minifox/packages"));
-    if (!QDir().mkpath(packageDirectory)) {
-        if (error) {
-            *error = QStringLiteral("无法创建 Minifox 运行包目录：%1").arg(packageDirectory);
+bool expectedPackageEntries(const QString &directory, const QJsonObject &files,
+                            const QString &legacyStamp, QString *error)
+{
+    SafeDataPath guard;
+    if (!guard.lock(directory, error)) return false;
+    for (const QFileInfo &entry : QDir(directory).entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot)) {
+        if (!guard.lock(entry.absoluteFilePath(), error)) return false;
+        if (!entry.isFile() || (!files.contains(entry.fileName()) && entry.fileName() != legacyStamp)) {
+            if (error) *error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 缓存包含非预期条目，请检查：%1").arg(entry.absoluteFilePath());
+            return false;
         }
-        return {};
     }
-    const QString archivePath = QDir(packageDirectory).filePath(packageName);
-    if (QFileInfo(archivePath).size() == resource.size()) {
-        return archivePath;
-    }
-    resource.close();
-    if (!copyAtomically(resourcePath, archivePath, error)) {
-        return {};
-    }
-    return archivePath;
+    return true;
+}
+
+bool packageMatches(const QString &directory, const QJsonObject &files)
+{
+    if (files.isEmpty()) return false;
+    for (auto it = files.begin(); it != files.end(); ++it)
+        if (fileSha256(QDir(directory).filePath(it.key())) != it.value().toString().toLatin1()) return false;
+    return true;
 }
 
 bool extractEmbeddedArchive(const QString &archivePath,
@@ -335,62 +369,54 @@ bool extractEmbeddedArchive(const QString &archivePath,
                             const QString &validationPattern,
                             QString *error)
 {
-    const QString stampPath = QDir(destination).filePath(
-        QStringLiteral(".minifox-package-%1").arg(QFileInfo(archivePath).completeBaseName()));
-    const QByteArray expectedStamp =
-        QFileInfo(archivePath).fileName().toUtf8() + ':'
-        + QByteArray::number(QFileInfo(archivePath).size());
-    QFile stamp(stampPath);
-    if (stamp.open(QIODevice::ReadOnly)
-        && stamp.readAll() == expectedStamp
-        && !QDir(destination).entryList({validationPattern}, QDir::Files).isEmpty()) {
-        return true;
-    }
-
-    if (!QDir().mkpath(destination)) {
-        if (error) {
-            *error = QStringLiteral("无法创建 Minifox 解包目录：%1").arg(destination);
-        }
+    Q_UNUSED(validationPattern);
+    const QString name = QFileInfo(archivePath).fileName();
+    const QJsonObject manifest = embeddedManifest(name);
+    const QJsonObject files = manifest.value("files").toObject();
+    const QString legacyStamp = ".minifox-package-" + QFileInfo(archivePath).completeBaseName();
+    SafeDataPath guard;
+    if (!guard.lock(archivePath, error) || !guard.lock(destination, error)) return false;
+    QLockFile lock(destination + ".lock");
+    if (!lock.tryLock(30000)) {
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "另一个进程正在准备 ZLUDA 运行包。");
         return false;
     }
-    const QString tar = tarExecutable();
-    if (tar.isEmpty()) {
-        if (error) {
-            *error = QStringLiteral("系统缺少 tar.exe，无法释放内置运行包。");
-        }
+    if (files.isEmpty() || fileSha256(archivePath) != manifest.value("archiveSha256").toString().toLatin1()) {
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 归档校验失败，未解包。");
         return false;
     }
+    if (!expectedPackageEntries(destination, files, legacyStamp, error)) return false;
+    if (packageMatches(destination, files)) return true;
 
+    QTemporaryDir staging(QDir(QFileInfo(destination).absolutePath()).filePath("zluda-staging-XXXXXX"));
+    if (!staging.isValid()) {
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "无法创建 ZLUDA 临时解包目录。");
+        return false;
+    }
+    // Extract a private copy of the embedded archive, never the mutable cache.
+    const QString stagedArchive = staging.filePath("package.extpack");
+    if (!copyAtomically(":/minifox/zluda/" + name, stagedArchive, error)) return false;
+    const QString unpack = staging.filePath("files");
+    if (!QDir().mkpath(unpack)) return false;
     QProcess extractor;
-    extractor.setProgram(tar);
-    extractor.setArguments({
-        QStringLiteral("-xf"),
-        archivePath,
-        QStringLiteral("-C"),
-        destination
-    });
-    extractor.start();
-    if (!extractor.waitForFinished(30000)
-        || extractor.exitStatus() != QProcess::NormalExit
-        || extractor.exitCode() != 0
-        || QDir(destination).entryList({validationPattern}, QDir::Files).isEmpty()) {
-        if (error) {
-            const QString detail = ProcessTextDecoder::decode(
-                extractor.readAllStandardError()).trimmed();
-            *error = detail.isEmpty()
-                ? QStringLiteral("无法释放内置运行包：%1").arg(QFileInfo(archivePath).fileName())
-                : QStringLiteral("无法释放内置运行包：%1").arg(detail);
-        }
+    extractor.start(tarExecutable(), {"-xf", stagedArchive, "-C", unpack});
+    if (!extractor.waitForFinished(30000) || extractor.exitStatus() != QProcess::NormalExit
+        || extractor.exitCode() != 0) {
+        extractor.kill(); extractor.waitForFinished(1000);
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "无法解包内置 ZLUDA 运行包：%1").arg(ProcessTextDecoder::decode(extractor.readAllStandardError()));
         return false;
     }
-
-    QSaveFile stampFile(stampPath);
-    if (!stampFile.open(QIODevice::WriteOnly)
-        || stampFile.write(expectedStamp) != expectedStamp.size()
-        || !stampFile.commit()) {
-        if (error) {
-            *error = QStringLiteral("无法记录 Minifox 运行包版本：%1").arg(stampPath);
-        }
+    if (!expectedPackageEntries(unpack, files, {}, error) || !packageMatches(unpack, files)) {
+        if (error && error->isEmpty()) *error = QCoreApplication::translate("ZludaBootstrap", "内置 ZLUDA 解包文件校验失败。");
+        return false;
+    }
+    if (!QDir().mkpath(destination) || !guard.lock(destination, error)) return false;
+    for (auto it = files.begin(); it != files.end(); ++it) {
+        const QString target = QDir(destination).filePath(it.key());
+        if (!guard.lock(target, error) || !copyAtomically(QDir(unpack).filePath(it.key()), target, error)) return false;
+    }
+    if (!packageMatches(destination, files)) {
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 发布后校验失败，已阻止启动。");
         return false;
     }
     return true;
@@ -414,7 +440,7 @@ QString extractEmbeddedZluda(const QString &portableRoot,
     if (!extractEmbeddedArchive(archive, destination, QStringLiteral("nvcuda.dll"), error)
         || !hasZludaFiles(destination)) {
         if (error && error->isEmpty()) {
-            *error = QStringLiteral("内置 ZLUDA 运行包不完整。");
+            *error = QCoreApplication::translate("ZludaBootstrap", "内置 ZLUDA 运行包不完整。");
         }
         return {};
     }
@@ -441,7 +467,7 @@ QString detectGfxArchitecture(const QString &rocmBin, QString *error)
     const QString hipInfo = QDir(rocmBin).filePath(QStringLiteral("hipInfo.exe"));
     if (!QFileInfo::exists(hipInfo)) {
         if (error) {
-            *error = QStringLiteral("HIP_PATH 中缺少 hipInfo.exe，无法识别 AMD 架构：%1")
+            *error = QCoreApplication::translate("ZludaBootstrap", "HIP_PATH 中缺少 hipInfo.exe，无法识别 AMD 架构：%1")
                          .arg(rocmBin);
         }
         return {};
@@ -459,7 +485,7 @@ QString detectGfxArchitecture(const QString &rocmBin, QString *error)
         || probe.exitStatus() != QProcess::NormalExit
         || probe.exitCode() != 0) {
         if (error) {
-            *error = QStringLiteral("HIP 设备检测失败：%1")
+            *error = QCoreApplication::translate("ZludaBootstrap", "HIP 设备检测失败：%1")
                          .arg(ProcessTextDecoder::decode(
                              probe.readAllStandardError()).trimmed());
         }
@@ -472,7 +498,7 @@ QString detectGfxArchitecture(const QString &rocmBin, QString *error)
     const QRegularExpressionMatch match = expression.match(output);
     if (!match.hasMatch()) {
         if (error) {
-            *error = QStringLiteral("HIP 已安装，但 hipInfo 未返回 gcnArchName。");
+            *error = QCoreApplication::translate("ZludaBootstrap", "HIP 已安装，但 hipInfo 未返回 gcnArchName。");
         }
         return {};
     }
@@ -498,7 +524,13 @@ QString locateHipTensileLibrary(const QString &rocmBin,
 
 bool writeBootstrapScript(const QString &bootstrapDirectory, QString *error)
 {
-    static const QByteArray script = R"PY(import ctypes
+    static const QByteArray script = R"PY(import sys
+_bootstrap_directory = __file__.replace("\\", "/").rsplit("/", 1)[0].rstrip("/").casefold()
+sys.path[:] = [p for p in sys.path
+               if p.replace("\\", "/").rstrip("/").casefold() != _bootstrap_directory]
+import ctypes
+import hashlib
+import json
 import importlib.abc
 import importlib.machinery
 import os
@@ -557,11 +589,44 @@ def _minifox_preload_zluda():
     global _minifox_zluda_loaded
     if _minifox_zluda_loaded:
         return
+    _hashes = json.loads(os.environ["MINIFOX_ZLUDA_SHA256"])
+    _entries = list(os.scandir(_runtime))
+    if ({entry.name for entry in _entries} != set(_hashes)
+            or any(not entry.is_file(follow_symlinks=False) for entry in _entries)):
+        raise RuntimeError("Unexpected ZLUDA runtime directory contents")
+    # Validate even retained aliases before the OS may search this directory
+    # for the import dependencies of one of the explicitly loaded DLLs.
+    for _entry in _entries:
+        _hash = hashlib.sha256()
+        with open(_entry.path, "rb") as _file:
+            for _chunk in iter(lambda: _file.read(1024 * 1024), b""):
+                _hash.update(_chunk)
+        if _hash.hexdigest() != _hashes[_entry.name]:
+            raise RuntimeError("ZLUDA DLL integrity check failed: " + _entry.name)
     for _name in os.environ["MINIFOX_ZLUDA_PRELOAD"].split(";"):
         if _name:
-            _minifox_zluda_handles.append(
-                ctypes.WinDLL(os.path.join(_runtime, _name))
-            )
+            _path = os.path.join(_runtime, _name)
+            _expected = json.loads(os.environ["MINIFOX_ZLUDA_SHA256"])[_name]
+            # Deny writes and renames between hashing and LoadLibrary.
+            _kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            _kernel.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32,
+                                           ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
+            _kernel.CreateFileW.restype = ctypes.c_void_p
+            _kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+            _handle = _kernel.CreateFileW(_path, 0x80000000, 1, None, 3, 0, None)
+            if _handle == ctypes.c_void_p(-1).value:
+                raise RuntimeError("Unable to lock ZLUDA DLL: " + _name)
+            try:
+                with open(_path, "rb") as _file:
+                    _hash = hashlib.sha256()
+                    for _chunk in iter(lambda: _file.read(1024 * 1024), b""):
+                        _hash.update(_chunk)
+                    _actual = _hash.hexdigest()
+                if _actual != _expected:
+                    raise RuntimeError("ZLUDA DLL integrity check failed: " + _name)
+                _minifox_zluda_handles.append(ctypes.WinDLL(_path))
+            finally:
+                _kernel.CloseHandle(_handle)
     _minifox_zluda_loaded = True
 
 
@@ -603,18 +668,43 @@ if os.environ.get("MINIFOX_ZLUDA_BOOTSTRAP") == "1":
     os.environ["MINIFOX_ZLUDA_ACTIVE"] = "1"
 )PY";
 
-    if (!QDir().mkpath(bootstrapDirectory)) {
+    SafeDataPath guard;
+    const QString scriptPath = QDir(bootstrapDirectory).filePath(QStringLiteral("sitecustomize.py"));
+    if (!guard.lock(scriptPath, error) || !QDir().mkpath(bootstrapDirectory)
+        || !guard.lock(scriptPath, error)) {
         if (error) {
-            *error = QStringLiteral("无法创建 ZLUDA Python 引导目录：%1").arg(bootstrapDirectory);
+            *error = QCoreApplication::translate("ZludaBootstrap", "无法创建 ZLUDA Python 引导目录：%1").arg(bootstrapDirectory);
         }
         return false;
     }
-    QSaveFile file(QDir(bootstrapDirectory).filePath(QStringLiteral("sitecustomize.py")));
+    // Python imports sitecustomize before the bridge. Do not allow adjacent
+    // modules or stale bytecode to replace the generated checker itself.
+    for (const QFileInfo &entry : QDir(bootstrapDirectory).entryInfoList(
+             QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot)) {
+        if (!guard.lock(entry.absoluteFilePath(), error)) return false;
+        if (entry.fileName() == "sitecustomize.py" && entry.isFile()) continue;
+        if (entry.fileName() == "__pycache__" && entry.isDir()) {
+            const auto cachedFiles = QDir(entry.absoluteFilePath()).entryInfoList(
+                QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
+            for (const QFileInfo &cached : cachedFiles) {
+                if (!guard.lock(cached.absoluteFilePath(), error)) return false;
+                if (!cached.isFile() || !cached.fileName().startsWith("sitecustomize.")
+                    || cached.suffix() != "pyc" || !QFile::remove(cached.absoluteFilePath())) {
+                    if (error) *error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 引导缓存存在非预期内容：%1").arg(cached.absoluteFilePath());
+                    return false;
+                }
+            }
+            continue;
+        }
+        if (error) *error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 引导目录存在非预期内容：%1").arg(entry.absoluteFilePath());
+        return false;
+    }
+    QSaveFile file(scriptPath);
     if (!file.open(QIODevice::WriteOnly)
         || file.write(script) != script.size()
         || !file.commit()) {
         if (error) {
-            *error = QStringLiteral("无法写入 ZLUDA Python 引导脚本。");
+            *error = QCoreApplication::translate("ZludaBootstrap", "无法写入 ZLUDA Python 引导脚本。");
         }
         return false;
     }
@@ -698,7 +788,7 @@ ZludaBootstrap::Detection ZludaBootstrap::parseDetectionOutput(const QByteArray 
         result.backend = classifyBackend(result.cudaVersion, result.hipVersion, result.deviceNames);
         return result;
     }
-    result.error = QStringLiteral("无法解析 PyTorch GPU 探测结果。");
+    result.error = QCoreApplication::translate("ZludaBootstrap", "无法解析 PyTorch GPU 探测结果。");
     return result;
 }
 
@@ -928,7 +1018,7 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
              result.torchInductorCacheDirectory
          }) {
         if (!QDir().mkpath(cacheDirectory)) {
-            result.error = QStringLiteral("无法创建运行时缓存目录：%1").arg(cacheDirectory);
+            result.error = QCoreApplication::translate("ZludaBootstrap", "无法创建运行时缓存目录：%1").arg(cacheDirectory);
             return result;
         }
     }
@@ -953,34 +1043,28 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
     // Developer overrides remain available for diagnostics. Normal users always
     // receive and extract the package embedded in the Minifox executable.
     QString source;
-    const QString configuredSource =
-        QDir::cleanPath(environment.value(QStringLiteral("MINIFOX_ZLUDA_DIR")));
-    if (hasZludaFiles(configuredSource)) {
-        source = configuredSource;
+    const QString configured = environment.value(QStringLiteral("MINIFOX_ZLUDA_DIR")).trimmed();
+    const bool externalSource = !configured.isEmpty();
+    if (externalSource) {
+        source = QDir::cleanPath(configured);
+        if (!QDir::isAbsolutePath(source) || !hasZludaFiles(source)) {
+            result.error = QCoreApplication::translate("ZludaBootstrap", "MINIFOX_ZLUDA_DIR 必须是明确选择且完整的可信 ZLUDA 绝对目录。");
+            return result;
+        }
     } else {
         source = extractEmbeddedZluda(portableRoot, selectedRocmBin, &result.error);
     }
-    if (source.isEmpty() && result.error.isEmpty()) {
-        // Compatibility with older Minifox/Aki layouts; never preferred over
-        // the embedded, versioned package.
-        source = configuredOrPortableZludaSource(portableRoot, environment);
-    }
-    if (source.isEmpty() && result.error.isEmpty()) {
-        source = extractAkiExtpack(portableRoot, result.runtimeDirectory, &result.error);
-    }
-    if (source.isEmpty() && result.error.isEmpty()) {
-        source = pathZludaSource(environment);
-    }
-    if (source.isEmpty()) {
-        if (result.error.isEmpty()) {
-            result.error = QStringLiteral("无法释放启动器内置的 ZLUDA 运行包。");
-        }
-        return result;
-    }
+    if (source.isEmpty()) return result;
+    SafeDataPath sourceGuard;
+    if (!sourceGuard.lock(source, &result.error)
+        || !sourceGuard.lock(result.runtimeDirectory, &result.error)) return result;
+    const QString packageName = hipMajorVersionForRocmBin(selectedRocmBin) >= 7
+        ? QStringLiteral("zluda-hip71.extpack") : QStringLiteral("zluda-hip57.extpack");
+    const QJsonObject trustedFiles = externalSource ? QJsonObject{} : embeddedManifest(packageName).value("files").toObject();
     result.sourceDirectory = source;
 
     if (!QDir().mkpath(result.runtimeDirectory)) {
-        result.error = QStringLiteral("无法创建 ZLUDA 运行时目录：%1").arg(result.runtimeDirectory);
+        result.error = QCoreApplication::translate("ZludaBootstrap", "无法创建 ZLUDA 运行时目录：%1").arg(result.runtimeDirectory);
         return result;
     }
 
@@ -1001,32 +1085,47 @@ ZludaBootstrap::Preparation ZludaBootstrap::prepare(
         {findSourceFile(source, QStringLiteral("cublas.dll"), cublasName), cublasName},
         {findSourceFile(source, QStringLiteral("cusparse.dll"), cusparseName), cusparseName}
     };
-    for (const auto &[sourceFile, targetName] : files) {
-        if (sourceFile.isEmpty() || !QFileInfo::exists(sourceFile)) {
-            result.error = QStringLiteral("ZLUDA 目录缺少与当前 PyTorch 匹配的 %1。").arg(targetName);
-            return result;
-        }
-        if (!copyAtomically(sourceFile,
-                            QDir(result.runtimeDirectory).filePath(targetName),
-                            &result.error)) {
-            return result;
+    const auto copyVerified = [&](const QString &sourceFile, const QString &targetName) {
+        const QString target = QDir(result.runtimeDirectory).filePath(targetName);
+        if (!sourceGuard.lock(sourceFile, &result.error) || !sourceGuard.lock(target, &result.error)) return false;
+        const QString expected = externalSource ? QString::fromLatin1(fileSha256(sourceFile))
+            : trustedFiles.value(QFileInfo(sourceFile).fileName()).toString();
+        if (expected.size() != 64 || fileSha256(sourceFile) != expected.toLatin1()
+            || !copyAtomically(sourceFile, target, &result.error)
+            || fileSha256(target) != expected.toLatin1()) {
+            if (result.error.isEmpty()) result.error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA DLL 校验失败：%1").arg(targetName);
+            return false;
         }
         result.preloadNames.append(targetName);
+        result.preloadHashes.insert(targetName, expected);
+        return true;
+    };
+    for (const auto &[sourceFile, targetName] : files)
+        if (sourceFile.isEmpty() || !copyVerified(sourceFile, targetName)) return result;
+    for (const QString &name : {QStringLiteral("nvml.dll"), QStringLiteral("vml.dll")}) {
+        const QString optional = QDir(source).filePath(name);
+        if (QFileInfo::exists(optional) && !copyVerified(optional, name)) return result;
     }
-    for (const QString &optionalName : {
-             QStringLiteral("nvml.dll"),
-             QStringLiteral("vml.dll")
-         }) {
-        const QString optionalSource = QDir(source).filePath(optionalName);
-        if (!QFileInfo::exists(optionalSource)) {
-            continue;
-        }
-        if (!copyAtomically(optionalSource,
-                            QDir(result.runtimeDirectory).filePath(optionalName),
-                            &result.error)) {
+
+    // DLL dependencies are also searched in the loading directory. Permit only
+    // the selected DLLs plus proven bundled aliases left by another torch version.
+    const QJsonObject otherFiles = embeddedManifest(packageName == "zluda-hip57.extpack"
+        ? "zluda-hip71.extpack" : "zluda-hip57.extpack").value("files").toObject();
+    static const QRegularExpression alias("^(cublas64_[0-9]+|cusparse64_[0-9]+|nvrtc64_[0-9_]+)\\.dll$");
+    for (const QFileInfo &entry : QDir(result.runtimeDirectory).entryInfoList(
+             QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot)) {
+        if (!sourceGuard.lock(entry.absoluteFilePath(), &result.error)) return result;
+        if (entry.isFile() && result.preloadHashes.contains(entry.fileName())) continue;
+        const QString hash = QString::fromLatin1(fileSha256(entry.absoluteFilePath()));
+        bool knownAlias = !externalSource && entry.isFile() && alias.match(entry.fileName()).hasMatch();
+        bool knownHash = false;
+        for (const auto &value : trustedFiles) knownHash |= value.toString() == hash;
+        for (const auto &value : otherFiles) knownHash |= value.toString() == hash;
+        if (!knownAlias || !knownHash) {
+            result.error = QCoreApplication::translate("ZludaBootstrap", "ZLUDA 运行目录包含非预期文件，已阻止加载：%1").arg(entry.absoluteFilePath());
             return result;
         }
-        result.preloadNames.append(optionalName);
+        result.preloadHashes.insert(entry.fileName(), hash);
     }
 
     if (!writeBootstrapScript(result.bootstrapDirectory, &result.error)) {
@@ -1046,6 +1145,10 @@ void ZludaBootstrap::apply(const Preparation &preparation,
     }
     environment.insert(QStringLiteral("MINIFOX_ZLUDA_BOOTSTRAP"), QStringLiteral("1"));
     environment.insert(QStringLiteral("MINIFOX_ZLUDA_DLL_DIR"), preparation.runtimeDirectory);
+    QJsonObject hashes;
+    for (auto it = preparation.preloadHashes.cbegin(); it != preparation.preloadHashes.cend(); ++it)
+        hashes.insert(it.key(), it.value());
+    environment.insert(QStringLiteral("MINIFOX_ZLUDA_SHA256"), QString::fromUtf8(QJsonDocument(hashes).toJson(QJsonDocument::Compact)));
     environment.insert(QStringLiteral("MINIFOX_ZLUDA_PRELOAD"),
                        preparation.preloadNames.join(QLatin1Char(';')));
     environment.insert(QStringLiteral("MINIFOX_ROCM_BIN"), rocmBin);
