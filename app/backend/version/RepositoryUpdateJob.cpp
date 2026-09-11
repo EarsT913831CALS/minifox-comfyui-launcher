@@ -1,7 +1,9 @@
+#include <QCoreApplication>
 #include "RepositoryUpdateJob.h"
 
 #include "ProcessTextDecoder.h"
 #include "VersionTransactionStore.h"
+#include "RepositoryRecovery.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -33,16 +35,40 @@ void RepositoryUpdateJob::start()
 {
     if (m_started) return;
     m_started = true;
-    for (const VersionTransactionEntry &entry : VersionTransactionStore::entries()) {
+    QString storeError;
+    const auto entries = VersionTransactionStore::entries(&storeError);
+    if (!storeError.isEmpty()) {
+        fail(tr("无法读取中断记录，已停止更新：%1").arg(storeError));
+        return;
+    }
+    for (const VersionTransactionEntry &entry : entries) {
         if (QDir::cleanPath(entry.root).compare(QDir::cleanPath(m_spec.root),
                                                 Qt::CaseInsensitive) == 0) {
             m_hadInterruptedEntry = true;
-            break;
+            emit statusChanged(tr("正在恢复 %1 上次未完成的更新…").arg(m_spec.displayName));
+            auto *watcher = new QFutureWatcher<QString>(this);
+            connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher] {
+                const QString error = watcher->result();
+                watcher->deleteLater();
+                if (!error.isEmpty()) { fail(error); return; }
+                m_hadInterruptedEntry = false;
+                m_started = false;
+                start();
+            });
+            const QString git = m_spec.gitProgram;
+            const RepositoryGitContext context{m_spec.gitPrefixArguments, m_spec.gitEnvironment};
+            watcher->setFuture(QtConcurrent::run(SafeMergeEngine::workerPool(), [git, entry, context] {
+                QString error;
+                if (!RepositoryRecovery::rollback(git, entry, &error, context)) return error;
+                return QString();
+            }));
+            return;
         }
     }
     emit statusChanged(tr("正在检查 %1 的仓库状态…").arg(m_spec.displayName));
     runGit(Stage::Status, {QStringLiteral("status"), QStringLiteral("--porcelain"),
-                           QStringLiteral("--untracked-files=no")});
+                           QStringLiteral("--untracked-files=no"),
+                           QStringLiteral("--no-renames"), QStringLiteral("-z")});
 }
 
 void RepositoryUpdateJob::cancel()
@@ -94,6 +120,24 @@ QString RepositoryUpdateJob::selectDevelopmentBranch(const QString &output)
     return {};
 }
 
+QString RepositoryUpdateJob::selectExtensionRemoteBranch(const QString &output,
+                                                         const QString &localBranch)
+{
+    QStringList candidates;
+    QString upstream;
+    for (const QString &line : output.split('\n', Qt::SkipEmptyParts)) {
+        const QString ref = line.section('\t', 0, 0).trimmed();
+        if (ref == localBranch) upstream = line.section('\t', 1, 1).trimmed();
+        if (ref.startsWith("origin/") && ref != "origin/HEAD") candidates.append(ref);
+    }
+    if (!branchNeedsRecovery(localBranch) && candidates.contains("origin/" + localBranch))
+        return "origin/" + localBranch;
+    if (candidates.contains(upstream)) return upstream;
+    for (const QString &preferred : {QStringLiteral("origin/main"), QStringLiteral("origin/master"), QStringLiteral("origin/dev")})
+        if (candidates.contains(preferred)) return preferred;
+    return candidates.value(0);
+}
+
 bool RepositoryUpdateJob::branchNeedsRecovery(const QString &branch)
 {
     return branch.isEmpty()
@@ -102,23 +146,43 @@ bool RepositoryUpdateJob::branchNeedsRecovery(const QString &branch)
 }
 
 void RepositoryUpdateJob::runGit(Stage stage, const QStringList &arguments,
-                                 const QString &indexFile, int inactivityTimeoutMs)
+                                 const QString &indexFile, int inactivityTimeoutMs,
+                                 const QByteArray &standardInput)
 {
     m_stage = stage;
-    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    QProcessEnvironment environment = m_spec.gitEnvironment;
     environment.insert(QStringLiteral("GIT_TERMINAL_PROMPT"), QStringLiteral("0"));
     environment.insert(QStringLiteral("GCM_INTERACTIVE"), QStringLiteral("Never"));
     if (!indexFile.isEmpty()) environment.insert(QStringLiteral("GIT_INDEX_FILE"), indexFile);
-    m_runner.start(m_spec.gitProgram, repositoryArguments(arguments),
-                   environment, inactivityTimeoutMs);
+    QStringList processArguments = repositoryArguments(arguments);
+    if (stage == Stage::UpdateSafeRef || stage == Stage::SwitchSafeHead
+        || stage == Stage::ResetSafeIndex || stage == Stage::SetUpstream)
+        processArguments = QStringList{"-c", "core.fsync=all"} + processArguments;
+    m_runner.start(m_spec.gitProgram, processArguments,
+                   environment, inactivityTimeoutMs, standardInput);
+}
+
+void RepositoryUpdateJob::runCheckoutIndex(Stage stage, const QString &snapshotPath,
+                                           const QStringList &paths,
+                                           const QString &indexFile)
+{
+    if (paths.isEmpty()) {
+        // Advance without spawning Git.
+        m_stage = stage;
+        handleProcessFinished(ProcessResult{0, QProcess::NormalExit,
+                                            QByteArray(), QByteArray(), false, false});
+        return;
+    }
+    runGit(stage, {QStringLiteral("checkout-index"),
+                   QStringLiteral("--prefix=") + snapshotPath + QStringLiteral("/"),
+                   QStringLiteral("--stdin"), QStringLiteral("-z")},
+           indexFile, 120000, SafeMergeEngine::encodePathList(paths));
 }
 
 QStringList RepositoryUpdateJob::repositoryArguments(const QStringList &arguments) const
 {
     QStringList result = m_spec.gitPrefixArguments;
-    result.append({QStringLiteral("-c"),
-                   QStringLiteral("safe.directory=%1").arg(QDir::cleanPath(m_spec.root)),
-                   QStringLiteral("-C"), m_spec.root});
+    result.append({QStringLiteral("-C"), m_spec.root});
     result.append(arguments);
     return result;
 }
@@ -147,12 +211,20 @@ void RepositoryUpdateJob::handleProcessFinished(const ProcessResult &result)
     const QString output = ProcessTextDecoder::decode(result.standardOutput).trimmed();
     switch (m_stage) {
     case Stage::Status:
-        m_dirty = !output.isEmpty();
+        m_localEntries = SafeMergeEngine::parseStatusEntries(result.standardOutput);
         emit statusChanged(tr("正在读取 %1 的当前版本…").arg(m_spec.displayName));
         runGit(Stage::ReadHead, {QStringLiteral("rev-parse"), QStringLiteral("HEAD")});
         break;
     case Stage::ReadHead:
         m_originalHead = output.section(QLatin1Char('\n'), 0, 0).trimmed();
+        if (m_spec.target == RepositoryTarget::Explicit) {
+            m_targetBranch = m_spec.explicitBranch;
+            m_upstreamRef = m_spec.explicitUpstream;
+            m_trackBranch = !m_upstreamRef.isEmpty();
+            runGit(Stage::ResolveTargetCommit,
+                   {"rev-parse", "--verify", m_spec.explicitRef + "^{commit}"});
+            break;
+        }
         emit statusChanged(tr("正在获取 %1 的远端更新…").arg(m_spec.displayName));
         runGit(Stage::Fetch, {QStringLiteral("fetch"), QStringLiteral("--tags"),
                               QStringLiteral("--progress")}, {}, 60000);
@@ -166,13 +238,18 @@ void RepositoryUpdateJob::handleProcessFinished(const ProcessResult &result)
         } else {
             const Stage stage = m_spec.target == RepositoryTarget::Development
                 ? Stage::ResolveDevelopment : Stage::ResolveCurrent;
-            const QStringList args = m_spec.target == RepositoryTarget::CurrentBranch
+            QStringList args = m_spec.target == RepositoryTarget::CurrentBranch
                 ? QStringList {QStringLiteral("for-each-ref"), QStringLiteral("--contains=HEAD"),
                                QStringLiteral("--format=%(refname:short)"),
                                QStringLiteral("refs/remotes/origin/")}
                 : QStringList {QStringLiteral("for-each-ref"),
                                QStringLiteral("--format=%(refname:short)"),
                                QStringLiteral("refs/remotes/origin/")};
+            if (m_spec.kind == RepositoryKind::Extension) {
+                args = {"for-each-ref", "--contains=HEAD",
+                        "--format=%(refname:short)%09%(upstream:short)",
+                        "refs/remotes/origin/", "refs/heads/"};
+            }
             runGit(stage, args);
         }
         break;
@@ -181,21 +258,43 @@ void RepositoryUpdateJob::handleProcessFinished(const ProcessResult &result)
     case Stage::ResolveCurrent:
         resolveTarget(output);
         break;
-    case Stage::CleanCheckout:
-    case Stage::CleanFastForward:
-        if (m_trackBranch) {
-            runGit(Stage::SetUpstream,
-                   {QStringLiteral("branch"),
-                    QStringLiteral("--set-upstream-to=") + m_upstreamRef,
-                    m_targetBranch});
-        } else {
-            complete();
+    case Stage::ResolveTargetCommit:
+        m_targetRef = output;
+        if (m_spec.kind == RepositoryKind::Extension && m_spec.target == RepositoryTarget::Explicit
+            && m_spec.explicitBranch.isEmpty()) {
+            runGit(Stage::ResolveExplicitBranch,
+                   {"for-each-ref", "--contains=" + m_targetRef,
+                    "--format=%(refname:short)%09%(upstream:short)",
+                    "refs/remotes/origin/", "refs/heads/"});
+            break;
         }
+        if (m_targetRef == m_originalHead && m_targetBranch.isEmpty()
+            && !m_hadInterruptedEntry) {
+            complete();
+        } else if (m_spec.target == RepositoryTarget::CurrentBranch && m_targetBranch.isEmpty()) {
+            runGit(Stage::VerifyFastForward, {"merge-base", "--is-ancestor", m_originalHead, m_targetRef});
+        } else beginSafeMerge();
+        break;
+    case Stage::VerifyFastForward:
+        beginSafeMerge();
+        break;
+    case Stage::ResolveExplicitBranch:
+        m_upstreamRef = selectExtensionRemoteBranch(output, m_spec.localBranch);
+        m_targetBranch = m_upstreamRef.isEmpty() ? QString() : m_upstreamRef.mid(7);
+        m_trackBranch = !m_upstreamRef.isEmpty();
+        m_detachTarget = m_upstreamRef.isEmpty();
+        beginSafeMerge();
         break;
     case Stage::PrepareWorkingIndex:
-        runGit(Stage::StageLocalChanges,
-               {QStringLiteral("add"), QStringLiteral("-u"), QStringLiteral("--")},
-               m_workingIndexPath);
+        if (m_plan.basePaths.isEmpty()) {
+            runGit(Stage::WriteLocalTree, {QStringLiteral("write-tree")}, m_workingIndexPath);
+        } else {
+            runGit(Stage::StageLocalChanges,
+                   {QStringLiteral("--literal-pathspecs"), QStringLiteral("add"),
+                    QStringLiteral("-u"), QStringLiteral("--pathspec-from-file=-"),
+                    QStringLiteral("--pathspec-file-nul")},
+                   m_workingIndexPath, 120000, SafeMergeEngine::encodePathList(m_plan.basePaths));
+        }
         break;
     case Stage::StageLocalChanges:
         runGit(Stage::WriteLocalTree, {QStringLiteral("write-tree")}, m_workingIndexPath);
@@ -206,37 +305,39 @@ void RepositoryUpdateJob::handleProcessFinished(const ProcessResult &result)
                  false, true);
             break;
         }
-        runGit(Stage::PrepareBaseIndex, {QStringLiteral("read-tree"), QStringLiteral("HEAD")},
+        runGit(Stage::PrepareBaseIndex, {QStringLiteral("read-tree"), m_originalHead},
                m_baseIndexPath);
+        break;
+    case Stage::ResolveRemotePaths:
+        m_plan = SafeMergeEngine::planSnapshots(
+            m_localEntries,
+            SafeMergeEngine::parseNameStatusEntries(result.standardOutput));
+        runGit(Stage::PrepareWorkingIndex,
+               {QStringLiteral("read-tree"), m_originalHead}, m_workingIndexPath);
         break;
     case Stage::PrepareBaseIndex:
-        runGit(Stage::CheckoutBaseSnapshot,
-               {QStringLiteral("checkout-index"), QStringLiteral("-a"),
-                QStringLiteral("--prefix=") + m_baseSnapshotPath + QStringLiteral("/")},
-               m_baseIndexPath);
+        runCheckoutIndex(Stage::CheckoutBaseSnapshot, m_baseSnapshotPath,
+                         m_plan.basePaths, m_baseIndexPath);
         break;
     case Stage::CheckoutBaseSnapshot:
-        runGit(Stage::CheckoutLocalSnapshot,
-               {QStringLiteral("checkout-index"), QStringLiteral("-a"),
-                QStringLiteral("--prefix=") + m_localSnapshotPath + QStringLiteral("/")},
-               m_workingIndexPath);
+        runCheckoutIndex(Stage::CheckoutLocalSnapshot, m_localSnapshotPath,
+                         m_plan.localPaths, m_workingIndexPath);
         break;
     case Stage::CheckoutLocalSnapshot:
         runGit(Stage::PrepareTargetIndex,
                {QStringLiteral("read-tree"), m_targetRef}, m_targetIndexPath);
         break;
     case Stage::PrepareTargetIndex:
-        runGit(Stage::CheckoutTargetSnapshot,
-               {QStringLiteral("checkout-index"), QStringLiteral("-a"),
-                QStringLiteral("--prefix=") + m_targetSnapshotPath + QStringLiteral("/")},
-               m_targetIndexPath);
+        runCheckoutIndex(Stage::CheckoutTargetSnapshot, m_targetSnapshotPath,
+                         m_plan.targetPaths, m_targetIndexPath);
         break;
     case Stage::CheckoutTargetSnapshot:
-        beginMutation(QStringLiteral("safe-merge"));
-        if (m_transactionActive) runSafeMerge();
+        beginMutation(QStringLiteral("preparing"));
         break;
     case Stage::UpdateSafeRef:
-        if (!m_targetBranch.isEmpty()) {
+        if (m_detachTarget) {
+            runGit(Stage::ResetSafeIndex, {"reset", "--mixed", m_targetRef});
+        } else if (!m_targetBranch.isEmpty()) {
             runGit(Stage::SwitchSafeHead,
                    {QStringLiteral("symbolic-ref"), QStringLiteral("HEAD"),
                     QStringLiteral("refs/heads/") + m_targetBranch});
@@ -277,12 +378,12 @@ void RepositoryUpdateJob::resolveTarget(const QString &output)
         m_trackBranch = true;
         m_upstreamRef = m_targetRef;
     } else {
-        const QString remote = selectRemoteBranch(output, m_spec.localBranch);
+        const QString remote = m_spec.kind == RepositoryKind::Extension
+            ? selectExtensionRemoteBranch(output, m_spec.localBranch)
+            : selectRemoteBranch(output, m_spec.localBranch);
         if (branchNeedsRecovery(m_spec.localBranch)) {
             m_targetRef = remote;
-            m_targetBranch = m_spec.kind == RepositoryKind::Core
-                ? QStringLiteral("minifox/version-core")
-                : QStringLiteral("minifox/version-extension");
+            m_targetBranch = remote.startsWith("origin/") ? remote.mid(7) : QString();
             m_trackBranch = true;
             m_upstreamRef = remote;
         } else {
@@ -294,8 +395,10 @@ void RepositoryUpdateJob::resolveTarget(const QString &output)
                  .arg(m_spec.displayName), false, true);
         return;
     }
-    if (m_dirty) beginSafeMerge();
-    else beginCleanMutation();
+    // Resolve the moving remote ref once. Preserve its name separately for upstream.
+    runGit(Stage::ResolveTargetCommit,
+           {QStringLiteral("rev-parse"), QStringLiteral("--verify"),
+            m_targetRef + QStringLiteral("^{commit}")});
 }
 
 void RepositoryUpdateJob::beginMutation(const QString &phase)
@@ -310,28 +413,25 @@ void RepositoryUpdateJob::beginMutation(const QString &phase)
     entry.originalHead = m_originalHead;
     entry.phase = phase;
     entry.startedAt = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    QString error;
-    if (!VersionTransactionStore::upsert(entry, &error)) {
-        fail(tr("无法记录 %1 的版本操作状态，仓库未被修改：%2")
-                 .arg(m_spec.displayName, error), false, true);
-        return;
-    }
-    m_transactionActive = true;
-}
-
-void RepositoryUpdateJob::beginCleanMutation()
-{
-    emit statusChanged(tr("正在同步 %1…").arg(m_spec.displayName));
-    beginMutation(QStringLiteral("fast-forward"));
-    if (!m_transactionActive) return;
-    if (!m_targetBranch.isEmpty()) {
-        runGit(Stage::CleanCheckout,
-               {QStringLiteral("checkout"), QStringLiteral("-B"),
-                m_targetBranch, m_targetRef});
-    } else {
-        runGit(Stage::CleanFastForward,
-               {QStringLiteral("merge"), QStringLiteral("--ff-only"), m_targetRef});
-    }
+    entry.upstreamRef = m_trackBranch ? m_upstreamRef : QString();
+    entry.detachedTarget = m_detachTarget;
+    auto *watcher = new QFutureWatcher<QString>(this);
+    connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher] {
+        const QString error = watcher->result();
+        watcher->deleteLater();
+        if (!error.isEmpty()) {
+            fail(tr("无法记录 %1 的版本操作状态，仓库未被修改：%2")
+                     .arg(m_spec.displayName, error), false, true);
+            return;
+        }
+        m_transactionActive = true;
+        runSafeMerge();
+    });
+    watcher->setFuture(QtConcurrent::run(SafeMergeEngine::workerPool(), [entry] {
+        QString error;
+        if (!VersionTransactionStore::upsert(entry, &error)) return error;
+        return QString();
+    }));
 }
 
 void RepositoryUpdateJob::beginSafeMerge()
@@ -353,15 +453,18 @@ void RepositoryUpdateJob::beginSafeMerge()
                  .arg(m_spec.displayName), false, true);
         return;
     }
-    runGit(Stage::PrepareWorkingIndex,
-           {QStringLiteral("read-tree"), QStringLiteral("HEAD")}, m_workingIndexPath);
+    // Local-only changes stay in place; only target changes need snapshots.
+    runGit(Stage::ResolveRemotePaths,
+           {QStringLiteral("diff"), QStringLiteral("--no-renames"),
+            QStringLiteral("--name-status"), QStringLiteral("-z"),
+            m_originalHead, m_targetRef});
 }
 
 void RepositoryUpdateJob::runSafeMerge()
 {
     const SafeMergeRequest request {m_spec.gitProgram, m_spec.root,
                                     m_baseSnapshotPath, m_localSnapshotPath,
-                                    m_targetSnapshotPath};
+                                    m_targetSnapshotPath, m_transactionId, {m_spec.gitPrefixArguments, m_spec.gitEnvironment}};
     auto *watcher = new QFutureWatcher<SafeMergeResult>(this);
     connect(watcher, &QFutureWatcher<SafeMergeResult>::finished, this,
             [this, watcher] {
@@ -369,7 +472,8 @@ void RepositoryUpdateJob::runSafeMerge()
         watcher->deleteLater();
         handleSafeMergeFinished(result);
     });
-    watcher->setFuture(QtConcurrent::run(SafeMergeEngine::run, request));
+    watcher->setFuture(QtConcurrent::run(SafeMergeEngine::workerPool(),
+                                          SafeMergeEngine::run, request));
 }
 
 void RepositoryUpdateJob::handleSafeMergeFinished(const SafeMergeResult &result)
@@ -381,6 +485,7 @@ void RepositoryUpdateJob::handleSafeMergeFinished(const SafeMergeResult &result)
         case SafeMergeError::MergeProcess: detail = tr("无法合并本地文件：%1").arg(result.detail); break;
         case SafeMergeError::WorkingTreeChanged: detail = tr("安全更新期间文件再次发生变化：%1").arg(result.detail); break;
         case SafeMergeError::FileWrite: detail = tr("无法写入安全更新结果：%1").arg(result.detail); break;
+        case SafeMergeError::RecoveryBackup: detail = tr("无法保存恢复资料：%1").arg(result.detail); break;
         case SafeMergeError::None: break;
         }
         const bool unmodified = result.error != SafeMergeError::FileWrite;
@@ -388,7 +493,9 @@ void RepositoryUpdateJob::handleSafeMergeFinished(const SafeMergeResult &result)
              false, unmodified);
         return;
     }
-    if (m_targetBranch.isEmpty()) {
+    if (m_detachTarget) {
+        runGit(Stage::UpdateSafeRef, {"update-ref", "--no-deref", "HEAD", m_targetRef});
+    } else if (m_targetBranch.isEmpty()) {
         runGit(Stage::UpdateSafeRef,
                {QStringLiteral("reset"), QStringLiteral("--mixed"), m_targetRef});
     } else {
@@ -400,6 +507,31 @@ void RepositoryUpdateJob::handleSafeMergeFinished(const SafeMergeResult &result)
 
 void RepositoryUpdateJob::complete()
 {
+    if (m_transactionActive && !m_completionVerified) {
+        auto *watcher = new QFutureWatcher<QString>(this);
+        connect(watcher, &QFutureWatcher<QString>::finished, this, [this, watcher] {
+            const QString error = watcher->result();
+            watcher->deleteLater();
+            if (!error.isEmpty()) { fail(error); return; }
+            m_completionVerified = true;
+            complete();
+        });
+        const QString id = m_transactionId, git = m_spec.gitProgram;
+        const RepositoryGitContext context{m_spec.gitPrefixArguments, m_spec.gitEnvironment};
+        watcher->setFuture(QtConcurrent::run(SafeMergeEngine::workerPool(), [id, git, context] {
+            QString error;
+            const auto entries = VersionTransactionStore::entries(&error);
+            for (auto entry : entries) {
+                if (entry.id != id) continue;
+                if (!RepositoryRecovery::verify(git, entry, &error, context)) return error;
+                entry.phase = "committed";
+                if (!VersionTransactionStore::upsert(entry, &error)) return error;
+                return QString();
+            }
+            return error.isEmpty() ? QCoreApplication::translate("RepositoryUpdateJob", "恢复记录丢失，已停止完成操作。") : error;
+        }));
+        return;
+    }
     QString error;
     if (m_transactionActive && !VersionTransactionStore::remove(m_transactionId, &error)) {
         fail(tr("%1 已更新，但无法清除中断标记：%2").arg(m_spec.displayName, error));
@@ -421,23 +553,21 @@ void RepositoryUpdateJob::fail(const QString &message, bool timedOut,
     }
     clearTemporaryFiles();
     emit finished({m_spec.root, m_spec.displayName, false,
-                   m_transactionActive, timedOut, message});
+                   m_transactionActive || m_hadInterruptedEntry, timedOut, message});
 }
 
 void RepositoryUpdateJob::clearTemporaryFiles()
 {
-    for (const QString &path : {m_workingIndexPath, m_baseIndexPath, m_targetIndexPath}) {
-        if (!path.isEmpty()) QFile::remove(path);
-    }
-    for (const QString &path : {m_baseSnapshotPath, m_localSnapshotPath, m_targetSnapshotPath}) {
-        if (!path.isEmpty()) QDir(path).removeRecursively();
-    }
+    SafeMergeEngine::discardSnapshots({m_workingIndexPath, m_baseIndexPath, m_targetIndexPath,
+                                       m_baseSnapshotPath, m_localSnapshotPath, m_targetSnapshotPath});
     m_workingIndexPath.clear();
     m_baseIndexPath.clear();
     m_targetIndexPath.clear();
     m_baseSnapshotPath.clear();
     m_localSnapshotPath.clear();
     m_targetSnapshotPath.clear();
+    m_localEntries.clear();
+    m_plan = SparseSnapshotPaths{};
 }
 
 QString RepositoryUpdateJob::actionKey() const

@@ -21,5 +21,5 @@ public:
 
 private:
     static QStringList parameterArguments(const QVariantMap &parameters);
-    static QString maskedEnvironmentValue(const QString &name, const QString &value);
+
 };

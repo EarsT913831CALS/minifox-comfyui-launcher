@@ -232,8 +232,8 @@ Item {
 
                     AppLabel {
                         width: parent.width
-                        text: root.properties.text || ""
-                        textFormat: Text.MarkdownText
+                        text: root.appContext.skins.safeMarkdown(root.properties.text || "")
+                        textFormat: Text.RichText
                         wrapMode: Text.WordWrap
                         color: Theme.foregroundSecondary
                         onLinkActivated: link => root.appContext.skins.openExternalLink(link)

@@ -1,8 +1,11 @@
+#include "SafeDataPath.h"
 #include "SafeMergeEngine.h"
 
 #include "ProcessTextDecoder.h"
+#include "RepositoryRecovery.h"
 
 #include <QDir>
+#include <QCoreApplication>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
@@ -10,19 +13,16 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
+#include <QTemporaryDir>
+#include <QThreadPool>
+#include <QtConcurrentRun>
 
 #include <algorithm>
 #include <utility>
 
 namespace {
 
-struct WorkingTreeChange {
-    QString path;
-    QByteArray originalData;
-    QByteArray replacementData;
-    bool originalExists = false;
-    bool remove = false;
-};
+using WorkingTreeChange = RecoveryChange;
 
 struct LineEdit {
     int baseStart = 0;
@@ -30,6 +30,15 @@ struct LineEdit {
     QList<QByteArray> replacement;
     bool local = false;
 };
+
+struct DiffHunk {
+    int baseStart;
+    int baseCount;
+    int variantStart;
+    int variantCount;
+};
+
+using FileHunks = QList<QList<DiffHunk>>;
 
 bool isRegularFile(const QString &path)
 {
@@ -64,7 +73,8 @@ QByteArray readFile(const QString &path, bool *ok)
 
 bool writeFile(const QString &path, const QByteArray &data)
 {
-    if (!QDir().mkpath(QFileInfo(path).absolutePath())) return false;
+    SafeDataPath guard;
+    if (!guard.lock(path) || !QDir().mkpath(QFileInfo(path).absolutePath()) || !guard.lock(path)) return false;
     QSaveFile file(path);
     return file.open(QIODevice::WriteOnly)
         && file.write(data) == data.size()
@@ -109,21 +119,91 @@ QByteArray normalizeLineEnding(QByteArray line, const QByteArray &lineEnding)
     return line;
 }
 
-bool collectLineEdits(const SafeMergeRequest &request,
-                      const QString &basePath, const QString &variantPath,
-                      const QList<QByteArray> &baseLines,
-                      const QList<QByteArray> &variantLines,
-                      bool local, QList<LineEdit> *edits, QString *error)
+// Numeric aliases keep patch headers independent of repository filenames (including
+// tabs, Unicode and names which resemble patch syntax). Only conflicting text
+// files enter these directories; binary and clean files never get text-diffed.
+bool collectBatchHunks(const QString &git, const QString &root,
+                       const QString &variant, int fileCount,
+                       FileHunks *hunks, QString *error)
 {
+    hunks->resize(fileCount);
     QProcess process;
-    process.setProcessChannelMode(QProcess::SeparateChannels);
-    process.setProgram(request.gitProgram);
+    process.setWorkingDirectory(root);
+    process.setProgram(git);
     process.setArguments({QStringLiteral("diff"), QStringLiteral("--no-index"),
-                          QStringLiteral("--no-color"), QStringLiteral("--no-ext-diff"),
-                          QStringLiteral("--unified=0"), QStringLiteral("--text"),
-                          QStringLiteral("--ignore-space-at-eol"),
-                          QStringLiteral("--ignore-cr-at-eol"), QStringLiteral("--"),
-                          basePath, variantPath});
+                         QStringLiteral("--no-prefix"), QStringLiteral("--no-color"),
+                         QStringLiteral("--no-ext-diff"), QStringLiteral("--no-textconv"),
+                         QStringLiteral("--no-renames"), QStringLiteral("--diff-algorithm=myers"),
+                         QStringLiteral("--unified=0"), QStringLiteral("--text"),
+                         QStringLiteral("--ignore-space-at-eol"),
+                         QStringLiteral("--ignore-cr-at-eol"), QStringLiteral("--"),
+                         QStringLiteral("base"), variant});
+
+    const QRegularExpression hunkExpression(
+        QStringLiteral("^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@"));
+    const QByteArray filePrefix = "+++ " + variant.toUtf8() + '/';
+    int currentFile = -1;
+    bool inHunk = false;
+    bool invalid = false;
+    QByteArray line;
+    bool discardLine = false;
+    const auto parseLine = [&] {
+        if (line.startsWith("diff --git ")) {
+            currentFile = -1;
+            inHunk = false;
+        } else if (!inHunk && line.startsWith(filePrefix)) {
+            bool ok = false;
+            currentFile = line.mid(filePrefix.size()).trimmed().toInt(&ok);
+            if (!ok || currentFile < 0 || currentFile >= fileCount) invalid = true;
+        } else if (line.startsWith("@@ ")) {
+            inHunk = true;
+            const auto match = hunkExpression.match(QString::fromLatin1(line));
+            if (!match.hasMatch() || currentFile < 0 || currentFile >= fileCount) {
+                invalid = true;
+                return;
+            }
+            bool oldOk = false, newOk = false, oldCountOk = true, newCountOk = true;
+            const int oldLine = match.captured(1).toInt(&oldOk);
+            const int oldCount = match.captured(2).isEmpty()
+                ? 1 : match.captured(2).toInt(&oldCountOk);
+            const int newLine = match.captured(3).toInt(&newOk);
+            const int newCount = match.captured(4).isEmpty()
+                ? 1 : match.captured(4).toInt(&newCountOk);
+            if (!oldOk || !newOk || !oldCountOk || !newCountOk) {
+                invalid = true;
+                return;
+            }
+            (*hunks)[currentFile].append({oldCount == 0 ? oldLine : oldLine - 1,
+                                         oldCount, newCount == 0 ? newLine : newLine - 1,
+                                         newCount});
+        }
+    };
+    // Drain stdout while Git runs. Retain only bounded header lines and hunk
+    // coordinates, rather than buffering two potentially enormous patches.
+    const auto drain = [&] {
+        const QByteArray chunk = process.readAllStandardOutput();
+        qsizetype start = 0;
+        while (start < chunk.size()) {
+            const qsizetype newline = chunk.indexOf('\n', start);
+            const qsizetype end = newline < 0 ? chunk.size() : newline;
+            if (!discardLine) {
+                if (line.size() + end - start > 1024) {
+                    line.append(chunk.constData() + start, 1024 - line.size());
+                    // Git may append a long function-context label to a hunk
+                    // header. Its coordinates fit in the retained prefix.
+                    if (line.startsWith("@@ ")) parseLine();
+                    line.clear();
+                    discardLine = true;
+                } else line.append(chunk.constData() + start, end - start);
+            }
+            if (newline < 0) break;
+            if (!discardLine) parseLine();
+            line.clear();
+            discardLine = false;
+            start = newline + 1;
+        }
+    };
+    QObject::connect(&process, &QProcess::readyReadStandardOutput, &process, drain);
     process.start();
     if (!process.waitForStarted(5000)) {
         if (error) *error = process.errorString();
@@ -132,40 +212,36 @@ bool collectLineEdits(const SafeMergeRequest &request,
     if (!process.waitForFinished(120000)) {
         process.kill();
         process.waitForFinished(2000);
-        if (error) *error = QStringLiteral("git diff timed out: %1").arg(variantPath);
+        if (error) *error = QCoreApplication::translate("SafeMergeEngine", "批量 Git 差异计算超时。");
         return false;
     }
+    drain();
+    if (!line.isEmpty() && !discardLine) parseLine();
     if (process.exitStatus() != QProcess::NormalExit
-        || process.exitCode() < 0 || process.exitCode() > 1) {
+        || process.exitCode() < 0 || process.exitCode() > 1 || invalid) {
         if (error) {
-            const QString detail = ProcessTextDecoder::decode(
-                process.readAllStandardError()).trimmed();
-            *error = detail.isEmpty()
-                ? QStringLiteral("git diff failed for %1 (exit code %2)")
-                      .arg(variantPath).arg(process.exitCode())
-                : detail;
+            *error = ProcessTextDecoder::decode(process.readAllStandardError()).trimmed();
+            if (error->isEmpty()) *error = QCoreApplication::translate("SafeMergeEngine", "批量 Git 差异输出无效。");
         }
         return false;
     }
-    if (process.exitCode() == 0) return true;
+    return true;
+}
 
-    const QString diff = QString::fromUtf8(process.readAllStandardOutput());
-    const QRegularExpression hunkExpression(
-        QStringLiteral("^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@"),
-        QRegularExpression::MultilineOption);
-    auto matches = hunkExpression.globalMatch(diff);
-    while (matches.hasNext()) {
-        const QRegularExpressionMatch match = matches.next();
-        const int oldLine = match.captured(1).toInt();
-        const int oldCount = match.captured(2).isEmpty() ? 1 : match.captured(2).toInt();
-        const int newLine = match.captured(3).toInt();
-        const int newCount = match.captured(4).isEmpty() ? 1 : match.captured(4).toInt();
-        const int baseStart = oldCount == 0 ? oldLine : oldLine - 1;
-        const int variantStart = newCount == 0 ? newLine : newLine - 1;
+bool collectLineEdits(const QList<DiffHunk> &hunks,
+                      const QList<QByteArray> &baseLines,
+                      const QList<QByteArray> &variantLines,
+                      bool local, QList<LineEdit> *edits, QString *error)
+{
+    for (const DiffHunk &hunk : hunks) {
+        const int baseStart = hunk.baseStart;
+        const int oldCount = hunk.baseCount;
+        const int variantStart = hunk.variantStart;
+        const int newCount = hunk.variantCount;
         if (baseStart < 0 || variantStart < 0
-            || baseStart + oldCount > baseLines.size()
-            || variantStart + newCount > variantLines.size()) {
-            if (error) *error = QStringLiteral("Invalid zero-context diff for %1").arg(variantPath);
+            || qsizetype(baseStart) + oldCount > baseLines.size()
+            || qsizetype(variantStart) + newCount > variantLines.size()) {
+            if (error) *error = QCoreApplication::translate("SafeMergeEngine", "零上下文差异数据无效。");
             return false;
         }
 
@@ -210,8 +286,7 @@ bool editsOverlap(const LineEdit &left, const LineEdit &right)
         && right.baseStart < left.baseStart + left.baseCount;
 }
 
-bool mergeText(const SafeMergeRequest &request, const QString &localPath,
-               const QString &basePath, const QString &targetPath,
+bool mergeText(const QList<DiffHunk> &localHunks, const QList<DiffHunk> &remoteHunks,
                const QByteArray &baseData, const QByteArray &localData,
                const QByteArray &targetData, const QByteArray &workingData,
                QByteArray *mergedData,
@@ -222,17 +297,26 @@ bool mergeText(const SafeMergeRequest &request, const QString &localPath,
     const QList<QByteArray> targetLines = splitLines(targetData);
     QList<LineEdit> localEdits;
     QList<LineEdit> remoteEdits;
-    if (!collectLineEdits(request, basePath, localPath, baseLines, localLines,
+    if (!collectLineEdits(localHunks, baseLines, localLines,
                           true, &localEdits, error)
-        || !collectLineEdits(request, basePath, targetPath, baseLines, targetLines,
+        || !collectLineEdits(remoteHunks, baseLines, targetLines,
                              false, &remoteEdits, error)) {
         return false;
     }
 
     QList<LineEdit> mergedEdits = localEdits;
+    qsizetype firstLocal = 0;
     for (const LineEdit &remoteEdit : std::as_const(remoteEdits)) {
+        while (firstLocal < localEdits.size()
+               && localEdits[firstLocal].baseStart + localEdits[firstLocal].baseCount
+                   <= remoteEdit.baseStart
+               && !editsOverlap(remoteEdit, localEdits[firstLocal])) {
+            ++firstLocal;
+        }
         bool overlapsLocal = false;
-        for (const LineEdit &localEdit : std::as_const(localEdits)) {
+        for (qsizetype index = firstLocal; index < localEdits.size(); ++index) {
+            const LineEdit &localEdit = localEdits[index];
+            if (localEdit.baseStart > remoteEdit.baseStart + remoteEdit.baseCount) break;
             if (editsOverlap(remoteEdit, localEdit)) {
                 overlapsLocal = true;
                 break;
@@ -242,28 +326,27 @@ bool mergeText(const SafeMergeRequest &request, const QString &localPath,
     }
     std::sort(mergedEdits.begin(), mergedEdits.end(),
               [](const LineEdit &left, const LineEdit &right) {
-        if (left.baseStart != right.baseStart) return left.baseStart > right.baseStart;
-        return left.baseCount > right.baseCount;
+        if (left.baseStart != right.baseStart) return left.baseStart < right.baseStart;
+        // An insertion at the boundary precedes a replacement at that position.
+        return left.baseCount < right.baseCount;
     });
 
-    QList<QByteArray> result = baseLines;
     const QByteArray lineEnding = workingData.contains("\r\n")
         ? QByteArray("\r\n") : QByteArray("\n");
-    for (LineEdit edit : std::as_const(mergedEdits)) {
-        for (QByteArray &line : edit.replacement) {
-            line = normalizeLineEnding(line, lineEnding);
-        }
-        for (int count = 0; count < edit.baseCount; ++count) {
-            result.removeAt(edit.baseStart);
-        }
-        for (auto iterator = edit.replacement.crbegin();
-             iterator != edit.replacement.crend(); ++iterator) {
-            result.insert(edit.baseStart, *iterator);
-        }
-    }
-    for (QByteArray &line : result) line = normalizeLineEnding(line, lineEnding);
     QByteArray output;
-    for (const QByteArray &line : std::as_const(result)) output += line;
+    qsizetype cursor = 0;
+    for (const LineEdit &edit : std::as_const(mergedEdits)) {
+        while (cursor < edit.baseStart) {
+            output += normalizeLineEnding(baseLines[cursor++], lineEnding);
+        }
+        for (const QByteArray &line : edit.replacement) {
+            output += normalizeLineEnding(line, lineEnding);
+        }
+        cursor = edit.baseStart + edit.baseCount;
+    }
+    while (cursor < baseLines.size()) {
+        output += normalizeLineEnding(baseLines[cursor++], lineEnding);
+    }
     if (mergedData) *mergedData = output;
     return true;
 }
@@ -272,6 +355,7 @@ bool mergeText(const SafeMergeRequest &request, const QString &localPath,
 
 SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
 {
+    SafeDataPath guard;
     const QDir baseRoot(request.baseSnapshotRoot);
     const QDir localRoot(request.localSnapshotRoot);
     const QDir targetRoot(request.targetSnapshotRoot);
@@ -279,12 +363,19 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
     paths.unite(snapshotFiles(request.localSnapshotRoot));
     paths.unite(snapshotFiles(request.targetSnapshotRoot));
     QList<WorkingTreeChange> changes;
+    QTemporaryDir batchDirectory;
+    QStringList textPaths;
 
     for (const QString &relativePath : std::as_const(paths)) {
         const QString basePath = baseRoot.filePath(relativePath);
         const QString localPath = localRoot.filePath(relativePath);
         const QString targetPath = targetRoot.filePath(relativePath);
         const QString actualPath = QDir(request.workingRoot).filePath(relativePath);
+        QString pathError;
+        if (!SafeDataPath::canonicalRelative(relativePath)
+            || !guard.lock(actualPath, &pathError) || !guard.lock(basePath, &pathError)
+            || !guard.lock(localPath, &pathError) || !guard.lock(targetPath, &pathError))
+            return {false, SafeMergeError::FileWrite, relativePath + ": " + pathError};
         const bool baseExists = isRegularFile(basePath);
         const bool localExists = isRegularFile(localPath);
         const bool targetExists = isRegularFile(targetPath);
@@ -331,16 +422,47 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
             continue;
         }
 
-        QByteArray mergedData;
-        QString mergeError;
-        if (!mergeText(request, localPath, basePath, targetPath,
-                       baseData, localData, targetData, actualData,
-                       &mergedData, &mergeError)) {
-            return {false, SafeMergeError::MergeProcess,
-                    mergeError.isEmpty() ? relativePath : mergeError};
+        const QString alias = QString::number(textPaths.size());
+        const QDir batch(batchDirectory.path());
+        if (!batchDirectory.isValid()
+            || !writeFile(batch.filePath("base/" + alias), baseData)
+            || !writeFile(batch.filePath("local/" + alias), localData)
+            || !writeFile(batch.filePath("target/" + alias), targetData)
+            || !writeFile(batch.filePath("working/" + alias), actualData)) {
+            return {false, SafeMergeError::SnapshotRead, relativePath};
         }
-        if (mergedData != actualData) {
-            changes.append({actualPath, actualData, mergedData, true, false});
+        textPaths.append(relativePath);
+    }
+
+    if (!textPaths.isEmpty()) {
+        FileHunks localHunks, remoteHunks;
+        QString error;
+        if (!collectBatchHunks(request.gitProgram, batchDirectory.path(),
+                               QStringLiteral("local"), textPaths.size(), &localHunks, &error)
+            || !collectBatchHunks(request.gitProgram, batchDirectory.path(),
+                                  QStringLiteral("target"), textPaths.size(), &remoteHunks, &error)) {
+            return {false, SafeMergeError::MergeProcess, error};
+        }
+        const QDir batch(batchDirectory.path());
+        for (qsizetype index = 0; index < textPaths.size(); ++index) {
+            const QString alias = QString::number(index);
+            bool baseOk = false, localOk = false, targetOk = false, actualOk = false;
+            const QByteArray baseData = readFile(batch.filePath("base/" + alias), &baseOk);
+            const QByteArray localData = readFile(batch.filePath("local/" + alias), &localOk);
+            const QByteArray targetData = readFile(batch.filePath("target/" + alias), &targetOk);
+            const QByteArray actualData = readFile(batch.filePath("working/" + alias), &actualOk);
+            if (!baseOk || !localOk || !targetOk || !actualOk) {
+                return {false, SafeMergeError::SnapshotRead, textPaths[index]};
+            }
+            QByteArray mergedData;
+            if (!mergeText(localHunks[index], remoteHunks[index],
+                           baseData, localData, targetData, actualData, &mergedData, &error)) {
+                return {false, SafeMergeError::MergeProcess, textPaths[index] + ": " + error};
+            }
+            if (mergedData != actualData) {
+                changes.append({QDir(request.workingRoot).filePath(textPaths[index]),
+                                actualData, mergedData, true, false});
+            }
         }
     }
 
@@ -361,8 +483,28 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
         }
     }
 
+    if (!request.transactionId.isEmpty()) {
+        QString error;
+        const auto entries = VersionTransactionStore::entries(&error);
+        bool prepared = false;
+        for (const auto &entry : entries) {
+            if (entry.id == request.transactionId) {
+                prepared = RepositoryRecovery::prepare(request.gitProgram, entry, changes, &error, request.gitContext);
+                break;
+            }
+        }
+        if (!prepared) return {false, SafeMergeError::RecoveryBackup, error};
+    }
     QList<WorkingTreeChange> applied;
     for (const WorkingTreeChange &change : std::as_const(changes)) {
+        bool currentOk = false;
+        const QByteArray currentData = change.originalExists ? readFile(change.path, &currentOk) : QByteArray();
+        if ((change.originalExists && (!currentOk || currentData != change.originalData))
+            || (!change.originalExists && QFileInfo::exists(change.path))) {
+            // Some earlier files may already be written. Keep the journal and
+            // require conflict-aware recovery, rather than discarding evidence.
+            return {false, SafeMergeError::FileWrite, change.path};
+        }
         const bool changed = change.remove
             ? (!QFileInfo::exists(change.path) || QFile::remove(change.path))
             : writeFile(change.path, change.replacementData);
@@ -377,4 +519,116 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
         return {false, SafeMergeError::FileWrite, change.path};
     }
     return {true, SafeMergeError::None, {}};
+}
+
+QList<LocalPathEntry> SafeMergeEngine::parseStatusEntries(const QByteArray &data)
+{
+    QList<LocalPathEntry> entries;
+    const QList<QByteArray> records = data.split('\0');
+    for (const QByteArray &record : records) {
+        if (record.size() < 4 || record.at(2) != ' ') continue;
+        LocalPathEntry entry;
+        entry.path = QString::fromUtf8(record.mid(3));
+        if (entry.path.isEmpty()) continue;
+        entry.added = record.at(0) == 'A' || record.at(1) == 'A';
+        entry.deleted = record.at(0) == 'D' || record.at(1) == 'D';
+        entries.append(entry);
+    }
+    return entries;
+}
+
+QList<RemotePathEntry> SafeMergeEngine::parseNameStatusEntries(const QByteArray &data)
+{
+    QList<RemotePathEntry> entries;
+    const QList<QByteArray> fields = data.split('\0');
+    for (int index = 0; index + 1 < fields.size(); index += 2) {
+        const QByteArray status = fields.at(index);
+        const QByteArray path = fields.at(index + 1);
+        if (status.isEmpty() || path.isEmpty()) continue;
+        RemotePathEntry entry;
+        entry.path = QString::fromUtf8(path);
+        entry.added = status.at(0) == 'A';
+        entry.deleted = status.at(0) == 'D';
+        entries.append(entry);
+    }
+    return entries;
+}
+
+SparseSnapshotPaths SafeMergeEngine::planSnapshots(const QList<LocalPathEntry> &local,
+                                                   const QList<RemotePathEntry> &remote)
+{
+    QSet<QString> localAdded;
+    QSet<QString> localDeleted;
+    QSet<QString> remoteAdded;
+    QSet<QString> remoteDeleted;
+    QSet<QString> changed;
+
+    for (const LocalPathEntry &entry : local) {
+        if (entry.path.isEmpty()) continue;
+        if (entry.added) localAdded.insert(entry.path);
+        if (entry.deleted) localDeleted.insert(entry.path);
+    }
+    for (const RemotePathEntry &entry : remote) {
+        if (entry.path.isEmpty()) continue;
+        changed.insert(entry.path);
+        if (entry.added) remoteAdded.insert(entry.path);
+        if (entry.deleted) remoteDeleted.insert(entry.path);
+    }
+
+    SparseSnapshotPaths plan;
+    for (const QString &path : std::as_const(changed)) {
+        const bool inHead = !localAdded.contains(path) && !remoteAdded.contains(path);
+        // The working snapshot stages tracked changes onto HEAD.
+        const bool inLocal = inHead && !localDeleted.contains(path);
+        // Keep local additions untracked unless the target also adds the path.
+        const bool inTarget = remoteAdded.contains(path)
+            || (!localAdded.contains(path) && !remoteDeleted.contains(path));
+        if (inHead) plan.basePaths.append(path);
+        if (inLocal) plan.localPaths.append(path);
+        if (inTarget) plan.targetPaths.append(path);
+    }
+    plan.basePaths.sort();
+    plan.localPaths.sort();
+    plan.targetPaths.sort();
+    return plan;
+}
+
+QByteArray SafeMergeEngine::encodePathList(const QStringList &paths)
+{
+    QByteArray result;
+    for (const QString &path : paths) {
+        result += path.toUtf8();
+        result += '\0';
+    }
+    return result;
+}
+
+QThreadPool *SafeMergeEngine::workerPool()
+{
+    static QThreadPool pool;
+    static const bool configured = [] {
+        pool.setMaxThreadCount(1);
+        pool.setThreadPriority(QThread::LowPriority);
+        return true;
+    }();
+    Q_UNUSED(configured);
+    return &pool;
+}
+
+void SafeMergeEngine::discardSnapshots(const QStringList &paths)
+{
+    QStringList pending;
+    for (const QString &path : paths) {
+        if (!path.isEmpty()) pending.append(path);
+    }
+    if (pending.isEmpty()) return;
+    // Snapshot paths are private, UUID-named artifacts. The same single worker
+    // owns merging and cleanup, so deleting an owner cannot race its merge.
+    (void)QtConcurrent::run(workerPool(), [pending] {
+        for (const QString &path : pending) {
+            const QFileInfo info(path);
+            if (info.isDir() && !info.isSymLink()) QDir(path).removeRecursively();
+            else QFile::remove(path);
+        }
+    });
 }

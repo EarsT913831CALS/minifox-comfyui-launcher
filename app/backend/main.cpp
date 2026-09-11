@@ -1,9 +1,13 @@
 #include "AppContext.h"
+#include "ConfigurationPackageManager.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +24,16 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
 
     QGuiApplication application(argc, argv);
+    QString recoveryError;
+    if (!ConfigurationPackageManager::recoverPendingState(&recoveryError)) {
+#ifdef Q_OS_WIN
+        MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(recoveryError.utf16()),
+                    L"Minifox — 配置恢复未完成", MB_OK | MB_ICONERROR);
+#else
+        qCritical().noquote() << recoveryError;
+#endif
+        return EXIT_FAILURE;
+    }
     AppContext appContext;
     QObject::connect(&application, &QCoreApplication::aboutToQuit,
                      &appContext, [&appContext] {

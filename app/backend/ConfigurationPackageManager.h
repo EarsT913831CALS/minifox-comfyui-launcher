@@ -20,6 +20,7 @@ public:
     bool restartRequired() const;
     QString lastError() const;
     QString lastMessage() const;
+    static bool recoverPendingState(QString *error = nullptr);
 
     Q_INVOKABLE bool switchProfile(int index);
     Q_INVOKABLE bool addProfile();
@@ -37,7 +38,7 @@ private:
     QString snapshotPath(const QString &profileId) const;
     bool captureCurrentProfile(const QString &destination,
                                bool includeSensitiveValues = true);
-    bool applyPackageState(const QString &packagePath, bool *changed);
+    bool applyPackageState(const QString &packagePath, bool *changed, const QString &targetId);
     void setError(const QString &message);
     bool flushPendingChanges();
     void setMessage(const QString &message);

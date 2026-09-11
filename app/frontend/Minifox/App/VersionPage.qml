@@ -33,6 +33,7 @@ Pane {
                                                  + root.versionActionWidth
                                                  + root.removeActionWidth
     readonly property int availableActionWidth: root.englishUi ? 86 : 74
+    readonly property real extensionCellPadding: 16
     property real extensionViewportWidth: 1280
     property real extensionEnabledWidth: 56
     property real extensionNameWidth: 300
@@ -79,21 +80,7 @@ Pane {
     }
 
     function browserUrl(remote) {
-        let value = String(remote || "").trim();
-        if (value.length === 0)
-            return "";
-        if (value.startsWith("git@")) {
-            const separator = value.indexOf(":");
-            if (separator > 4)
-                value = "https://" + value.slice(4, separator) + "/" + value.slice(separator + 1);
-        } else if (value.startsWith("ssh://git@")) {
-            value = "https://" + value.slice(10);
-        } else if (!value.includes("://")) {
-            value = "https://" + value;
-        }
-        if (value.endsWith(".git"))
-            value = value.slice(0, -4);
-        return value;
+        return root.appContext.skins.repositoryBrowserUrl(String(remote || ""));
     }
 
     function showRefreshNotice(success, message) {
@@ -125,7 +112,7 @@ Pane {
             cursorShape: Qt.PointingHandCursor
             onClicked: mouse => {
                 if ((mouse.modifiers & Qt.ControlModifier) !== 0)
-                    Qt.openUrlExternally(remoteLink.targetUrl);
+                    root.appContext.skins.openExternalLink(remoteLink.targetUrl);
             }
         }
 
@@ -145,8 +132,8 @@ Pane {
             verticalAlignment: Text.AlignVCenter
             horizontalAlignment: headerCell.label === qsTr("启用")
                                  ? Text.AlignHCenter : Text.AlignLeft
-            leftPadding: headerCell.label === qsTr("启用") ? 0 : 8
-            rightPadding: headerCell.adjustable ? 8 : 0
+            leftPadding: headerCell.label === qsTr("启用") ? 0 : root.extensionCellPadding
+            rightPadding: headerCell.label === qsTr("启用") ? 0 : root.extensionCellPadding
             text: headerCell.label
             font.pointSize: root.tableFontSize
             elide: Text.ElideRight
@@ -313,12 +300,20 @@ Pane {
             padding: Theme.spacingMd
             strong: true
 
-            AppLabel {
+            ColumnLayout {
                 width: parent.width
-                text: qsTr("上次版本操作“%1”未完成。请点击要执行的操作按钮，从头按当前仓库状态重新执行；完成前无法启动 ComfyUI。")
-                      .arg(root.versions.interruptedOperationDescription)
-                color: Theme.error
-                wrapMode: Text.WordWrap
+                AppLabel {
+                    Layout.fillWidth: true
+                    text: qsTr("上次版本操作“%1”未完成。请先恢复安全更新；重置、清理或旧版本操作可能需要人工检查备份。恢复完成前无法启动 ComfyUI。")
+                          .arg(root.versions.interruptedOperationDescription)
+                    color: Theme.error
+                    wrapMode: Text.WordWrap
+                }
+                Button {
+                    text: qsTr("恢复安全更新")
+                    enabled: !root.versions.busy
+                    onClicked: root.versions.recoverInterruptedOperations()
+                }
             }
         }
 
@@ -589,11 +584,11 @@ Pane {
                                     Row {
                                         anchors.fill: parent
                                         CheckBox { width: root.extensionEnabledWidth; height: parent.height; checked: extensionRow.modelData.enabled; onToggled: root.versions.setExtensionEnabled(extensionRow.modelData.path, checked) }
-                                        AppLabel { width: root.extensionNameWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.name; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
-                                        CtrlRemoteLink { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; remoteUrl: extensionRow.modelData.remote || ""; font.pointSize: root.tableFontSize }
-                                        AppLabel { width: root.extensionBranchWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.branch || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
-                                        AppLabel { width: root.extensionCommitWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.commit || "—"; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
-                                        AppLabel { width: root.extensionDateWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 8; text: extensionRow.modelData.date; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: root.extensionNameWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.name; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        CtrlRemoteLink { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; remoteUrl: extensionRow.modelData.remote || ""; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: root.extensionBranchWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.branch || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionCommitWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.commit || "—"; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionDateWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.date; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
                                         AppButton {
                                             width: root.statusActionWidth
                                             height: parent.height

@@ -53,6 +53,8 @@ public:
     Q_INVOKABLE bool setBackgroundImage(const QUrl &source);
     Q_INVOKABLE QString assetUrl(const QString &assetReference) const;
     Q_INVOKABLE bool openLocalFolder(const QString &path);
+    Q_INVOKABLE QString safeMarkdown(const QString &source) const;
+    Q_INVOKABLE QString repositoryBrowserUrl(const QString &remote) const;
     Q_INVOKABLE bool openExternalLink(const QUrl &url);
 
     Q_INVOKABLE void setAppearanceValue(const QString &key, const QVariant &value);

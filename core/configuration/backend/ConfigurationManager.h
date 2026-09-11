@@ -31,6 +31,7 @@ public:
         const QString &name,
         int maximumCharacters = MaximumProfileNameCharacters);
     static QString profileNameWithSuffix(const QString &baseName, const QString &suffix);
+    static QVariantMap shareableParameters(const QVariantMap &parameters);
     static bool isSensitiveEnvironmentName(const QString &name);
 
     QStringList profileNames() const;

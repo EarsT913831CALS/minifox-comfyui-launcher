@@ -16,6 +16,17 @@ set(minifox_zluda_package_files
     ${PROJECT_SOURCE_DIR}/assets/zluda/zluda-hip71.extpack
 )
 
+file(READ "${PROJECT_SOURCE_DIR}/assets/zluda/manifest.json" minifox_zluda_manifest)
+foreach(package IN LISTS minifox_zluda_package_files)
+    get_filename_component(package_name "${package}" NAME)
+    file(SHA256 "${package}" actual_hash)
+    string(JSON expected_hash GET "${minifox_zluda_manifest}" "${package_name}" archiveSha256)
+    if(NOT actual_hash STREQUAL expected_hash)
+        message(FATAL_ERROR "ZLUDA archive does not match the reviewed manifest: ${package_name}")
+    endif()
+endforeach()
+list(APPEND minifox_zluda_package_files "${PROJECT_SOURCE_DIR}/assets/zluda/manifest.json")
+
 qt_add_resources(minifox_runtime_backend minifox_zluda_packages
     BIG_RESOURCES
     PREFIX "/minifox/zluda"
@@ -40,10 +51,10 @@ target_link_libraries(minifox_runtime_backend
         Qt6::Core
         Qt6::Quick
         minifox_platform
+        minifox_shared_backend
     PRIVATE
         Qt6::Gui
         Qt6::Network
         minifox_application_settings_backend
         minifox_configuration_backend
-        minifox_shared_backend
 )

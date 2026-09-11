@@ -47,7 +47,8 @@ bool GitProcessRunner::running() const
 
 void GitProcessRunner::start(const QString &program, const QStringList &arguments,
                              const QProcessEnvironment &environment,
-                             int inactivityTimeoutMs)
+                             int inactivityTimeoutMs,
+                             const QByteArray &standardInput)
 {
     if (running()) return;
     m_standardOutput.clear();
@@ -60,6 +61,10 @@ void GitProcessRunner::start(const QString &program, const QStringList &argument
     m_process.setArguments(arguments);
     m_process.setProcessEnvironment(environment);
     m_process.start();
+    if (!standardInput.isEmpty()) {
+        m_process.write(standardInput);
+        m_process.closeWriteChannel();
+    }
     resetInactivityTimer();
 }
 

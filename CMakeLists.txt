@@ -71,6 +71,7 @@ add_subdirectory(app)
 
 if(MINIFOX_BUILD_TESTS)
     add_subdirectory(core/runtime/tests)
+    add_subdirectory(app/backend/tests)
     add_subdirectory(core/skin/tests)
     add_subdirectory(platform/windows/tests)
 endif()

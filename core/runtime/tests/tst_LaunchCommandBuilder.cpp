@@ -5,6 +5,7 @@
 #include "LogModel.h"
 #include "RuntimeManager.h"
 #include "ZludaBootstrap.h"
+#include "ExternalContent.h"
 
 #include <QFontDatabase>
 #include <QFile>
@@ -51,12 +52,54 @@ public:
     }
 
 private slots:
+    void safeNoticeDoesNotFetchImages() {
+        QTcpServer server; QVERIFY(server.listen(QHostAddress::LocalHost));
+        const QString source = QString("**bold** ![probe](http://127.0.0.1:%1/pixel) [web](https://example.com)").arg(server.serverPort());
+        QQmlEngine engine; QQmlComponent component(&engine);
+        component.setData("import QtQuick\nText { width: 300; height: 100; textFormat: Text.RichText }", QUrl());
+        QScopedPointer<QObject> item(component.create()); QVERIFY2(item, qPrintable(component.errorString()));
+        item->setProperty("text", ExternalContent::markdown(source));
+        QTest::qWait(250);
+        QVERIFY(!server.hasPendingConnections());
+        QVERIFY(item->property("text").toString().contains("https://example.com"));
+    }
+    void runtimeFreezesProfileAndBlocksSharedPython_data() {
+        QTest::addColumn<int>("port");
+        QTest::newRow("default-port") << 8188;
+        QTest::newRow("custom-port") << 8931;
+    }
+    void runtimeFreezesProfileAndBlocksSharedPython() {
+        QFETCH(int, port);
+        const QString python = QStandardPaths::findExecutable("python.exe");
+        QVERIFY(!python.isEmpty());
+        QTemporaryDir temp;
+        QFile main(temp.filePath("main.py")); QVERIFY(main.open(QIODevice::WriteOnly));
+        main.write("import time\ntime.sleep(10)\n"); main.close();
+        QFile requirements(temp.filePath("requirements.txt")); QVERIFY(requirements.open(QIODevice::WriteOnly)); requirements.close();
+        ConfigurationManager configuration(temp.filePath("profiles.json"));
+        configuration.setComfyRoot(temp.path()); configuration.setPythonPath(python);
+        configuration.setParameterValue("port", port);
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        RuntimeManager runtime(&configuration, &settings);
+        runtime.start();
+        QVERIFY(runtime.active());
+        configuration.setPythonPath(temp.filePath("missing.exe"));
+        configuration.setParameterValue("port", 8932);
+        QVERIFY(runtime.serviceUrl().endsWith(QString(":%1").arg(port)));
+        OperationLease update;
+        QString error;
+        QVERIFY(!update.acquire({OperationLease::pythonEnvironment(python)}, &error));
+        QTRY_VERIFY_WITH_TIMEOUT(runtime.processId() > 0, 5000);
+        runtime.shutdown();
+        QCoreApplication::processEvents();
+        QVERIFY2(update.acquire({OperationLease::pythonEnvironment(python)}, &error), qPrintable(error));
+    }
     void initTestCase();
     void defaultsStayImplicit();
     void commandPromptActivatesSelectedEnvironment();
     void explicitModesAndCustomArguments();
     void progressBridgeEnablesArgumentParsingBeforeProgressImport();
-    void environmentIsAppliedAndSecretsAreMasked();
+    void environmentIsAppliedAndFullyDisplayed();
     void sensitiveProfileSnapshotsCanBeRedacted();
     void proxySettingsAreAppliedToChildEnvironment();
     void appearanceSettingsExposeEffectiveValues();
@@ -71,6 +114,8 @@ private slots:
     void zludaBackendClassificationProtectsNvidia();
     void installedTorchBackendUsesVersionMetadata();
     void zludaRuntimePreparationStagesAliases();
+    void zludaCachedContentIsVerified();
+    void progressBridgeRejectsAdjacentModules();
     void zludaLocalIntegrationWhenConfigured();
     void zludaRuntimeManagerIntegrationWhenConfigured();
     void runtimeShutdownReleasesChildPort();
@@ -208,6 +253,9 @@ void LaunchCommandBuilderTest::explicitModesAndCustomArguments()
     QVERIFY(result.arguments.contains(QStringLiteral("--async-offload")));
     QCOMPARE(result.arguments.at(result.arguments.indexOf(QStringLiteral("--port")) + 1), QStringLiteral("9000"));
     QCOMPARE(result.arguments.constLast(), QStringLiteral("two words"));
+    QVERIFY(result.preview.contains(QStringLiteral("--port 9000")));
+    QVERIFY(result.preview.contains(QStringLiteral("--extra-test \"two words\"")));
+    QVERIFY(!result.preview.contains(QStringLiteral("[自由文本参数已隐藏]")));
 }
 
 void LaunchCommandBuilderTest::progressBridgeEnablesArgumentParsingBeforeProgressImport()
@@ -232,7 +280,68 @@ void LaunchCommandBuilderTest::progressBridgeEnablesArgumentParsingBeforeProgres
     QVERIFY(progressCall > parsingCall);
 }
 
-void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
+void LaunchCommandBuilderTest::progressBridgeRejectsAdjacentModules()
+{
+    QTemporaryDir temp;
+    QDir root(temp.path()); QVERIFY(root.mkpath("runtime")); QVERIFY(root.mkpath("comfy"));
+    QFile resource(":/minifox/python/minifox_progress_bridge.py"); QVERIFY(resource.open(QIODevice::ReadOnly));
+    const auto write = [](const QString &path, const QByteArray &bytes) {
+        QFile file(path); return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
+    };
+    const QString script = root.filePath("runtime/bridge.py");
+    QVERIFY(write(script, resource.readAll()));
+    QVERIFY(write(root.filePath("runtime/pkgutil.py"), "raise RuntimeError('ADJACENT_MODULE_LOADED')\n"));
+    QVERIFY(write(root.filePath("runtime/runpy.py"), "raise RuntimeError('ADJACENT_MODULE_LOADED')\n"));
+    QVERIFY(write(root.filePath("comfy/main.py"), "print('COMFY_CONTROL_OK')\n"));
+    QProcess process; auto env = QProcessEnvironment::systemEnvironment();
+    env.insert("MINIFOX_COMFY_MAIN", root.filePath("comfy/main.py"));
+    process.setProcessEnvironment(env); process.setWorkingDirectory(root.filePath("comfy"));
+    process.start(QStandardPaths::findExecutable("python"), {script});
+    QVERIFY(process.waitForFinished(15000));
+    const auto error = process.readAllStandardError();
+    QVERIFY2(process.exitCode() == 0, error.constData());
+    QVERIFY(process.readAllStandardOutput().contains("COMFY_CONTROL_OK"));
+    QVERIFY(!error.contains("ADJACENT_MODULE_LOADED"));
+}
+
+void LaunchCommandBuilderTest::zludaCachedContentIsVerified()
+{
+    QTemporaryDir temp; QString error;
+    QVERIFY2(ZludaBootstrap::preloadEmbeddedPackages(temp.path(), &error), qPrintable(error));
+    const auto corrupt = [](const QString &path) {
+        QFile file(path); if (!file.open(QIODevice::ReadWrite)) return false;
+        const auto size = file.size(); QByteArray byte = file.read(1);
+        if (byte.isEmpty()) return false;
+        byte[0] ^= 1;
+        return file.seek(0) && file.write(byte) == 1 && file.size() == size;
+    };
+    const auto contents = [](const QString &path) { QFile file(path); return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{}; };
+    for (const QString &name : {QString("zluda-hip57"), QString("zluda-hip71")}) {
+        const QString archive = temp.filePath(".minifox/packages/" + name + ".extpack");
+        const QString dll = temp.filePath(".minifox/packages/" + name + "/nvcuda.dll");
+        const QByteArray originalArchive = contents(archive), originalDll = contents(dll);
+        QVERIFY(corrupt(archive)); QVERIFY(corrupt(dll));
+        QVERIFY2(ZludaBootstrap::preloadEmbeddedPackages(temp.path(), &error), qPrintable(error));
+        QCOMPARE(contents(archive), originalArchive); QCOMPARE(contents(dll), originalDll);
+    }
+    const QString extra = temp.filePath(".minifox/packages/zluda-hip57/unknown.dll");
+    QFile file(extra); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("unexpected"); file.close();
+    QVERIFY(!ZludaBootstrap::preloadEmbeddedPackages(temp.path(), &error)); QVERIFY(!error.isEmpty());
+    QVERIFY(file.remove());
+#ifdef Q_OS_WIN
+    const QString package = temp.filePath(".minifox/packages/zluda-hip57");
+    QVERIFY(QDir().rename(package, package + "-original"));
+    QTemporaryDir outside;
+    QProcess junction; junction.start("cmd.exe", {"/d", "/c", "mklink", "/J", QDir::toNativeSeparators(package),
+                                                QDir::toNativeSeparators(outside.path())});
+    QVERIFY(junction.waitForFinished()); QCOMPARE(junction.exitCode(), 0);
+    QVERIFY(!ZludaBootstrap::preloadEmbeddedPackages(temp.path(), &error));
+    QVERIFY(QDir(outside.path()).entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty());
+    QVERIFY(QDir().rmdir(package));
+#endif
+}
+
+void LaunchCommandBuilderTest::environmentIsAppliedAndFullyDisplayed()
 {
     const QVariantList environment {
         QVariantMap{{QStringLiteral("name"), QStringLiteral("CUSTOM_ENV")},
@@ -260,8 +369,8 @@ void LaunchCommandBuilderTest::environmentIsAppliedAndSecretsAreMasked()
     QVERIFY(!result.environment.contains(QStringLiteral("DISABLED_ENV")));
     QVERIFY(!result.environment.contains(QStringLiteral("INVALID-NAME")));
     QVERIFY(result.preview.contains(QStringLiteral("set \"CUSTOM_ENV=value with spaces\"")));
-    QVERIFY(result.preview.contains(QStringLiteral("SERVICE_API_KEY=••••••••")));
-    QVERIFY(!result.preview.contains(QStringLiteral("top-secret")));
+    QVERIFY(result.preview.contains(QStringLiteral("SERVICE_API_KEY=top-secret")));
+    QVERIFY(!result.preview.contains(QStringLiteral("DISABLED_ENV")));
 }
 
 void LaunchCommandBuilderTest::sensitiveProfileSnapshotsCanBeRedacted()
@@ -291,18 +400,7 @@ void LaunchCommandBuilderTest::sensitiveProfileSnapshotsCanBeRedacted()
     const QVariantList redactedEnvironment = manager.currentProfileSnapshot(false)
                                                  .value(QStringLiteral("environment"))
                                                  .toList();
-    QCOMPARE(redactedEnvironment.at(ordinaryIndex).toMap()
-                 .value(QStringLiteral("value")).toString(),
-             QStringLiteral("ordinary-value"));
-    QVERIFY(redactedEnvironment.at(ordinaryIndex).toMap()
-                .value(QStringLiteral("enabled")).toBool());
-    QCOMPARE(redactedEnvironment.at(secretIndex).toMap()
-                 .value(QStringLiteral("value")).toString(),
-             QString{});
-    QVERIFY(!redactedEnvironment.at(secretIndex).toMap()
-                 .value(QStringLiteral("enabled")).toBool());
-    QVERIFY(redactedEnvironment.at(secretIndex).toMap()
-                .value(QStringLiteral("redacted")).toBool());
+    QVERIFY(redactedEnvironment.isEmpty());
 }
 
 void LaunchCommandBuilderTest::proxySettingsAreAppliedToChildEnvironment()
@@ -1114,7 +1212,51 @@ void LaunchCommandBuilderTest::zludaRuntimePreparationStagesAliases()
              preparation.runtimeDirectory);
     QCOMPARE(environment.value(QStringLiteral("PYTHONPATH")).split(QDir::listSeparator()).constFirst(),
              preparation.bootstrapDirectory);
-
+    // Tamper after preparation: the Python loading boundary must reject the DLL
+    // before LoadLibrary, even though all C++ checks previously succeeded.
+    const QString actualPython = QStandardPaths::findExecutable("python"); QVERIFY(!actualPython.isEmpty());
+    const QString sideDll = QDir(preparation.runtimeDirectory).filePath("amdhip64.dll");
+    QVERIFY(writeFile(sideDll, "untrusted dependency"));
+    const auto rejectedDll = ZludaBootstrap::prepare(pythonPath, root.filePath("ComfyUI"), environment);
+    QVERIFY(!rejectedDll.valid); QVERIFY(!rejectedDll.error.isEmpty());
+    QProcess loadProbe; loadProbe.setProcessEnvironment(environment);
+    loadProbe.start(actualPython, {"-S", "-c", "import runpy,sys; m=runpy.run_path(sys.argv[1]); m['_minifox_preload_zluda']()",
+        QDir(preparation.bootstrapDirectory).filePath("sitecustomize.py")});
+    QVERIFY(loadProbe.waitForFinished()); QVERIFY(loadProbe.exitCode() != 0);
+    QVERIFY(loadProbe.readAllStandardError().contains("Unexpected ZLUDA runtime directory contents"));
+    QVERIFY(QFile::remove(sideDll));
+    const QString adjacent = QDir(preparation.bootstrapDirectory).filePath("ctypes.py");
+    QVERIFY(writeFile(adjacent, "raise RuntimeError('ADJACENT_BOOTSTRAP_MODULE')\n"));
+    const auto rejected = ZludaBootstrap::prepare(pythonPath, root.filePath("ComfyUI"), environment);
+    QVERIFY(!rejected.valid); QVERIFY(!rejected.error.isEmpty()); QVERIFY(QFile::remove(adjacent));
+    const QString malicious = root.filePath("poison.py");
+    QVERIFY(writeFile(malicious, "print('STALE_BYTECODE_LOADED')\n"));
+    const QString sitecustomize = QDir(preparation.bootstrapDirectory).filePath("sitecustomize.py");
+    QProcess compiler;
+    compiler.start(actualPython, {"-c", "import py_compile,importlib.util,sys; py_compile.compile(sys.argv[1], cfile=importlib.util.cache_from_source(sys.argv[2]), invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)",
+                                 malicious, sitecustomize});
+    QVERIFY(compiler.waitForFinished()); QCOMPARE(compiler.exitCode(), 0);
+    const auto cleared = ZludaBootstrap::prepare(pythonPath, root.filePath("ComfyUI"), environment);
+    QVERIFY2(cleared.valid, qPrintable(cleared.error));
+    QVERIFY(QDir(QDir(preparation.bootstrapDirectory).filePath("__pycache__")).entryList({"*.pyc"}, QDir::Files).isEmpty());
+    QProcess startup; startup.setProcessEnvironment(environment);
+    startup.start(actualPython, {"-c", "print('BOOTSTRAP_CONTROL_OK')"});
+    QVERIFY(startup.waitForFinished()); QCOMPARE(startup.exitCode(), 0);
+    const auto startupOutput = startup.readAllStandardOutput();
+    QVERIFY(startupOutput.contains("BOOTSTRAP_CONTROL_OK")); QVERIFY(!startupOutput.contains("STALE_BYTECODE_LOADED"));
+    QVERIFY2(startup.readAllStandardError().isEmpty(), "The generated sitecustomize must import successfully");
+    const QString runtimeDll = QDir(preparation.runtimeDirectory).filePath("nvcuda.dll");
+    QFile tamper(runtimeDll); QVERIFY(tamper.open(QIODevice::ReadWrite));
+    QByteArray byte = tamper.read(1); byte[0] ^= 1;
+    QVERIFY(tamper.seek(0)); QCOMPARE(tamper.write(byte), 1); tamper.close();
+    QProcess process; process.setProcessEnvironment(environment);
+    process.start(actualPython, {"-S", "-c",
+        "import runpy,sys; m=runpy.run_path(sys.argv[1]); m['_minifox_preload_zluda']()",
+        QDir(preparation.bootstrapDirectory).filePath("sitecustomize.py")});
+    QVERIFY(process.waitForFinished(15000));
+    QVERIFY(process.exitCode() != 0);
+    const auto rejection = process.readAllStandardError();
+    QVERIFY2(rejection.contains("ZLUDA DLL integrity check failed"), rejection.constData());
 }
 
 void LaunchCommandBuilderTest::zludaLocalIntegrationWhenConfigured()

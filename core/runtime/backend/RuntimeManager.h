@@ -1,4 +1,6 @@
 #pragma once
+#include "OperationLease.h"
+#include "LaunchCommandBuilder.h"
 
 #include "ProcessJob.h"
 #include "ZludaBootstrap.h"
@@ -108,6 +110,12 @@ private:
     void launchConfiguredProcess();
     void terminateTrackedProcessTree();
 
+    LaunchCommandBuilder::Result operationCommand() const;
+    QVariant operationParameter(const QString &key) const;
+    OperationLease m_operationLease;
+    QVariantMap m_startProfile;
+    LaunchCommandBuilder::Result m_startCommand;
+    QString m_startProxyMode, m_startProxyUrl;
     ConfigurationManager *m_configuration;
     ApplicationSettings *m_settings;
     QProcess m_process;
@@ -116,7 +124,6 @@ private:
     QProcess m_commandPrompt;
     QStringList m_dependencyPendingInstalls;
     QStringList m_dependencyRecheckPaths;
-    QString m_dependencyBatPath;
     QString m_dependencyCurrentPath;
     bool m_dependencyRecheckPhase = false;
     ZludaBootstrap::Preparation m_zludaPreparation;

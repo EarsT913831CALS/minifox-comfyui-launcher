@@ -81,7 +81,7 @@ The core view lists stable releases, development releases, remote branches, and 
 - Safe Update (default): local changes to tracked code lines are preserved; other lines in the same files and clean files are synchronized with the remote version. Untracked files are unaffected.
 - With Reset Tracked Files enabled, updates and version switches reset tracked files to match the remote repository; untracked files are unaffected.
 - The Full Cleanup button runs `git reset --hard HEAD` followed by `git clean -ffd`, deleting untracked files and directories not ignored by Git and restoring the working tree to a clean state at the current Git revision.
-- If an update, switch, or cleanup is interrupted, the launcher keeps an interruption marker and temporarily blocks ComfyUI startup. Return to Version Management and click the operation you want to run; it starts again from the current repository state rather than resuming an internal step.
+- Interrupted operations block ComfyUI startup. Default safe-update retries first verify and roll back the previous incomplete update, including files, branches, and the index. You can also select Recover Safe Update. Edits made after interruption are never automatically overwritten. Missing/corrupt recovery data and legacy markers require manual inspection and cannot be silently replaced.
 - Extension version switching presents commit descriptions, dates, and the current version without requiring a commit ID.
 - Hold `Ctrl` and left-click a remote repository URL to open it in the default browser.
 
@@ -98,7 +98,11 @@ ComfyUI-Package/
         └── extensions/
 ```
 
-Each date folder keeps up to 3 core archives and 60 extension archives. Up to the 5 most recent date folders are retained. Archives are automatically numbered to prevent same-day name collisions.
+Each date folder normally retains 3 core archives and 60 extension archives across the 5 most recent date folders. Archives referenced by unfinished transactions are exempt from rotation, so these limits may temporarily be exceeded. Archives are automatically numbered and fully decompressed to a drained pipe for validation before a destructive reset.
+
+Safe-update recovery packs are stored beside the executable in `.minifox/recovery/`. They contain affected files' original and expected contents, deletion state, and the original index, protected by SHA-256. Git objects are pinned under `refs/minifox-recovery/`. These recovery points are independent of temporary snapshots and rotating ZIP archives and are not automatically pruned yet. Keep `.minifox` when moving the launcher.
+
+Reset Tracked Files and Full Cleanup also pin a Git recovery point under `refs/minifox-reset-backups/`, including index-only edits and deletions. The corresponding `.minifox/recovery/*.reset.json` records the original commit, recovery ref, and archive checksums. Interrupted destructive operations require manual recovery: inspect the manifest, Git recovery point, and ZIPs in a separate copy first. Do not simply delete the interruption marker or hard-reset the original repository. These backups do not replace backups on a separate disk or guarantee zero loss after hardware failure.
 
 ## Portable Data
 
@@ -275,6 +279,18 @@ GitHub Actions runs the following in a Windows UCRT64 environment:
 4. Single-file static Release build verification
 
 CI validates source code only. It does not upload or publish executables, DLLs, installers, or other build artifacts.
+
+## Configuration and runtime package validation
+
+The local launch command preview shows the full configured environment values and actual arguments. Exporting a profile offers two separate modes: Share Launch Options includes only preset options and numeric parameters, while Full Backup preserves the original profile, including environment variables and free-text arguments. Shared exports omit UI state and preserve the recipient's existing UI state when imported.
+
+Configuration packages exchange only application settings, skin JSON, raster skin assets and the custom icon. Runtime code, package caches, version transactions and recovery backups are outside that data set. Old packages containing protected files, duplicate paths or Windows path aliases are rejected; re-export trusted configurations with the updated launcher. Nested skin assets and uppercase image extensions remain supported.
+
+Profile switching saves `.minifox/configuration-state.pending.zip` before publishing data and the selected profile. After an interruption, startup restores the original configuration before loading settings. Failed recovery preserves the journal and stops startup. Keep the journal and the entire `.minifox` directory. Writes are flushed and read back, but physical power-loss testing has not been performed.
+
+Dependency installation launches Python with an argument list and displays logs/errors in the launcher; no installation batch script is generated or executed. Git retains its ownership checks and the user's existing trust decisions; the launcher no longer adds `safe.directory`. Local refresh does not switch or reset branches. Checking remote updates still fetches normally.
+
+Embedded ZLUDA archives and DLLs are checked against `assets/zluda/manifest.json`, including cached, extracted and loaded contents. Identical verified DLLs can be reused while open; unexpected files block startup. `MINIFOX_ZLUDA_DIR` accepts an explicitly selected absolute directory of user-trusted executable code, not an authenticated bundled package. Integrity checks do not prove upstream binary safety.
 
 ## Acknowledgements
 

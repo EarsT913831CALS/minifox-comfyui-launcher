@@ -479,25 +479,14 @@ QVariantMap ConfigurationManager::currentProfileSnapshot(bool includeSensitiveVa
 {
     const auto &profile = currentProfile();
     QVariantList environment = environmentEntries();
-    if (!includeSensitiveValues) {
-        for (QVariant &value : environment) {
-            QVariantMap entry = value.toMap();
-            if (!entry.value(QStringLiteral("value")).toString().isEmpty()
-                && isSensitiveEnvironmentName(entry.value(QStringLiteral("name")).toString())) {
-                entry.insert(QStringLiteral("value"), QString{});
-                entry.insert(QStringLiteral("enabled"), false);
-                entry.insert(QStringLiteral("redacted"), true);
-                value = entry;
-            }
-        }
-    }
+    if (!includeSensitiveValues) environment.clear();
     return {
         {QStringLiteral("id"), profile.id},
         {QStringLiteral("name"), profile.name},
         {QStringLiteral("pythonPath"), profile.pythonPath},
         {QStringLiteral("comfyRoot"), profile.comfyRoot},
-        {QStringLiteral("customArguments"), profile.customArguments},
-        {QStringLiteral("parameters"), profile.parameters},
+        {QStringLiteral("customArguments"), includeSensitiveValues ? profile.customArguments : QString{}},
+        {QStringLiteral("parameters"), includeSensitiveValues ? profile.parameters : shareableParameters(profile.parameters)},
         {QStringLiteral("environment"), environment}
     };
 }
@@ -826,4 +815,29 @@ QString ConfigurationManager::findDefaultPython(const QString &comfyRoot)
     }
 
     return QStandardPaths::findExecutable(QStringLiteral("python.exe"));
+}
+
+QVariantMap ConfigurationManager::shareableParameters(const QVariantMap &parameters)
+{
+    QVariantMap safe;
+    for (const auto &definition : LaunchParameterCatalog::parameters()) {
+        if (!parameters.contains(definition.key)) continue;
+        const QVariant value = parameters.value(definition.key);
+        if (definition.control == "switch" && value.metaType().id() == QMetaType::Bool) {
+            safe.insert(definition.key, value);
+        } else if (definition.control == "integer" || definition.control == "integerOptional"
+                   || definition.control == "real") {
+            bool ok = false;
+            const double number = value.toDouble(&ok);
+            if (ok && number >= definition.minimum.toDouble() && number <= definition.maximum.toDouble()
+                && (definition.control == "real" || number == qint64(number)))
+                safe.insert(definition.key, number);
+        } else if (!definition.options.isEmpty()) {
+            for (const auto &option : definition.options)
+                if (value.toString() == option.toMap().value("value").toString()) {
+                    safe.insert(definition.key, value.toString()); break;
+                }
+        }
+    }
+    return safe;
 }
