@@ -31,6 +31,11 @@ struct SafeMergeResult {
     bool success = false;
     SafeMergeError error = SafeMergeError::None;
     QString detail;
+    // Files where a local edit and the target changed the same place. The
+    // target version won; the local file and a readable log were copied to
+    // conflictDirectory first (only for journaled runs with a transaction id).
+    QStringList conflictPaths = {};
+    QString conflictDirectory = {};
 };
 
 // Paths needed to build sparse base, local, and target snapshots.

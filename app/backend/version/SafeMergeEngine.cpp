@@ -1,11 +1,13 @@
 #include "SafeDataPath.h"
 #include "SafeMergeEngine.h"
 
+#include "PortablePaths.h"
 #include "ProcessTextDecoder.h"
 #include "RepositoryRecovery.h"
 
 #include <QDir>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
@@ -29,6 +31,22 @@ struct LineEdit {
     int baseCount = 0;
     QList<QByteArray> replacement;
     bool local = false;
+    int variantStart = 0;
+};
+
+// A local edit replaced by the target's change to the same lines.
+struct TextConflict {
+    int localLine = 0;
+    QList<QByteArray> localLines;
+    QList<QByteArray> remoteLines;
+};
+
+struct FileConflict {
+    QString path;
+    QByteArray localData;
+    bool localExists = false;
+    QString note;
+    QList<TextConflict> lines;
 };
 
 struct DiffHunk {
@@ -253,7 +271,8 @@ bool collectLineEdits(const QList<DiffHunk> &hunks,
                 const QByteArray replacement = variantLines.at(variantStart + index);
                 if (lineContent(baseLines.at(baseStart + index))
                     != lineContent(replacement)) {
-                    edits->append({baseStart + index, 1, {replacement}, local});
+                    edits->append({baseStart + index, 1, {replacement}, local,
+                                   variantStart + index});
                 }
             }
             continue;
@@ -264,7 +283,7 @@ bool collectLineEdits(const QList<DiffHunk> &hunks,
         for (int index = 0; index < newCount; ++index) {
             replacement.append(variantLines.at(variantStart + index));
         }
-        edits->append({baseStart, oldCount, replacement, local});
+        edits->append({baseStart, oldCount, replacement, local, variantStart});
     }
     return true;
 }
@@ -289,7 +308,7 @@ bool editsOverlap(const LineEdit &left, const LineEdit &right)
 bool mergeText(const QList<DiffHunk> &localHunks, const QList<DiffHunk> &remoteHunks,
                const QByteArray &baseData, const QByteArray &localData,
                const QByteArray &targetData, const QByteArray &workingData,
-               QByteArray *mergedData,
+               QByteArray *mergedData, QList<TextConflict> *conflicts,
                QString *error)
 {
     const QList<QByteArray> baseLines = splitLines(baseData);
@@ -304,25 +323,34 @@ bool mergeText(const QList<DiffHunk> &localHunks, const QList<DiffHunk> &remoteH
         return false;
     }
 
-    QList<LineEdit> mergedEdits = localEdits;
-    qsizetype firstLocal = 0;
-    for (const LineEdit &remoteEdit : std::as_const(remoteEdits)) {
-        while (firstLocal < localEdits.size()
-               && localEdits[firstLocal].baseStart + localEdits[firstLocal].baseCount
-                   <= remoteEdit.baseStart
-               && !editsOverlap(remoteEdit, localEdits[firstLocal])) {
-            ++firstLocal;
+    // Where both sides changed the same lines the target wins; the replaced
+    // local lines are reported so the caller can back them up and tell the user.
+    QList<LineEdit> mergedEdits = remoteEdits;
+    qsizetype firstRemote = 0;
+    for (const LineEdit &localEdit : std::as_const(localEdits)) {
+        while (firstRemote < remoteEdits.size()
+               && remoteEdits[firstRemote].baseStart + remoteEdits[firstRemote].baseCount
+                   <= localEdit.baseStart
+               && !editsOverlap(localEdit, remoteEdits[firstRemote])) {
+            ++firstRemote;
         }
-        bool overlapsLocal = false;
-        for (qsizetype index = firstLocal; index < localEdits.size(); ++index) {
-            const LineEdit &localEdit = localEdits[index];
-            if (localEdit.baseStart > remoteEdit.baseStart + remoteEdit.baseCount) break;
-            if (editsOverlap(remoteEdit, localEdit)) {
-                overlapsLocal = true;
-                break;
+        TextConflict conflict;
+        bool overlapsRemote = false;
+        for (qsizetype index = firstRemote; index < remoteEdits.size(); ++index) {
+            const LineEdit &remoteEdit = remoteEdits[index];
+            if (remoteEdit.baseStart > localEdit.baseStart + localEdit.baseCount) break;
+            if (editsOverlap(localEdit, remoteEdit)) {
+                overlapsRemote = true;
+                conflict.remoteLines += remoteEdit.replacement;
             }
         }
-        if (!overlapsLocal) mergedEdits.append(remoteEdit);
+        if (!overlapsRemote) {
+            mergedEdits.append(localEdit);
+        } else if (conflicts) {
+            conflict.localLine = localEdit.variantStart + 1;
+            conflict.localLines = localEdit.replacement;
+            conflicts->append(conflict);
+        }
     }
     std::sort(mergedEdits.begin(), mergedEdits.end(),
               [](const LineEdit &left, const LineEdit &right) {
@@ -351,6 +379,58 @@ bool mergeText(const QList<DiffHunk> &localHunks, const QList<DiffHunk> &remoteH
     return true;
 }
 
+QString translate(const char *text)
+{
+    return QCoreApplication::translate("SafeMergeEngine", text);
+}
+
+void appendLogLines(QString *log, const QList<QByteArray> &lines)
+{
+    constexpr qsizetype shownLines = 20;
+    if (lines.isEmpty()) *log += QStringLiteral("    ") + translate("（无内容）") + '\n';
+    for (qsizetype index = 0; index < qMin(lines.size(), shownLines); ++index) {
+        *log += QStringLiteral("    ") + QString::fromUtf8(lineContent(lines[index])) + '\n';
+    }
+    if (lines.size() > shownLines) {
+        *log += QStringLiteral("    ") + translate("……（共 %1 行）").arg(lines.size()) + '\n';
+    }
+}
+
+// Copies each conflicting local file as it was before the update, plus a log
+// of every replaced local change, so nothing the target overrode is lost.
+bool writeConflictBackup(const QString &directory, const QString &workingRoot,
+                         const QList<FileConflict> &conflicts, QString *error)
+{
+    const QDir root(directory);
+    QString log = translate("Minifox 安全更新冲突记录") + '\n'
+        + translate("仓库：%1").arg(QDir::toNativeSeparators(workingRoot)) + '\n'
+        + translate("时间：%1").arg(QDateTime::currentDateTime().toString(Qt::ISODate)) + '\n'
+        + translate("规则：本地修改与远端更新改到同一处时，采用远端版本。"
+                    "更新前的本地文件原样保存在 files 目录。") + '\n';
+    for (const FileConflict &conflict : conflicts) {
+        log += QStringLiteral("\n== ") + conflict.path + '\n';
+        if (!conflict.note.isEmpty()) log += conflict.note + '\n';
+        for (const TextConflict &lines : conflict.lines) {
+            log += translate("第 %1 行（更新前的本地文件）").arg(lines.localLine) + '\n';
+            log += QStringLiteral("  ") + translate("本地（已被替换）：") + '\n';
+            appendLogLines(&log, lines.localLines);
+            log += QStringLiteral("  ") + translate("远端（已采用）：") + '\n';
+            appendLogLines(&log, lines.remoteLines);
+        }
+        const QString copy = root.filePath(QStringLiteral("files/") + conflict.path);
+        if (conflict.localExists && !writeFile(copy, conflict.localData)) {
+            if (error) *error = copy;
+            return false;
+        }
+    }
+    const QString logPath = root.filePath(QStringLiteral("conflicts.log"));
+    if (!writeFile(logPath, log.toUtf8())) {
+        if (error) *error = logPath;
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
@@ -363,6 +443,7 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
     paths.unite(snapshotFiles(request.localSnapshotRoot));
     paths.unite(snapshotFiles(request.targetSnapshotRoot));
     QList<WorkingTreeChange> changes;
+    QList<FileConflict> conflicts;
     QTemporaryDir batchDirectory;
     QStringList textPaths;
 
@@ -380,13 +461,25 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
         const bool localExists = isRegularFile(localPath);
         const bool targetExists = isRegularFile(targetPath);
 
-        // Files absent from both tracked snapshots are untracked and must be preserved.
+        // Paths absent from both tracked snapshots are new in the target.
         if (!baseExists && !localExists) {
-            if (!targetExists || QFileInfo::exists(actualPath)) continue;
+            if (!targetExists) continue;
             bool ok = false;
             const QByteArray targetData = readFile(targetPath, &ok);
             if (!ok) return {false, SafeMergeError::SnapshotRead, relativePath};
-            changes.append({actualPath, {}, targetData, false, false});
+            if (!QFileInfo::exists(actualPath)) {
+                changes.append({actualPath, {}, targetData, false, false});
+                continue;
+            }
+            // A local file already uses the name. Directories and links stay.
+            if (!isRegularFile(actualPath)) continue;
+            bool actualOk = false;
+            const QByteArray actualData = readFile(actualPath, &actualOk);
+            if (!actualOk) return {false, SafeMergeError::WorkingTreeChanged, relativePath};
+            if (normalizedLineEndings(actualData) == normalizedLineEndings(targetData)) continue;
+            conflicts.append({relativePath, actualData, true,
+                              translate("本地已有同名文件，远端新增了该文件：已采用远端版本。"), {}});
+            changes.append({actualPath, actualData, targetData, true, false});
             continue;
         }
 
@@ -417,8 +510,16 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
             changes.append({actualPath, actualData, targetData, localExists, !targetExists});
             continue;
         }
-        if (!targetExists || !localExists) continue;
-        if (baseData.contains('\0') || localData.contains('\0') || targetData.contains('\0')) {
+        if (!targetExists && !localExists) continue;
+        const bool binary = baseData.contains('\0') || localData.contains('\0')
+            || targetData.contains('\0');
+        if (!targetExists || !localExists || binary) {
+            const QString note = !localExists
+                ? translate("本地已删除，远端有修改：已恢复为远端版本。")
+                : !targetExists ? translate("本地有修改，远端已删除：已按远端删除。")
+                : translate("二进制文件两边都有修改：已采用远端版本。");
+            conflicts.append({relativePath, actualData, localExists, note, {}});
+            changes.append({actualPath, actualData, targetData, localExists, !targetExists});
             continue;
         }
 
@@ -455,9 +556,14 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
                 return {false, SafeMergeError::SnapshotRead, textPaths[index]};
             }
             QByteArray mergedData;
+            QList<TextConflict> lineConflicts;
             if (!mergeText(localHunks[index], remoteHunks[index],
-                           baseData, localData, targetData, actualData, &mergedData, &error)) {
+                           baseData, localData, targetData, actualData, &mergedData,
+                           &lineConflicts, &error)) {
                 return {false, SafeMergeError::MergeProcess, textPaths[index] + ": " + error};
+            }
+            if (!lineConflicts.isEmpty()) {
+                conflicts.append({textPaths[index], actualData, true, {}, lineConflicts});
             }
             if (mergedData != actualData) {
                 changes.append({QDir(request.workingRoot).filePath(textPaths[index]),
@@ -495,6 +601,19 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
         }
         if (!prepared) return {false, SafeMergeError::RecoveryBackup, error};
     }
+    QStringList conflictPaths;
+    for (const FileConflict &conflict : std::as_const(conflicts)) conflictPaths.append(conflict.path);
+    conflictPaths.sort();
+    QString conflictDirectory;
+    if (!conflicts.isEmpty() && !request.transactionId.isEmpty()) {
+        conflictDirectory = QDir(PortablePaths::dataDirectory()).filePath(
+            QStringLiteral("recovery/") + request.transactionId + QStringLiteral("-conflicts"));
+        QString error;
+        if (!writeConflictBackup(conflictDirectory, request.workingRoot, conflicts, &error)) {
+            QDir(conflictDirectory).removeRecursively();
+            return {false, SafeMergeError::RecoveryBackup, error};
+        }
+    }
     QList<WorkingTreeChange> applied;
     for (const WorkingTreeChange &change : std::as_const(changes)) {
         bool currentOk = false;
@@ -518,7 +637,7 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
         }
         return {false, SafeMergeError::FileWrite, change.path};
     }
-    return {true, SafeMergeError::None, {}};
+    return {true, SafeMergeError::None, {}, conflictPaths, conflictDirectory};
 }
 
 QList<LocalPathEntry> SafeMergeEngine::parseStatusEntries(const QByteArray &data)

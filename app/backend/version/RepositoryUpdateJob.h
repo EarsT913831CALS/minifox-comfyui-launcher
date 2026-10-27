@@ -30,6 +30,10 @@ struct RepositoryUpdateResult {
     bool incomplete = false;
     bool timedOut = false;
     QString error;
+    // Files where the target replaced conflicting local edits, and the folder
+    // holding the local copies and log.
+    QStringList conflictPaths = {};
+    QString conflictDirectory = {};
 };
 
 class RepositoryUpdateJob final : public QObject
@@ -110,6 +114,8 @@ private:
     bool m_hadInterruptedEntry = false;
     bool m_transactionActive = false;
     bool m_completionVerified = false;
+    QStringList m_conflictPaths;
+    QString m_conflictDirectory;
     QString m_transactionId;
     QString m_originalHead;
     QString m_targetRef;

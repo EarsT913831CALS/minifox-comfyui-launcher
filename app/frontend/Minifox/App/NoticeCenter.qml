@@ -8,7 +8,8 @@ import Minifox.Shared
 // Version and repository results are shown here instead of on the page that
 // started the work: the shell's Loader destroys pages on navigation, so a
 // result that arrives later would otherwise be lost. Notices stack rather than
-// replace each other; failures stay until dismissed, successes close by themselves.
+// replace each other; failures and warnings stay until dismissed, successes
+// close by themselves.
 Item {
     id: root
 
@@ -16,15 +17,15 @@ Item {
     property int maximumNotices: 5
     property int nextNoticeId: 0
 
-    function post(success, message) {
+    function post(success, message, warning) {
         const text = String(message || "").trim();
         if (text.length === 0)
             return;
-        notices.append({ noticeId: root.nextNoticeId++, success: success, message: text });
+        notices.append({ noticeId: root.nextNoticeId++, success: success, warning: warning === true, message: text });
         while (notices.count > root.maximumNotices) {
             let oldest = 0;
             for (let i = 0; i < notices.count; ++i) {
-                if (notices.get(i).success) {
+                if (notices.get(i).success && !notices.get(i).warning) {
                     oldest = i;
                     break;
                 }
@@ -55,6 +56,10 @@ Item {
 
         function onOperationCompleted(success, message) {
             root.post(success, message);
+        }
+
+        function onMergeConflictsReported(message) {
+            root.post(true, message, true);
         }
 
         function onDependencyInstallCompleted(success, message) {
@@ -99,17 +104,20 @@ Item {
 
                 required property int noticeId
                 required property bool success
+                required property bool warning
                 required property string message
+                readonly property color tone: notice.warning ? Theme.warning
+                    : notice.success ? Theme.success : Theme.error
 
                 width: ListView.view.width
                 height: noticeRow.implicitHeight + 24
                 color: Theme.surfaceRaised
                 border.width: 1
-                border.color: notice.success ? Theme.success : Theme.error
+                border.color: notice.tone
                 radius: Theme.controlRadius
 
                 Timer {
-                    running: notice.success
+                    running: notice.success && !notice.warning
                     interval: 5000
                     onTriggered: root.dismiss(notice.noticeId)
                 }
@@ -123,8 +131,8 @@ Item {
 
                     AppLabel {
                         Layout.alignment: Qt.AlignTop
-                        text: notice.success ? "✓" : "×"
-                        color: notice.success ? Theme.success : Theme.error
+                        text: notice.warning ? "!" : notice.success ? "✓" : "×"
+                        color: notice.tone
                         font.pointSize: Theme.subtitleSize
                         font.bold: true
                     }

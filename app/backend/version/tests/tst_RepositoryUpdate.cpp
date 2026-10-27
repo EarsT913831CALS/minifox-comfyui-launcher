@@ -391,7 +391,7 @@ private slots:
         QVERIFY(VersionTransactionStore::entries().isEmpty());
     }
 
-    void localDeletionAndReplacementWinsOnlyInsideItsChangedRange()
+    void remoteChangeWinsInsideConflictingLocalRange()
     {
         RepositoryFixture fixture(m_git);
         const QByteArray base(
@@ -409,10 +409,21 @@ private slots:
         const JobRun run = runJob(updateSpec(fixture));
         QVERIFY(run.received);
         QVERIFY2(run.result.success, qPrintable(run.result.error));
+        // The local block overlaps a remote line, so the target wins there; the
+        // replaced local block is kept in the conflict log and file copy.
         QCOMPARE(readFile(QDir(fixture.working).filePath(QStringLiteral("sample.txt"))),
-                 QByteArray("remote-0\nlocal-block\nline-6\nline-7\nremote-8\nline-9\n"));
+                 QByteArray("remote-0\nline-1\nline-2\nremote-inside-local-range\nline-4\nline-5\n"
+                            "line-6\nline-7\nremote-8\nline-9\n"));
         QCOMPARE(readFile(QDir(fixture.working).filePath(QStringLiteral("private.txt"))),
                  QByteArray("untracked-private-data\n"));
+        QCOMPARE(run.result.conflictPaths, QStringList{QStringLiteral("sample.txt")});
+        QVERIFY(!run.result.conflictDirectory.isEmpty());
+        const QByteArray log = readFile(QDir(run.result.conflictDirectory).filePath("conflicts.log"));
+        QVERIFY(log.contains("== sample.txt"));
+        QVERIFY(log.contains("local-block"));
+        QVERIFY(log.contains("remote-inside-local-range"));
+        QCOMPARE(readFile(QDir(run.result.conflictDirectory).filePath("files/sample.txt")),
+                 QByteArray("line-0\nlocal-block\nline-6\nline-7\nline-8\nline-9\n"));
         QVERIFY(VersionTransactionStore::entries().isEmpty());
     }
 
@@ -428,18 +439,19 @@ private slots:
         struct Case { QByteArray base, local, remote, expected; };
         const QList<Case> cases {
             {"a\nb\nc\n", "a\nlocal\nc\n", "a\nb\nremote\n", "a\nlocal\nremote\n"},
-            {"a\nb\nc\n", "a\nlocal\nc\n", "a\nremote\nc\n", "a\nlocal\nc\n"},
-            {"a\nb\n", "a\nlocal\nb\n", "a\nremote\nb\n", "a\nlocal\nb\n"},
+            {"a\nb\nc\n", "a\nlocal\nc\n", "a\nremote\nc\n", "a\nremote\nc\n"},
+            {"a\nb\n", "a\nlocal\nb\n", "a\nremote\nb\n", "a\nremote\nb\n"},
             {"a\nb\nc\n", "a\nlocal\nc\n", "a\ninsert\nb\nc\n", "a\ninsert\nlocal\nc\n"},
             {"a\nb\nc\n", "a\nlocal\nc\n", "a\nb\ninsert\nc\n", "a\nlocal\ninsert\nc\n"},
-            {"a\nb\nc\nd\n", "a\nb\nlocal\nc\nd\n", "a\nremote\nd\n", "a\nb\nlocal\nc\nd\n"},
+            {"a\nb\nc\nd\n", "a\nb\nlocal\nc\nd\n", "a\nremote\nd\n", "a\nremote\nd\n"},
             {"a\nb\nc\nd\n", "a\nd\n", "remote\nb\nc\nd\n", "remote\nd\n"},
             {"a\r\nb\r\nc\r\n", "a\r\nlocal\r\nc\r\n", "a\r\nb\r\nremote\r\n", "a\r\nlocal\r\nremote\r\n"},
             {"a\nb\nc", "a\nlocal\nc", "a\nb\nremote", "a\nlocal\nremote"},
             {"a\nb\nc\nd\ne\nf\n", "a\n++ local/999\nc\nd\ne\nlocal-end\n",
              "a\nb\nc\nremote\ne\nf\n", "a\n++ local/999\nc\nremote\ne\nlocal-end\n"},
-            {"", "local\n", "remote\n", "local\n"}
+            {"", "local\n", "remote\n", "remote\n"}
         };
+        const QList<qsizetype> conflicting {1, 2, 5, 10};
         for (qsizetype index = 0; index < cases.size(); ++index) {
             const QString name = QStringLiteral("目录/[file %1] +++.txt").arg(index);
             const Case &c = cases[index];
@@ -457,10 +469,17 @@ private slots:
             const QString name = QStringLiteral("working/目录/[file %1] +++.txt").arg(index);
             QCOMPARE(readFile(root.filePath(name)), cases[index].expected);
         }
+        QStringList expectedConflicts;
+        for (const qsizetype index : conflicting)
+            expectedConflicts.append(QStringLiteral("目录/[file %1] +++.txt").arg(index));
+        expectedConflicts.sort();
+        QCOMPARE(result.conflictPaths, expectedConflicts);
+        // Without a transaction there is no journal, so nothing is written.
+        QVERIFY(result.conflictDirectory.isEmpty());
         QCOMPARE(textDiffCount(readFile(tracePath)), 2);
     }
 
-    void deletedAndLocalOnlyFilesSurviveSparseUpdate()
+    void remoteEditRestoresLocallyDeletedFileAndKeepsLocalOnlyEdits()
     {
         RepositoryFixture fixture(m_git);
         QVERIFY(fixture.create("alpha\nbeta\n"));
@@ -475,8 +494,12 @@ private slots:
         const JobRun run = runJob(updateSpec(fixture));
         QVERIFY(run.received);
         QVERIFY2(run.result.success, qPrintable(run.result.error));
-        QVERIFY(!QFile::exists(QDir(fixture.working).filePath("sample.txt")));
+        QCOMPARE(normalizedLineEndings(readFile(QDir(fixture.working).filePath("sample.txt"))),
+                 QByteArray("remote\nbeta\n"));
         QCOMPARE(readFile(QDir(fixture.working).filePath("local-only.txt")), QByteArray("private local edit\n"));
+        QCOMPARE(run.result.conflictPaths, QStringList{QStringLiteral("sample.txt")});
+        QVERIFY(readFile(QDir(run.result.conflictDirectory).filePath("conflicts.log"))
+                    .contains("== sample.txt"));
     }
 
     void currentTargetSkipsSnapshotsAndKeepsStagedChanges()

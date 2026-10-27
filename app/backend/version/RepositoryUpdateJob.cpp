@@ -493,6 +493,8 @@ void RepositoryUpdateJob::handleSafeMergeFinished(const SafeMergeResult &result)
              false, unmodified);
         return;
     }
+    m_conflictPaths = result.conflictPaths;
+    m_conflictDirectory = result.conflictDirectory;
     if (m_detachTarget) {
         runGit(Stage::UpdateSafeRef, {"update-ref", "--no-deref", "HEAD", m_targetRef});
     } else if (m_targetBranch.isEmpty()) {
@@ -539,7 +541,8 @@ void RepositoryUpdateJob::complete()
     }
     m_transactionActive = false;
     clearTemporaryFiles();
-    emit finished({m_spec.root, m_spec.displayName, true, false, false, {}});
+    emit finished({m_spec.root, m_spec.displayName, true, false, false, {},
+                   m_conflictPaths, m_conflictDirectory});
 }
 
 void RepositoryUpdateJob::fail(const QString &message, bool timedOut,

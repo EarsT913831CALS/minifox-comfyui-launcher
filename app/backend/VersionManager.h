@@ -121,6 +121,8 @@ signals:
     void stateChanged();
     void refreshCompleted(bool success, const QString &message);
     void operationCompleted(bool success, const QString &message);
+    // Safe updates where the target replaced conflicting local edits.
+    void mergeConflictsReported(const QString &message);
     void dependencyInstallCompleted(bool success, const QString &message);
     void extensionVersionsLoaded(bool success, const QString &message);
 
@@ -230,6 +232,9 @@ private:
     bool clearVersionTransaction();
     bool completeVersionTransaction();
     void clearSafeMergeState();
+    static QString conflictSummary(const QString &displayName, const QStringList &paths,
+                                   const QString &directory);
+    static QString conflictNotice(const QStringList &summaries);
     void startSafeSnapshotMerge();
     void handleSafeSnapshotMergeFinished(bool success, const QString &error);
     void finishSafeMerge();
@@ -378,10 +383,12 @@ private:
     ExtensionFilterModel *m_availableFilter = nullptr;
     bool m_repositoryBatchCore = false;
     QStringList m_repositoryBatchDependencyRoots;
+    QStringList m_repositoryBatchConflicts;
     bool m_reconcilingVersionTransactions = false;
     bool m_notifyOnFinish = false;
     QString m_pendingCompletionMessage;
     QString m_safeMergeRoot;
+    QString m_safeMergeConflictSummary;
     QString m_safeMergeTargetRef;
     QString m_safeMergeTargetBranch;
     QString m_safeMergeUpstreamRef;

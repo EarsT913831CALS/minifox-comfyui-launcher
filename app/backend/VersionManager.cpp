@@ -152,6 +152,10 @@ VersionManager::VersionManager(ConfigurationManager *configuration,
             if (!m_repositoryBatchCore) {
                 setExtensionStatus(result.root, QStringLiteral("latest"));
             }
+            if (!result.conflictPaths.isEmpty()) {
+                m_repositoryBatchConflicts.append(conflictSummary(
+                    result.displayName, result.conflictPaths, result.conflictDirectory));
+            }
         }
         emit stateChanged();
     });
@@ -163,6 +167,8 @@ VersionManager::VersionManager(ConfigurationManager *configuration,
         m_repositoryBatchCore = false;
         const QStringList dependencyRoots = std::exchange(
             m_repositoryBatchDependencyRoots, {});
+        const QStringList conflicts = std::exchange(m_repositoryBatchConflicts, {});
+        if (!conflicts.isEmpty()) emit mergeConflictsReported(conflictNotice(conflicts));
         for (const QString &root : dependencyRoots) queueDependencyCheck(root);
         m_busy = false;
         emit stateChanged();
@@ -1083,6 +1089,7 @@ void VersionManager::clearSafeMergeState()
                                        m_safeMergeTargetIndexPath, m_safeMergeBaseSnapshotPath,
                                        m_safeMergeLocalSnapshotPath, m_safeMergeTargetSnapshotPath});
     m_safeMergeRoot.clear();
+    m_safeMergeConflictSummary.clear();
     m_safeMergeTargetRef.clear();
     m_safeMergeTargetBranch.clear();
     m_safeMergeUpstreamRef.clear();
@@ -1097,6 +1104,26 @@ void VersionManager::clearSafeMergeState()
     m_safeMergePlan = SparseSnapshotPaths{};
     m_safeMergeRequested = false;
     m_safeMergeAction = PendingCoreAction::None;
+}
+
+QString VersionManager::conflictSummary(const QString &displayName, const QStringList &paths,
+                                       const QString &directory)
+{
+    constexpr qsizetype listedPaths = 3;
+    QString summary = tr("%1：%n 个文件", nullptr, int(paths.size())).arg(displayName);
+    summary += tr("（%1%2）").arg(paths.mid(0, listedPaths).join(tr("、")),
+                                 paths.size() > listedPaths ? tr(" 等") : QString());
+    if (!directory.isEmpty()) {
+        summary += tr("，冲突详情已保存到 log 文件：%1").arg(
+            QDir::toNativeSeparators(QDir(directory).filePath(QStringLiteral("conflicts.log"))));
+    }
+    return summary;
+}
+
+QString VersionManager::conflictNotice(const QStringList &summaries)
+{
+    return tr("本地修改与远端更新冲突，已采用远端版本：")
+        + QStringLiteral("\n· ") + summaries.join(QStringLiteral("\n· "));
 }
 
 void VersionManager::startSafeSnapshotMerge()
@@ -1128,6 +1155,11 @@ void VersionManager::startSafeSnapshotMerge()
         case SafeMergeError::FileWrite: error = tr("无法写入安全更新结果：%1").arg(result.detail); break;
         case SafeMergeError::RecoveryBackup: error = tr("无法保存恢复资料：%1").arg(result.detail); break;
         case SafeMergeError::None: break;
+        }
+        if (result.success && !result.conflictPaths.isEmpty()) {
+            m_safeMergeConflictSummary = conflictSummary(
+                QFileInfo(m_safeMergeRoot).fileName(), result.conflictPaths,
+                result.conflictDirectory);
         }
         handleSafeSnapshotMergeFinished(result.success, error);
     });
@@ -1200,11 +1232,13 @@ void VersionManager::finishVerifiedSafeMerge()
 {
     const PendingCoreAction action = m_safeMergeAction;
     const QString root = m_safeMergeRoot;
+    const QString conflicts = m_safeMergeConflictSummary;
     if (!completeVersionTransaction()) {
         clearSafeMergeState();
         return;
     }
     clearSafeMergeState();
+    if (!conflicts.isEmpty()) emit mergeConflictsReported(conflictNotice({conflicts}));
     if (action == PendingCoreAction::UpdateExtension) {
         queueDependencyCheck(root);
         setExtensionStatus(root, QStringLiteral("latest"));
