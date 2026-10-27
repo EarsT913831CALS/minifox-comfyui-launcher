@@ -188,29 +188,36 @@ VersionManager::VersionManager(ConfigurationManager *configuration,
             }
         }
     });
-    m_dependencyProcess.setProcessChannelMode(QProcess::MergedChannels);
+    m_dependencyProcess.setProcessChannelMode(QProcess::SeparateChannels);
     m_dependencyTimeout.setSingleShot(true);
     connect(&m_dependencyTimeout, &QTimer::timeout, this, [this] {
         m_dependencyTimedOut = true;
+        m_dependencyJob.terminate();
         if (m_dependencyProcess.state() != QProcess::NotRunning) m_dependencyProcess.kill();
     });
-    connect(&m_dependencyProcess, &QProcess::finished, this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) {
-        if (m_dependencyInstallPhase) {
-            handleDependencyInstallFinished(exitCode, exitStatus);
-        } else {
-            handleDependencyCheckFinished(exitCode, exitStatus);
-        }
+    constexpr qsizetype dependencyOutputLimit = 1024 * 1024;
+    connect(&m_dependencyProcess, &QProcess::readyReadStandardOutput, this, [this] {
+        m_dependencyOutput.append(m_dependencyProcess.readAllStandardOutput());
+        if (m_dependencyOutput.size() > dependencyOutputLimit)
+            m_dependencyOutput.remove(0, m_dependencyOutput.size() - dependencyOutputLimit);
     });
+    connect(&m_dependencyProcess, &QProcess::readyReadStandardError, this, [this] {
+        m_dependencyErrors.append(m_dependencyProcess.readAllStandardError());
+        if (m_dependencyErrors.size() > dependencyOutputLimit)
+            m_dependencyErrors.remove(0, m_dependencyErrors.size() - dependencyOutputLimit);
+    });
+    connect(&m_dependencyProcess, &QProcess::started, this, [this] {
+        if (m_dependencyJob.attach(m_dependencyProcess.processId())) return;
+        // finished() follows the kill and completes this run exactly once.
+        m_dependencyAttachFailed = true;
+        m_dependencyProcess.kill();
+    });
+    connect(&m_dependencyProcess, &QProcess::finished,
+            this, &VersionManager::completeDependencyRun);
     connect(&m_dependencyProcess, &QProcess::errorOccurred, this,
             [this](QProcess::ProcessError error) {
-        if (error == QProcess::FailedToStart) {
-            if (m_dependencyInstallPhase) {
-                handleDependencyInstallFinished(-1, QProcess::CrashExit);
-            } else {
-                handleDependencyCheckFinished(-1, QProcess::CrashExit);
-            }
-        }
+        // Only FailedToStart has no finished() signal after it.
+        if (error == QProcess::FailedToStart) completeDependencyRun(-1, QProcess::CrashExit);
     });
     connect(m_configuration, &ConfigurationManager::currentProfileChanged, this, [this] {
         if (!m_busy && m_comfyRoot != m_configuration->comfyRoot()) {
@@ -3109,76 +3116,118 @@ void VersionManager::startNextDependencyCheck()
         m_dependencyInstallPhase = false;
         m_dependencyTimedOut = false;
         emit stateChanged();
+        // Offline metadata check instead of `pip install --dry-run`: its result is
+        // structured JSON, so PIP_QUIET or localized pip output cannot skip installs.
         m_dependencyProcess.setProcessEnvironment(m_operationGit.environment);
-        m_dependencyProcess.setProgram(python);
-#ifdef Q_OS_WIN
-        m_dependencyProcess.setCreateProcessArgumentsModifier({});
-#endif
-        m_dependencyProcess.setArguments({
-            QStringLiteral("-m"), QStringLiteral("pip"),
-            QStringLiteral("install"), QStringLiteral("--dry-run"),
-            QStringLiteral("-r"), requirements});
+        m_dependencyProcess.setWorkingDirectory(m_dependencyDir);
+        DependencyInstaller::configureCheck(m_dependencyProcess, python, {requirements});
         m_dependencyTimeout.start(180000);
-        m_dependencyProcess.start();
+        startDependencyProcess();
         return;
     }
+    m_dependencyCancelled = false;
     m_installingDependencies = false;
     emit stateChanged();
 }
 
+void VersionManager::startDependencyProcess()
+{
+    m_dependencyRunCompleted = false;
+    m_dependencyAttachFailed = false;
+    m_dependencyOutput.clear();
+    m_dependencyErrors.clear();
+    m_dependencyProcess.start();
+}
+
+void VersionManager::cancelDependencyInstall()
+{
+    if (!m_installingDependencies) return;
+    m_dependencyQueue.clear();
+    m_dependencyCancelled = true;
+    if (m_dependencyProcess.state() != QProcess::NotRunning) {
+        m_dependencyJob.terminate();
+        m_dependencyProcess.kill();
+    }
+}
+
+void VersionManager::completeDependencyRun(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    if (m_dependencyRunCompleted) return;
+    m_dependencyRunCompleted = true;
+    m_dependencyTimeout.stop();
+    m_dependencyJob.reset();
+    m_dependencyOutput.append(m_dependencyProcess.readAllStandardOutput());
+    m_dependencyErrors.append(m_dependencyProcess.readAllStandardError());
+
+    const QString name = QFileInfo(m_dependencyDir).fileName();
+    if (m_dependencyCancelled || m_dependencyAttachFailed) {
+        m_dependencyInstallPhase = false;
+        emit dependencyInstallCompleted(false, m_dependencyCancelled
+            ? tr("已取消 %1 的依赖处理，Python 环境可能只完成了部分安装。").arg(name)
+            : tr("无法将 %1 的依赖进程加入安全作业，已停止。").arg(name));
+    } else if (m_dependencyInstallPhase) {
+        handleDependencyInstallFinished(exitCode, exitStatus);
+    } else {
+        handleDependencyCheckFinished(exitCode, exitStatus);
+    }
+    // Exactly one next step per completed run, taken after this signal handler has
+    // returned so the same QProcess is never restarted from inside its own events.
+    const bool installNext = m_dependencyInstallPhase;
+    QTimer::singleShot(0, this, [this, installNext, name] {
+        if (installNext && !m_dependencyCancelled) {
+            startDependencyProcess();
+            return;
+        }
+        if (installNext) {
+            m_dependencyInstallPhase = false;
+            emit dependencyInstallCompleted(false, tr("已取消 %1 的依赖安装。").arg(name));
+        }
+        startNextDependencyCheck();
+    });
+}
+
 void VersionManager::handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    m_dependencyTimeout.stop();
-    const QString output = ProcessTextDecoder::decode(
-        m_dependencyProcess.readAllStandardOutput()).trimmed();
     const QString name = QFileInfo(m_dependencyDir).fileName();
-    const bool timedOut = m_dependencyTimedOut;
-    m_dependencyTimedOut = false;
-
+    const bool timedOut = std::exchange(m_dependencyTimedOut, false);
     if (timedOut) {
         emit dependencyInstallCompleted(false, tr("%1 的依赖检查超时。").arg(name));
-        startNextDependencyCheck();
-        return;
-    }
-    if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-        QString detail = output;
-        if (detail.size() > 200) detail = QStringLiteral("…") + detail.right(200);
-        if (detail.isEmpty()) detail = tr("pip 无法运行。");
-        emit dependencyInstallCompleted(false, tr("%1 的依赖检查失败：%2").arg(name, detail));
-        startNextDependencyCheck();
-        return;
-    }
-    if (!output.contains(QStringLiteral("Would install"))) {
-        startNextDependencyCheck();
         return;
     }
 
-    const QString requirements = requirementsFileFor(m_dependencyDir);
-    const QString python = m_operationPython;
+    QJsonParseError parseError;
+    const QJsonObject result = QJsonDocument::fromJson(m_dependencyOutput.trimmed(), &parseError).object();
+    if (exitStatus != QProcess::NormalExit || parseError.error != QJsonParseError::NoError
+        || result.isEmpty()) {
+        QString detail = ProcessTextDecoder::decode(m_dependencyErrors).trimmed();
+        if (detail.isEmpty()) detail = ProcessTextDecoder::decode(m_dependencyOutput).trimmed();
+        if (detail.size() > 200) detail = QStringLiteral("…") + detail.right(200);
+        if (detail.isEmpty()) detail = tr("检查进程退出代码 %1。").arg(exitCode);
+        emit dependencyInstallCompleted(false, tr("%1 的依赖检查失败：%2").arg(name, detail));
+        return;
+    }
+    const QString fatal = result.value(QStringLiteral("fatal")).toString();
+    if (!fatal.isEmpty()) {
+        emit dependencyInstallCompleted(false, tr("%1 的依赖检查失败：%2").arg(name, fatal));
+        return;
+    }
+    if (result.value(QStringLiteral("ok")).toBool()) {
+        return;
+    }
+
     m_dependencyInstallPhase = true;
     emit stateChanged();
     m_dependencyProcess.setProcessEnvironment(m_operationGit.environment);
-    DependencyInstaller::configure(m_dependencyProcess, python, requirements);
-    m_dependencyProcess.start();
-    if (!m_dependencyProcess.waitForStarted(3000)
-        || !m_dependencyJob.attach(m_dependencyProcess.processId())) {
-        if (m_dependencyProcess.state() != QProcess::NotRunning) {
-            m_dependencyProcess.kill();
-        }
-        m_dependencyJob.reset();
-        m_dependencyInstallPhase = false;
-        emit dependencyInstallCompleted(false, tr("无法将 %1 的依赖安装进程加入安全作业。").arg(name));
-        startNextDependencyCheck();
-    }
+    DependencyInstaller::configure(m_dependencyProcess, m_operationPython,
+                                   requirementsFileFor(m_dependencyDir));
 }
 
 void VersionManager::handleDependencyInstallFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    m_dependencyJob.reset();
     m_dependencyInstallPhase = false;
     const QString name = QFileInfo(m_dependencyDir).fileName();
     const int code = exitStatus == QProcess::NormalExit ? exitCode : -1;
-    const QString detail = ProcessTextDecoder::decode(m_dependencyProcess.readAllStandardOutput()).trimmed().right(2000);
+    const QString detail = ProcessTextDecoder::decode(m_dependencyOutput).trimmed().right(2000);
     if (code == 0) {
         emit dependencyInstallCompleted(true, tr("%1：依赖安装完成。").arg(name));
     } else if (code < 0) {
@@ -3188,7 +3237,6 @@ void VersionManager::handleDependencyInstallFinished(int exitCode, QProcess::Exi
         emit dependencyInstallCompleted(false,
             tr("%1：依赖安装失败（退出码 %2）。\n%3").arg(name).arg(code).arg(detail));
     }
-    startNextDependencyCheck();
 }
 
 RepositoryGitContext VersionManager::gitContext() const

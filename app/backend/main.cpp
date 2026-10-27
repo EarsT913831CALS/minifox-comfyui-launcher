@@ -34,28 +34,43 @@ int main(int argc, char *argv[])
 #endif
         return EXIT_FAILURE;
     }
-    AppContext appContext;
-    QObject::connect(&application, &QCoreApplication::aboutToQuit,
-                     &appContext, [&appContext] {
-        appContext.configuration()->savePendingChanges();
-    });
+    int exitCode = EXIT_SUCCESS;
+    bool restart = false;
+    {
+        AppContext appContext;
+        QObject::connect(&application, &QCoreApplication::aboutToQuit,
+                         &appContext, [&appContext] {
+            appContext.configuration()->savePendingChanges();
+        });
 
+        QQmlApplicationEngine engine;
+        appContext.setQmlEngine(&engine);
+        engine.setInitialProperties({
+            {QStringLiteral("appContext"), QVariant::fromValue(static_cast<QObject *>(&appContext))}
+        });
+        QObject::connect(
+            &engine,
+            &QQmlApplicationEngine::objectCreationFailed,
+            &application,
+            [] { QCoreApplication::exit(EXIT_FAILURE); },
+            Qt::QueuedConnection);
+        engine.loadFromModule(QStringLiteral("Minifox.App"), QStringLiteral("Main"));
 
-    QQmlApplicationEngine engine;
-    appContext.setQmlEngine(&engine);
-    engine.setInitialProperties({
-        {QStringLiteral("appContext"), QVariant::fromValue(static_cast<QObject *>(&appContext))}
-    });
-    QObject::connect(
-        &engine,
-        &QQmlApplicationEngine::objectCreationFailed,
-        &application,
-        [] { QCoreApplication::exit(EXIT_FAILURE); },
-        Qt::QueuedConnection);
-    engine.loadFromModule(QStringLiteral("Minifox.App"), QStringLiteral("Main"));
-
-    if (engine.rootObjects().isEmpty()) {
-        return EXIT_FAILURE;
+        if (engine.rootObjects().isEmpty()) {
+            return EXIT_FAILURE;
+        }
+        exitCode = application.exec();
+        restart = exitCode == EXIT_SUCCESS
+            && appContext.configurationPackages()->restartRequested();
     }
-    return application.exec();
+    // Every child process, lease and lock of this instance is released by now.
+    if (restart && !ConfigurationPackageManager::startReplacementInstance()) {
+#ifdef Q_OS_WIN
+        MessageBoxW(nullptr, L"无法重新启动启动器，请手动打开。",
+                    L"Minifox", MB_OK | MB_ICONWARNING);
+#else
+        qWarning("Unable to restart the launcher.");
+#endif
+    }
+    return exitCode;
 }

@@ -7,11 +7,6 @@
 
 namespace {
 
-QString cmdQuote(const QString &value)
-{
-    return QStringLiteral("\"") + QDir::toNativeSeparators(value) + QStringLiteral("\"");
-}
-
 void prependPathEntry(QStringList &entries, const QString &entry)
 {
     if (entry.isEmpty()) {
@@ -72,19 +67,27 @@ CommandPromptBuilder::Result CommandPromptBuilder::build(
     environment.insert(QStringLiteral("MINIFOX_PYTHON"), python.absoluteFilePath());
     environment.remove(QStringLiteral("PYTHONHOME"));
 
+    // cmd expands %NAME% even inside quotes, so legal paths such as
+    // "a-%TEMP%-b" must never be spliced into the command line.  The activation
+    // script is called relative to the process working directory, and the target
+    // directory arrives through a variable whose value is expanded only once.
+    environment.insert(QStringLiteral("MINIFOX_PROMPT_DIRECTORY"),
+                       QDir::toNativeSeparators(QDir::cleanPath(workingDirectory)));
     QString activationCommand;
     if (!result.activationScript.isEmpty()) {
-        activationCommand = QStringLiteral("call %1").arg(cmdQuote(result.activationScript));
+        activationCommand = QStringLiteral("call \".\\%1\"")
+                                .arg(QFileInfo(result.activationScript).fileName());
+        result.workingDirectory = QFileInfo(result.activationScript).absolutePath();
     } else {
         activationCommand = QStringLiteral("prompt (ComfyUI) $P$G");
+        result.workingDirectory = QDir::cleanPath(workingDirectory);
     }
     const QString commandLine = QStringLiteral(
-        "chcp 65001 >nul && title Minifox ComfyUI Environment & %1 && cd /d %2")
-                                    .arg(activationCommand, cmdQuote(workingDirectory));
+        "chcp 65001 >nul && title Minifox ComfyUI Environment & %1 && cd /d \"%MINIFOX_PROMPT_DIRECTORY%\"")
+                                    .arg(activationCommand);
 
     result.program = QStringLiteral("cmd.exe");
     result.nativeArguments = QStringLiteral("/D /K ") + commandLine;
-    result.workingDirectory = QDir::cleanPath(workingDirectory);
     result.environment = environment;
     result.environmentRoot = QDir::cleanPath(environmentRoot);
     return result;

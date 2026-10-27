@@ -65,6 +65,13 @@ ApplicationWindow {
                 versionOperationDialog.open();
             return;
         }
+        // pip runs inside the launcher's process job; quitting would kill it midway.
+        if (appContext.versions.installingDependencies) {
+            close.accepted = false;
+            if (!dependencyInstallDialog.visible)
+                dependencyInstallDialog.open();
+            return;
+        }
         if (appContext.runtime.active && !allowClose) {
             close.accepted = false;
             if (!closeConfirmation.visible)
@@ -224,6 +231,27 @@ ApplicationWindow {
                 text: qsTr("版本更新、安装、切换或清理正在进行，请等待操作完成后再关闭启动器。")
                 wrapMode: Text.Wrap
             }
+        }
+
+        AppDialog {
+            id: dependencyInstallDialog
+
+            parent: designSurface
+            anchors.centerIn: parent
+            title: qsTr("正在安装 Python 依赖")
+            modal: true
+            standardButtons: Dialog.Yes | Dialog.Cancel
+            acceptText: qsTr("取消安装")
+            rejectText: qsTr("继续等待")
+            closePolicy: Popup.CloseOnEscape
+
+            AppLabel {
+                width: dependencyInstallDialog.availableWidth
+                text: qsTr("pip 正在修改 Python 环境，可在弹出的命令行窗口查看进度。现在退出会中断安装，可能让环境只装了一部分。\n\n如确实要退出，可先取消安装，再关闭启动器。")
+                wrapMode: Text.Wrap
+            }
+
+            onAccepted: window.appContext.versions.cancelDependencyInstall()
         }
 
     }
