@@ -94,6 +94,146 @@ private slots:
         QCoreApplication::processEvents();
         QVERIFY2(update.acquire({OperationLease::pythonEnvironment(python)}, &error), qPrintable(error));
     }
+    void serviceUrlFollowsCustomArguments_data() {
+        QTest::addColumn<QString>("custom");
+        QTest::addColumn<QString>("url");
+        QTest::newRow("separate") << "--port 9237 --listen 127.0.0.1" << "http://127.0.0.1:9237";
+        QTest::newRow("equals") << "--port=9240" << "http://127.0.0.1:9240";
+        QTest::newRow("wildcard-listen") << "--listen --port 9241" << "http://127.0.0.1:9241";
+        QTest::newRow("ipv6") << "--listen ::1 --port 9242" << "http://[::1]:9242";
+    }
+    void serviceUrlFollowsCustomArguments() {
+        QFETCH(QString, custom);
+        QFETCH(QString, url);
+        QTemporaryDir temp;
+        ConfigurationManager configuration(temp.filePath("profiles.json"));
+        configuration.setComfyRoot(temp.path());
+        configuration.setCustomArguments(custom);
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        RuntimeManager runtime(&configuration, &settings);
+        QCOMPARE(runtime.serviceUrl(), url);
+    }
+    void disabledCustomNodesDoNotGateStartup_data() {
+        QTest::addColumn<QString>("whitelist");
+        QTest::addColumn<bool>("starts");
+        QTest::newRow("broken-disabled") << "allowed" << true;
+        QTest::newRow("broken-whitelisted") << "allowed\nbroken" << false;
+    }
+    void disabledCustomNodesDoNotGateStartup() {
+        QFETCH(QString, whitelist);
+        QFETCH(bool, starts);
+        const QString python = QStandardPaths::findExecutable("python.exe");
+        if (python.isEmpty()) QSKIP("python.exe is not available on PATH");
+        qputenv("MINIFOX_SKIP_DEPENDENCY_INSTALL", "1");
+        QTemporaryDir temp;
+        QDir root(temp.path());
+        const QString marker = temp.filePath("started.txt");
+        QFile main(temp.filePath("main.py")); QVERIFY(main.open(QIODevice::WriteOnly));
+        main.write(QStringLiteral("from pathlib import Path\nPath(r'%1').write_text('x')\n")
+                       .arg(QDir::toNativeSeparators(marker)).toUtf8());
+        main.close();
+        QFile core(temp.filePath("requirements.txt")); QVERIFY(core.open(QIODevice::WriteOnly)); core.close();
+        QVERIFY(root.mkpath("custom_nodes/broken")); QVERIFY(root.mkpath("custom_nodes/allowed"));
+        QFile broken(temp.filePath("custom_nodes/broken/requirements.txt"));
+        QVERIFY(broken.open(QIODevice::WriteOnly));
+        broken.write("minifox-definitely-missing-dependency-xyz==1.0\n"); broken.close();
+        QFile allowed(temp.filePath("custom_nodes/allowed/requirements.txt"));
+        QVERIFY(allowed.open(QIODevice::WriteOnly)); allowed.close();
+        ConfigurationManager configuration(temp.filePath("profiles.json"));
+        configuration.setComfyRoot(temp.path()); configuration.setPythonPath(python);
+        configuration.setParameterValue("disableCustomNodes", true);
+        configuration.setParameterValue("whitelistCustomNodes", whitelist);
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        RuntimeManager runtime(&configuration, &settings);
+        runtime.start();
+        if (starts) {
+            QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(marker), 8000);
+        } else {
+            QTRY_COMPARE_WITH_TIMEOUT(runtime.status(), RuntimeManager::Failed, 8000);
+            QVERIFY(!QFileInfo::exists(marker));
+        }
+        runtime.shutdown();
+    }
+    void readinessRequiresComfySystemStats_data() {
+        QTest::addColumn<QByteArray>("payload");
+        QTest::addColumn<bool>("ready");
+        QTest::newRow("plain-text") << QByteArray("not a ComfyUI server") << false;
+        QTest::newRow("system-stats") << QByteArray(R"({"system":{"os":"nt"},"devices":[]})") << true;
+    }
+    void readinessRequiresComfySystemStats() {
+        QFETCH(QByteArray, payload);
+        QFETCH(bool, ready);
+        const QString python = QStandardPaths::findExecutable("python.exe");
+        if (python.isEmpty()) QSKIP("python.exe is not available on PATH");
+        QTcpServer probe; QVERIFY(probe.listen(QHostAddress::LocalHost, 0));
+        const quint16 port = probe.serverPort(); probe.close();
+        QTemporaryDir temp;
+        QFile main(temp.filePath("main.py")); QVERIFY(main.open(QIODevice::WriteOnly));
+        main.write(QStringLiteral(
+            "import http.server\n"
+            "class H(http.server.BaseHTTPRequestHandler):\n"
+            "    def do_GET(self):\n"
+            "        self.send_response(200); self.end_headers(); self.wfile.write(%1)\n"
+            "    def log_message(self, *args): pass\n"
+            "http.server.HTTPServer(('127.0.0.1', %2), H).serve_forever()\n")
+                       .arg(QStringLiteral("b'%1'").arg(QString::fromUtf8(payload)))
+                       .arg(port).toUtf8());
+        main.close();
+        QFile requirements(temp.filePath("requirements.txt")); QVERIFY(requirements.open(QIODevice::WriteOnly)); requirements.close();
+        ConfigurationManager configuration(temp.filePath("profiles.json"));
+        configuration.setComfyRoot(temp.path()); configuration.setPythonPath(python);
+        configuration.setParameterValue("port", port);
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        RuntimeManager runtime(&configuration, &settings);
+        runtime.start();
+        QTRY_VERIFY_WITH_TIMEOUT(runtime.processId() > 0, 8000);
+        if (ready) {
+            QTRY_VERIFY_WITH_TIMEOUT(runtime.serviceReady(), 10000);
+            QCOMPARE(runtime.status(), RuntimeManager::Running);
+        } else {
+            QTest::qWait(3000);
+            QVERIFY(!runtime.serviceReady());
+            QCOMPARE(runtime.status(), RuntimeManager::Starting);
+        }
+        runtime.shutdown();
+    }
+    void occupiedPortBlocksLaunch() {
+        const QString python = QStandardPaths::findExecutable("python.exe");
+        if (python.isEmpty()) QSKIP("python.exe is not available on PATH");
+        QTcpServer occupant; QVERIFY(occupant.listen(QHostAddress::LocalHost, 0));
+        QTemporaryDir temp;
+        const QString marker = temp.filePath("started.txt");
+        QFile main(temp.filePath("main.py")); QVERIFY(main.open(QIODevice::WriteOnly));
+        main.write(QStringLiteral("from pathlib import Path\nPath(r'%1').write_text('x')\n")
+                       .arg(QDir::toNativeSeparators(marker)).toUtf8());
+        main.close();
+        QFile requirements(temp.filePath("requirements.txt")); QVERIFY(requirements.open(QIODevice::WriteOnly)); requirements.close();
+        ConfigurationManager configuration(temp.filePath("profiles.json"));
+        configuration.setComfyRoot(temp.path()); configuration.setPythonPath(python);
+        configuration.setParameterValue("port", occupant.serverPort());
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        RuntimeManager runtime(&configuration, &settings);
+        runtime.start();
+        QTRY_COMPARE_WITH_TIMEOUT(runtime.status(), RuntimeManager::Failed, 8000);
+        QVERIFY(runtime.lastError().contains(QString::number(occupant.serverPort())));
+        QVERIFY(!QFileInfo::exists(marker));
+    }
+    void progressFollowedByErrorKeepsError() {
+        LogModel model;
+        model.appendStandardError(QByteArrayLiteral("\r 50%|#####     | 4/8 [00:01<00:01, 2.47it/s]"));
+        model.appendStandardError(QByteArrayLiteral("RuntimeError: CUDA out of memory\n"));
+        QCOMPARE(model.rowCount(), 1);
+        QCOMPARE(model.data(model.index(0, 0), LogModel::TextRole).toString(),
+                 QStringLiteral("RuntimeError: CUDA out of memory"));
+
+        LogModel unterminated;
+        unterminated.appendStandardError(
+            QByteArrayLiteral("\r 75%|#######   | 6/8 [00:02<00:01, 2.35it/s]Traceback (most recent call last):"));
+        unterminated.flush();
+        QCOMPARE(unterminated.rowCount(), 1);
+        QCOMPARE(unterminated.data(unterminated.index(0, 0), LogModel::TextRole).toString(),
+                 QStringLiteral("Traceback (most recent call last):"));
+    }
     void initTestCase();
     void defaultsStayImplicit();
     void commandPromptActivatesSelectedEnvironment();
@@ -162,7 +302,10 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
     QTemporaryDir temporaryDirectory;
     QVERIFY(temporaryDirectory.isValid());
 
-    QDir root(temporaryDirectory.path());
+    // cmd expands %NAME% inside quotes; such legal folder names must survive.
+    QVERIFY(QDir(temporaryDirectory.path()).mkpath(
+        QStringLiteral("percent-%MINIFOX_AUDIT_SUB%-path & (x)")));
+    QDir root(temporaryDirectory.filePath(QStringLiteral("percent-%MINIFOX_AUDIT_SUB%-path & (x)")));
     QVERIFY(root.mkpath(QStringLiteral("environment/Scripts")));
     QVERIFY(root.mkpath(QStringLiteral("ComfyUI")));
 
@@ -179,6 +322,7 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
 
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral("PYTHONHOME"), QStringLiteral("C:/WrongPython"));
+    environment.insert(QStringLiteral("MINIFOX_AUDIT_SUB"), QStringLiteral("expanded"));
     const CommandPromptBuilder::Result result = CommandPromptBuilder::build(
         pythonPath, root.filePath(QStringLiteral("ComfyUI")), environment);
 
@@ -186,7 +330,8 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
     QVERIFY(result.nativeArguments.startsWith(QStringLiteral("/D /K ")));
     QVERIFY(result.nativeArguments.contains(QStringLiteral("chcp 65001")));
     QVERIFY(result.nativeArguments.contains(QStringLiteral("call")));
-    QVERIFY(result.nativeArguments.contains(QDir::toNativeSeparators(activationPath)));
+    QCOMPARE(QDir::cleanPath(result.activationScript), QDir::cleanPath(activationPath));
+    QVERIFY(!result.nativeArguments.contains(QStringLiteral("MINIFOX_AUDIT_SUB")));
     QCOMPARE(QDir::cleanPath(result.environmentRoot),
              QDir::cleanPath(root.filePath(QStringLiteral("environment"))));
     QCOMPARE(QDir::cleanPath(result.environment.value(QStringLiteral("VIRTUAL_ENV"))),
@@ -200,7 +345,7 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
     QProcess activationProbe;
     QString probeArguments = result.nativeArguments;
     probeArguments.replace(QStringLiteral("/D /K "), QStringLiteral("/D /V:ON /C "));
-    probeArguments.append(QStringLiteral(" && echo !MINIFOX_TEST_ACTIVATED!"));
+    probeArguments.append(QStringLiteral(" && echo ACT=!MINIFOX_TEST_ACTIVATED! DIR=!CD!"));
     activationProbe.setWorkingDirectory(result.workingDirectory);
     activationProbe.setProcessEnvironment(result.environment);
     activationProbe.setProcessChannelMode(QProcess::MergedChannels);
@@ -211,7 +356,10 @@ void LaunchCommandBuilderTest::commandPromptActivatesSelectedEnvironment()
     const QByteArray activationOutput = activationProbe.readAll();
     QCOMPARE(activationProbe.exitStatus(), QProcess::NormalExit);
     QVERIFY2(activationProbe.exitCode() == 0, activationOutput.constData());
-    QVERIFY2(activationOutput.contains("1"), activationOutput.constData());
+    QVERIFY2(activationOutput.contains("ACT=1"), activationOutput.constData());
+    QVERIFY2(activationOutput.contains(
+                 ("DIR=" + QDir::toNativeSeparators(root.filePath(QStringLiteral("ComfyUI")))).toUtf8()),
+             activationOutput.constData());
 
     QVERIFY(root.mkpath(QStringLiteral("portable-python")));
     const QString portablePythonPath =

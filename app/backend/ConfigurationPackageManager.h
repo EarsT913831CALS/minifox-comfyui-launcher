@@ -29,7 +29,11 @@ public:
     Q_INVOKABLE bool exportPackage(const QUrl &destination,
                                    bool includeSensitiveValues = false);
     Q_INVOKABLE bool deleteProfiles(const QStringList &profileIds);
+    // Asks the application to quit; the replacement instance is started by main()
+    // only after the event loop has really ended (see startReplacementInstance()).
     Q_INVOKABLE bool restartLauncher();
+    bool restartRequested() const;
+    static bool startReplacementInstance();
 
 signals:
     void stateChanged();
@@ -45,6 +49,7 @@ private:
 
     ConfigurationManager *m_configuration;
     bool m_restartRequired = false;
+    bool m_restartRequested = false;
     QString m_lastError;
     QString m_lastMessage;
 };

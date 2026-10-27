@@ -963,18 +963,33 @@ bool ConfigurationPackageManager::restartLauncher()
         return false;
     }
 
-    const QString executable = QCoreApplication::applicationFilePath();
+    // Same path as QCoreApplication::quit(), but the result is observable: the main
+    // window ignores the quit while a version operation, pip install or running
+    // ComfyUI needs confirmation.  Starting the new instance first would leave two.
+    m_restartRequested = true;
+    QEvent quitEvent(QEvent::Quit);
+    QCoreApplication::sendEvent(QCoreApplication::instance(), &quitEvent);
+    if (!quitEvent.isAccepted()) {
+        m_restartRequested = false;
+        setError(tr("有操作正在进行，启动器没有退出，已取消重启。请在操作完成后再重启。"));
+        return false;
+    }
+    return true;
+}
+
+bool ConfigurationPackageManager::restartRequested() const
+{
+    return m_restartRequested;
+}
+
+bool ConfigurationPackageManager::startReplacementInstance()
+{
     QStringList arguments = QCoreApplication::arguments();
     if (!arguments.isEmpty()) {
         arguments.removeFirst();
     }
-    if (!QProcess::startDetached(executable, arguments,
-                                 QCoreApplication::applicationDirPath())) {
-        setError(tr("无法重新启动启动器。"));
-        return false;
-    }
-    QCoreApplication::quit();
-    return true;
+    return QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments,
+                                   QCoreApplication::applicationDirPath());
 }
 
 void ConfigurationPackageManager::setError(const QString &message)

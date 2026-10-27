@@ -111,6 +111,8 @@ public:
     Q_INVOKABLE void installExtension(const QString &url);
     Q_INVOKABLE void removeExtension(const QString &path);
     Q_INVOKABLE void setExtensionEnabled(const QString &path, bool enabled);
+    // Stops the running dependency check/install (with its process tree) and drops the queue.
+    Q_INVOKABLE void cancelDependencyInstall();
     void retranslate();
 
 signals:
@@ -274,6 +276,8 @@ private:
     void completeRefresh(bool success, const QString &message);
     void queueDependencyCheck(const QString &targetDir);
     void startNextDependencyCheck();
+    void startDependencyProcess();
+    void completeDependencyRun(int exitCode, QProcess::ExitStatus exitStatus);
     void handleDependencyCheckFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void handleDependencyInstallFinished(int exitCode, QProcess::ExitStatus exitStatus);
     static QString requirementsFileFor(const QString &targetDir);
@@ -297,6 +301,13 @@ private:
     QString m_dependencyDir;
     bool m_dependencyInstallPhase = false;
     bool m_dependencyTimedOut = false;
+    // One completion per started process: finished, FailedToStart and a failed job
+    // attach all funnel into completeDependencyRun, which ignores repeats.
+    bool m_dependencyRunCompleted = true;
+    bool m_dependencyAttachFailed = false;
+    bool m_dependencyCancelled = false;
+    QByteArray m_dependencyOutput;
+    QByteArray m_dependencyErrors;
     bool m_installingDependencies = false;
     Operation m_operation = Operation::None;
     QString m_gitProgram;

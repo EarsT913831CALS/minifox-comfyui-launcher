@@ -5,6 +5,7 @@ qt_add_library(minifox_shared_backend STATIC
     ExternalContent.h
     SafeDataPath.cpp
     SafeDataPath.h
+    DependencyInstaller.cpp
     DependencyInstaller.h
     PortablePaths.cpp
     PortablePaths.h

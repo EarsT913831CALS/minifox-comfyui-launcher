@@ -1,5 +1,4 @@
 #include "ExternalContent.h"
-#include "LaunchParameterCatalog.h"
 #include "RuntimeManager.h"
 #include "DependencyInstaller.h"
 #include "SafeDataPath.h"
@@ -29,6 +28,9 @@
 #include <QResource>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QHostAddress>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QUrlQuery>
 
 #ifdef Q_OS_WIN
@@ -135,163 +137,6 @@ void configureInteractiveConsole(QProcess::CreateProcessArguments *arguments)
 }
 #endif
 
-// Offline requirements checker: inspects only the selected interpreter's installed
-// metadata.  It never contacts an index and never installs or changes a package.
-// Every positional argument is one requirements.txt; each gets its own result entry
-// so the caller can install and re-check exactly the files that failed.
-QString dependencyCheckerScript()
-{
-    static const QString checker = QStringLiteral(R"PY(
-import importlib.metadata as metadata
-import json
-import os
-import re
-import sys
-
-try:
-    from packaging.requirements import Requirement
-except Exception:
-    try:
-        from pip._vendor.packaging.requirements import Requirement
-    except Exception as exc:
-        print(json.dumps({"ok": False, "fatal": "Python 中缺少 pip/packaging，无法解析依赖清单：%s" % exc}))
-        raise SystemExit(3)
-
-def normalized_vcs_url(value):
-    value = value.strip()
-    if re.match(r"^(?:git|hg|svn|bzr)\+", value, re.IGNORECASE):
-        value = value.split("+", 1)[1]
-    value = value.split("#", 1)[0].rstrip("/")
-    git_revision = value.lower().find(".git@")
-    if git_revision >= 0:
-        value = value[:git_revision + 4]
-    else:
-        last_slash = value.rfind("/")
-        revision = value.rfind("@")
-        if revision > last_slash:
-            value = value[:revision]
-    if value.lower().endswith(".git"):
-        value = value[:-4]
-    return value.rstrip("/").casefold()
-
-def installed_vcs_distribution(raw):
-    expected_url = normalized_vcs_url(raw)
-    for distribution in metadata.distributions():
-        try:
-            direct_url_text = distribution.read_text("direct_url.json")
-            if not direct_url_text:
-                continue
-            direct_url = json.loads(direct_url_text).get("url", "")
-            if normalized_vcs_url(direct_url) != expected_url:
-                continue
-            name = distribution.metadata.get("Name") or distribution.name
-            return name, distribution.version
-        except Exception:
-            continue
-    return None
-
-def check_file(root):
-    seen_files = set()
-    raw_requirements = []
-    parse_errors = []
-
-    def read_file(path):
-        path = os.path.abspath(path)
-        if path in seen_files:
-            return
-        seen_files.add(path)
-        try:
-            with open(path, "r", encoding="utf-8-sig") as stream:
-                physical = stream.readlines()
-        except Exception as exc:
-            parse_errors.append("无法读取 %s：%s" % (path, exc))
-            return
-
-        logical = []
-        pending = ""
-        for raw in physical:
-            line = raw.rstrip("\r\n")
-            if line.rstrip().endswith("\\"):
-                pending += line.rstrip()[:-1] + " "
-                continue
-            logical.append(pending + line)
-            pending = ""
-        if pending:
-            logical.append(pending)
-
-        base = os.path.dirname(path)
-        for line in logical:
-            line = re.split(r"\s+#", line, maxsplit=1)[0].strip()
-            if not line or line.startswith("#"):
-                continue
-            include = re.match(r"^(?:-r|--requirement)\s+(.+)$", line)
-            constraint = re.match(r"^(?:-c|--constraint)\s+(.+)$", line)
-            if include or constraint:
-                child = (include or constraint).group(1).strip().strip("\"'")
-                read_file(os.path.join(base, child))
-                continue
-            if line.startswith("--hash=") or line.startswith("--"):
-                continue
-            if line.startswith("-e ") or line.startswith("--editable "):
-                egg = re.search(r"[#&]egg=([^&]+)", line)
-                if egg:
-                    raw_requirements.append(egg.group(1))
-                else:
-                    parse_errors.append("无法识别可编辑依赖：%s" % line)
-                continue
-            raw_requirements.append(line)
-
-    read_file(root)
-    issues = []
-    checked = 0
-    for raw in raw_requirements:
-        if re.match(r"^(?:git|hg|svn|bzr)\+\S+$", raw, re.IGNORECASE):
-            checked += 1
-            installed_vcs = installed_vcs_distribution(raw)
-            if installed_vcs is None:
-                repository = normalized_vcs_url(raw).rsplit("/", 1)[-1]
-                issues.append("缺少 VCS 依赖：%s（来源：%s）" % (repository, raw))
-            continue
-        try:
-            requirement = Requirement(raw)
-        except Exception as exc:
-            parse_errors.append("无法解析依赖“%s”：%s" % (raw, exc))
-            continue
-        try:
-            if requirement.marker is not None and not requirement.marker.evaluate():
-                continue
-        except Exception as exc:
-            parse_errors.append("无法计算依赖条件“%s”：%s" % (raw, exc))
-            continue
-        checked += 1
-        try:
-            installed = metadata.version(requirement.name)
-        except metadata.PackageNotFoundError:
-            issues.append("缺少依赖：%s" % requirement.name)
-            continue
-        except Exception as exc:
-            issues.append("无法读取 %s 的版本：%s" % (requirement.name, exc))
-            continue
-        if requirement.specifier and not requirement.specifier.contains(installed, prereleases=True):
-            issues.append("版本不符：%s 已安装 %s，需要 %s" %
-                          (requirement.name, installed, requirement.specifier))
-
-    return {
-        "path": os.path.abspath(root),
-        "ok": not issues and not parse_errors,
-        "checked": checked,
-        "issues": issues,
-        "parseErrors": parse_errors,
-    }
-
-results = [check_file(path) for path in sys.argv[1:]]
-ok = all(item["ok"] for item in results)
-print(json.dumps({"ok": ok, "results": results}))
-raise SystemExit(0 if ok else 2)
-)PY");
-    return checker;
-}
-
 // Kernel requirements live directly in the ComfyUI root; extension requirements live
 // one directory below custom_nodes.  Use that layout for a readable display name.
 QString requirementDisplayName(const QString &requirementsPath)
@@ -301,6 +146,132 @@ QString requirementDisplayName(const QString &requirementsPath)
         return QStringLiteral("ComfyUI");
     }
     return parent.dirName();
+}
+
+// The subset of ComfyUI's argparse options the launcher itself depends on.  It is
+// read from the final argument list, so custom arguments override the structured
+// parameters exactly as they do for ComfyUI (the last occurrence wins).
+struct LaunchArgumentView
+{
+    QString listen = QStringLiteral("127.0.0.1");
+    int port = 8188;
+    QString tlsKeyfile;
+    QString tlsCertfile;
+    bool disableAllCustomNodes = false;
+    QStringList whitelistCustomNodes;
+};
+
+LaunchArgumentView parseLaunchArguments(const QStringList &arguments)
+{
+    LaunchArgumentView view;
+    for (qsizetype index = 0; index < arguments.size(); ++index) {
+        QString option = arguments.at(index);
+        if (!option.startsWith(QStringLiteral("--"))) {
+            continue;
+        }
+        QString inlineValue;
+        bool hasInlineValue = false;
+        const qsizetype equals = option.indexOf(QLatin1Char('='));
+        if (equals > 0) {
+            inlineValue = option.mid(equals + 1);
+            option.truncate(equals);
+            hasInlineValue = true;
+        }
+        const auto nextValue = [&](QString *value) {
+            if (hasInlineValue) {
+                *value = inlineValue;
+                return true;
+            }
+            if (index + 1 < arguments.size()
+                && !arguments.at(index + 1).startsWith(QStringLiteral("--"))) {
+                *value = arguments.at(++index);
+                return true;
+            }
+            return false;
+        };
+
+        QString value;
+        if (option == QStringLiteral("--listen")) {
+            view.listen = nextValue(&value) ? value : QStringLiteral("0.0.0.0,::");
+        } else if (option == QStringLiteral("--port")) {
+            bool ok = false;
+            const int port = nextValue(&value) ? value.toInt(&ok) : 0;
+            if (ok && port > 0 && port < 65536) {
+                view.port = port;
+            }
+        } else if (option == QStringLiteral("--tls-keyfile")) {
+            view.tlsKeyfile = nextValue(&value) ? value : QString();
+        } else if (option == QStringLiteral("--tls-certfile")) {
+            view.tlsCertfile = nextValue(&value) ? value : QString();
+        } else if (option == QStringLiteral("--disable-all-custom-nodes")) {
+            view.disableAllCustomNodes = true;
+        } else if (option == QStringLiteral("--whitelist-custom-nodes")) {
+            QStringList entries;
+            if (hasInlineValue) {
+                entries.append(inlineValue);
+            }
+            while (index + 1 < arguments.size()
+                   && !arguments.at(index + 1).startsWith(QStringLiteral("--"))) {
+                entries.append(arguments.at(++index));
+            }
+            view.whitelistCustomNodes = entries;
+        }
+    }
+    return view;
+}
+
+// Host used by the launcher to reach the service.  Wildcard listeners are reached
+// through loopback; IPv6 literals are bracketed for URLs only.
+QString connectableHost(const LaunchArgumentView &view)
+{
+    QString listen = view.listen.split(QLatin1Char(','), Qt::SkipEmptyParts)
+                         .value(0, QStringLiteral("127.0.0.1")).trimmed();
+    if (listen.startsWith(QLatin1Char('[')) && listen.endsWith(QLatin1Char(']'))) {
+        listen = listen.mid(1, listen.size() - 2);
+    }
+    if (listen.isEmpty() || listen == QStringLiteral("0.0.0.0") || listen == QStringLiteral("::")) {
+        listen = QStringLiteral("127.0.0.1");
+    }
+    return listen;
+}
+
+// True when something already serves the port ComfyUI is about to listen on.
+// Binding detects any local owner; a connect probe is used only for loopback,
+// because VPN/TUN proxies accept connections to arbitrary remote addresses.
+bool portAlreadyServed(const LaunchArgumentView &view)
+{
+    QString host = connectableHost(view);
+    if (host.compare(QStringLiteral("localhost"), Qt::CaseInsensitive) == 0) {
+        host = QStringLiteral("127.0.0.1");
+    }
+    const QHostAddress address(host);
+    if (address.isNull()) {
+        return false;
+    }
+    const auto port = static_cast<quint16>(view.port);
+    QTcpServer bindProbe;
+    if (!bindProbe.listen(address, port)) {
+        return bindProbe.serverError() == QAbstractSocket::AddressInUseError;
+    }
+    bindProbe.close();
+    if (!address.isLoopback()) {
+        return false;
+    }
+    QTcpSocket connectProbe;
+    connectProbe.connectToHost(address, port);
+    const bool connected = connectProbe.waitForConnected(300);
+    connectProbe.abort();
+    return connected;
+}
+
+// A real ComfyUI answers /system_stats with a JSON object describing the system.
+bool looksLikeComfySystemStats(const QByteArray &payload)
+{
+    QJsonParseError error;
+    const QJsonDocument document = QJsonDocument::fromJson(payload, &error);
+    return error.error == QJsonParseError::NoError && document.isObject()
+        && (document.object().value(QStringLiteral("system")).isObject()
+            || document.object().value(QStringLiteral("devices")).isArray());
 }
 
 } // namespace
@@ -775,10 +746,7 @@ void RuntimeManager::beginDependencyCheck()
     QProcessEnvironment environment = command.environment;
     m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
     m_dependencyCheck.setProcessEnvironment(environment);
-    m_dependencyCheck.setProgram(command.program);
-    QStringList arguments{QStringLiteral("-c"), dependencyCheckerScript()};
-    arguments.append(requirementFiles);
-    m_dependencyCheck.setArguments(arguments);
+    DependencyInstaller::configureCheck(m_dependencyCheck, command.program, requirementFiles);
     m_logModel->appendSystemMessage(
         tr("正在使用所选 Python 离线检查 %1 个依赖清单…").arg(requirementFiles.size()),
         QStringLiteral("#0067c0"));
@@ -879,9 +847,8 @@ void RuntimeManager::handleDependencyCheckFinished(int exitCode,
             m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
             return;
         }
-        // Escape hatch for headless runs and tests: no console window can be
-        // attended there, so keep the old fail-fast behavior instead of
-        // opening install windows that would wait for input forever.
+        // Escape hatch for headless runs and tests: fail fast instead of
+        // opening pip console windows that change the Python environment.
         if (qEnvironmentVariableIsSet("MINIFOX_SKIP_DEPENDENCY_INSTALL")) {
             setLastError(tr("依赖检查失败，ComfyUI 未启动。"));
             setStatus(Failed);
@@ -920,6 +887,9 @@ QStringList RuntimeManager::collectRequirementFiles() const
     if (QFileInfo::exists(kernelRequirements)) {
         files.append(kernelRequirements);
     }
+    // Only nodes ComfyUI will actually load: with --disable-all-custom-nodes that
+    // is the whitelist, so disabled nodes cannot block startup with their requirements.
+    const LaunchArgumentView launch = parseLaunchArguments(command.arguments);
     const QDir customNodes(root.filePath(QStringLiteral("custom_nodes")));
     if (customNodes.exists()) {
         const QFileInfoList entries = customNodes.entryInfoList(
@@ -928,6 +898,10 @@ QStringList RuntimeManager::collectRequirementFiles() const
             const QString name = entry.fileName();
             if (name.compare(QStringLiteral("__pycache__"), Qt::CaseInsensitive) == 0
                 || name.endsWith(QStringLiteral(".disabled"), Qt::CaseInsensitive)) {
+                continue;
+            }
+            if (launch.disableAllCustomNodes
+                && !launch.whitelistCustomNodes.contains(name, Qt::CaseInsensitive)) {
                 continue;
             }
             const QString requirements = QDir(entry.absoluteFilePath())
@@ -948,13 +922,10 @@ void RuntimeManager::startNextDependencyInstall()
         m_dependencyRecheckPhase = true;
         const LaunchCommandBuilder::Result command =
             operationCommand();
-        QProcessEnvironment environment = command.environment;
-            m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
-        m_dependencyCheck.setProcessEnvironment(environment);
-        m_dependencyCheck.setProgram(command.program);
-        QStringList arguments{QStringLiteral("-c"), dependencyCheckerScript()};
-        arguments.append(m_dependencyRecheckPaths);
-        m_dependencyCheck.setArguments(arguments);
+        m_dependencyCheck.setWorkingDirectory(command.workingDirectory);
+        m_dependencyCheck.setProcessEnvironment(command.environment);
+        DependencyInstaller::configureCheck(m_dependencyCheck, command.program,
+                                            m_dependencyRecheckPaths);
         m_logModel->appendSystemMessage(tr("依赖安装结束，正在复检…"),
                                         QStringLiteral("#0067c0"));
         m_dependencyCheck.start();
@@ -966,9 +937,7 @@ void RuntimeManager::startNextDependencyInstall()
     const LaunchCommandBuilder::Result command =
         operationCommand();
 
-    QProcessEnvironment environment = command.environment;
-    m_dependencyInstall.setWorkingDirectory(command.workingDirectory);
-    m_dependencyInstall.setProcessEnvironment(environment);
+    m_dependencyInstall.setProcessEnvironment(command.environment);
     DependencyInstaller::configure(m_dependencyInstall, command.program, m_dependencyCurrentPath);
     m_logModel->appendSystemMessage(
         tr("正在安装 %1 的依赖…").arg(name),
@@ -1045,6 +1014,17 @@ void RuntimeManager::launchConfiguredProcess()
     } else if (!progressBridgeError.isEmpty()) {
         m_logModel->appendSystemMessage(progressBridgeError, QStringLiteral("#9d5d00"));
     }
+    // Another program (or an older ComfyUI) already answering on the port would make
+    // the readiness probe talk to it instead of the process started here.
+    const LaunchArgumentView launch = parseLaunchArguments(command.arguments);
+    if (portAlreadyServed(launch)) {
+        setLastError(tr("端口 %1 已被其他程序占用，ComfyUI 未启动。请关闭占用该端口的程序或更换端口。")
+                         .arg(launch.port));
+        setStatus(Failed);
+        m_logModel->appendSystemMessage(m_lastError, QStringLiteral("#c42b1c"));
+        return;
+    }
+
     m_logModel->appendSystemMessage(command.preview);
     if ((m_operationLease.held() ? m_startProxyMode : m_settings->proxyMode()) == QStringLiteral("manual")) {
         const QString proxyUrl = (m_operationLease.held() ? m_startProxyUrl : m_settings->proxyUrl()).isEmpty() ? QString{} : ExternalContent::redactUrl((m_operationLease.held() ? m_startProxyUrl : m_settings->proxyUrl()));
@@ -1153,19 +1133,17 @@ void RuntimeManager::updateCommandPreview()
     proxyCommands.append(command.preview);
     m_commandPreview = proxyCommands.join(QStringLiteral(" && "));
 
-    QString listen = operationParameter(QStringLiteral("listen")).toString();
-    listen = listen.split(QLatin1Char(','), Qt::SkipEmptyParts).value(0, QStringLiteral("127.0.0.1")).trimmed();
-    if (listen.isEmpty() || listen == QStringLiteral("0.0.0.0") || listen == QStringLiteral("::")
-        || listen == QStringLiteral("[::]")) {
-        listen = QStringLiteral("127.0.0.1");
+    // Derive the address from the final arguments so custom --port/--listen/--tls-*
+    // values are honored the same way ComfyUI honors them.
+    const LaunchArgumentView launch = parseLaunchArguments(command.arguments);
+    QString host = connectableHost(launch);
+    if (host.contains(QLatin1Char(':'))) {
+        host = QStringLiteral("[%1]").arg(host);
     }
-    if (listen.contains(QLatin1Char(':')) && !listen.startsWith(QLatin1Char('['))) {
-        listen = QStringLiteral("[%1]").arg(listen);
-    }
-    const bool tls = !operationParameter(QStringLiteral("tlsKeyfile")).toString().isEmpty()
-        && !operationParameter(QStringLiteral("tlsCertfile")).toString().isEmpty();
-    const int port = operationParameter(QStringLiteral("port")).toInt();
-    m_serviceUrl = QStringLiteral("%1://%2:%3").arg(tls ? QStringLiteral("https") : QStringLiteral("http"), listen).arg(port);
+    const bool tls = !launch.tlsKeyfile.isEmpty() && !launch.tlsCertfile.isEmpty();
+    m_serviceUrl = QStringLiteral("%1://%2:%3")
+                       .arg(tls ? QStringLiteral("https") : QStringLiteral("http"), host)
+                       .arg(launch.port);
     emit commandPreviewChanged();
 }
 
@@ -1217,9 +1195,12 @@ void RuntimeManager::handleReadinessReply()
         return;
     }
     const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    const bool ready = reply->error() == QNetworkReply::NoError
-        && statusCode >= 200 && statusCode < 500;
-    const QByteArray payload = ready ? reply->readAll() : QByteArray{};
+    const QByteArray payload = reply->readAll();
+    // A ComfyUI behind an authentication extension answers 401/403 without stats;
+    // anything else must return the real system_stats document.
+    const bool ready = (reply->error() == QNetworkReply::NoError && statusCode == 200
+                        && looksLikeComfySystemStats(payload))
+        || statusCode == 401 || statusCode == 403;
     reply->deleteLater();
     if (ready) {
         updateAcceleratorSummaryFromSystemStats(payload);
@@ -1301,12 +1282,4 @@ LaunchCommandBuilder::Result RuntimeManager::operationCommand() const
     auto command = LaunchCommandBuilder::build(m_configuration->currentProfileSnapshot());
     m_settings->applyToProcessEnvironment(command.environment);
     return command;
-}
-QVariant RuntimeManager::operationParameter(const QString &key) const
-{
-    if (!m_operationLease.held()) return m_configuration->parameterValue(key);
-    const auto parameters = m_startProfile.value("parameters").toMap();
-    if (parameters.contains(key)) return parameters.value(key);
-    const auto *definition = LaunchParameterCatalog::find(key);
-    return definition ? definition->defaultValue : QVariant{};
 }

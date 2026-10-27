@@ -4,6 +4,9 @@
 #include "PortablePaths.h"
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QProcess>
 #include <QSaveFile>
 #include <QSignalSpy>
@@ -31,7 +34,129 @@ class VersionManagerTest : public QObject
         QSaveFile f(path);
         return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() && f.commit();
     }
+    // A pip shadow on PYTHONPATH: `python -m pip` runs this __main__, which records the
+    // call and never touches the interpreter; pip._vendor still resolves to the real pip
+    // so the offline checker keeps working.
+    bool writeFakePip(const QString &directory) {
+        return QDir().mkpath(directory + "/pip")
+            && write(directory + "/pip/__init__.py",
+                "import importlib.machinery, os, sys\n"
+                "_here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+                "_spec = importlib.machinery.PathFinder.find_spec('pip', [p for p in sys.path if os.path.abspath(p or '.') != _here])\n"
+                "if _spec and _spec.submodule_search_locations:\n"
+                "    __path__.extend(_spec.submodule_search_locations)\n")
+            && write(directory + "/pip/__main__.py",
+                "import ctypes, json, os, sys, time\n"
+                "console = bool(ctypes.windll.kernel32.GetConsoleWindow()) if os.name == 'nt' else True\n"
+                "with open(os.environ['MINIFOX_TEST_PIP_LOG'], 'a', encoding='utf-8') as log:\n"
+                "    log.write(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd(), 'console': console}) + '\\n')\n"
+                "time.sleep(float(os.environ.get('MINIFOX_TEST_PIP_SLEEP', '0')))\n"
+                "sys.exit(int(os.environ.get('MINIFOX_TEST_PIP_EXIT', '0')))\n");
+    }
+    QList<QJsonObject> pipCalls(const QString &log) {
+        QFile file(log);
+        QList<QJsonObject> calls;
+        if (!file.open(QIODevice::ReadOnly)) return calls;
+        for (const QByteArray &line : file.readAll().split('\n'))
+            if (!line.trimmed().isEmpty()) calls.append(QJsonDocument::fromJson(line).object());
+        return calls;
+    }
+    QProcessEnvironment fakePipEnvironment(const QString &fakePip, const QString &log) {
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert("PYTHONPATH", fakePip);
+        environment.insert("MINIFOX_TEST_PIP_LOG", log);
+        environment.insert("MINIFOX_DEPENDENCY_FAILURE_PAUSE", "0");
+        return environment;
+    }
 private slots:
+    void dependencyQueueInstallsEachProjectInItsOwnDirectory() {
+        const QString python = QStandardPaths::findExecutable("python");
+        if (python.isEmpty()) QSKIP("python is not available on PATH");
+        QTemporaryDir temp;
+        const QString fakePip = temp.filePath("fake-pip"), log = temp.filePath("pip.log");
+        QVERIFY(writeFakePip(fakePip));
+        const QString a = temp.filePath("nodes/A"), b = temp.filePath("nodes/B"), c = temp.filePath("nodes/C");
+        for (const QString &dir : {a, b, c}) QVERIFY(QDir().mkpath(dir));
+        QVERIFY(write(a + "/requirements.txt", "minifox-definitely-missing-a==1.0\n"));
+        QVERIFY(write(b + "/requirements.txt", "./minifox_local_b-1.0-py3-none-any.whl\n"));
+        QVERIFY(write(c + "/requirements.txt", ""));
+        ConfigurationManager config(temp.filePath("profiles.json"));
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        VersionManager manager(&config, &settings);
+        manager.m_operationPython = python;
+        manager.m_operationGit.environment = fakePipEnvironment(fakePip, log);
+        // pip's own quiet mode must not decide whether anything gets installed.
+        manager.m_operationGit.environment.insert("PIP_QUIET", "1");
+        QSignalSpy results(&manager, &VersionManager::dependencyInstallCompleted);
+        manager.queueDependencyCheck(a);
+        manager.queueDependencyCheck(b);
+        manager.queueDependencyCheck(c);
+        QVERIFY(manager.installingDependencies());
+        QTRY_VERIFY_WITH_TIMEOUT(!manager.installingDependencies(), 60000);
+        const QList<QJsonObject> calls = pipCalls(log);
+        QCOMPARE(calls.size(), 2);
+        // Package changes happen in a visible console window, not a hidden pipe.
+        QVERIFY(calls.at(0).value("console").toBool());
+        QCOMPARE(QDir::cleanPath(calls.at(0).value("cwd").toString()), QDir::cleanPath(a));
+        QCOMPARE(calls.at(0).value("argv").toArray(),
+                 QJsonArray({"install", "-r", QDir(a).filePath("requirements.txt")}));
+        QCOMPARE(QDir::cleanPath(calls.at(1).value("cwd").toString()), QDir::cleanPath(b));
+        QCOMPARE(results.count(), 2);
+        for (const QList<QVariant> &result : results)
+            QVERIFY2(result.at(0).toBool(), qPrintable(result.at(1).toString()));
+    }
+    void dependencyStartFailureCompletesEachProjectOnce() {
+        QTemporaryDir temp;
+        const QString a = temp.filePath("A"), b = temp.filePath("B");
+        for (const QString &dir : {a, b}) {
+            QVERIFY(QDir().mkpath(dir));
+            QVERIFY(write(dir + "/requirements.txt", "anything==1\n"));
+        }
+        // Exists but cannot be executed: every run ends through FailedToStart.
+        const QString notPython = temp.filePath("python.exe");
+        QVERIFY(write(notPython, "not an executable"));
+        ConfigurationManager config(temp.filePath("profiles.json"));
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        VersionManager manager(&config, &settings);
+        manager.m_operationPython = notPython;
+        manager.m_operationGit.environment = QProcessEnvironment::systemEnvironment();
+        QSignalSpy results(&manager, &VersionManager::dependencyInstallCompleted);
+        manager.queueDependencyCheck(a);
+        manager.queueDependencyCheck(b);
+        QTRY_VERIFY_WITH_TIMEOUT(!manager.installingDependencies(), 15000);
+        QTest::qWait(200);
+        QCOMPARE(results.count(), 2);
+        QVERIFY(results.at(0).at(1).toString().startsWith("A"));
+        QVERIFY(results.at(1).at(1).toString().startsWith("B"));
+    }
+    void dependencyInstallCanBeCancelled() {
+        const QString python = QStandardPaths::findExecutable("python");
+        if (python.isEmpty()) QSKIP("python is not available on PATH");
+        QTemporaryDir temp;
+        const QString fakePip = temp.filePath("fake-pip"), log = temp.filePath("pip.log");
+        QVERIFY(writeFakePip(fakePip));
+        const QString a = temp.filePath("A"), b = temp.filePath("B");
+        for (const QString &dir : {a, b}) {
+            QVERIFY(QDir().mkpath(dir));
+            QVERIFY(write(dir + "/requirements.txt", "minifox-definitely-missing-x==1.0\n"));
+        }
+        ConfigurationManager config(temp.filePath("profiles.json"));
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        VersionManager manager(&config, &settings);
+        manager.m_operationPython = python;
+        manager.m_operationGit.environment = fakePipEnvironment(fakePip, log);
+        manager.m_operationGit.environment.insert("MINIFOX_TEST_PIP_SLEEP", "60");
+        QSignalSpy results(&manager, &VersionManager::dependencyInstallCompleted);
+        manager.queueDependencyCheck(a);
+        manager.queueDependencyCheck(b);
+        QTRY_COMPARE_WITH_TIMEOUT(pipCalls(log).size(), 1, 30000);
+        manager.cancelDependencyInstall();
+        QTRY_VERIFY_WITH_TIMEOUT(!manager.installingDependencies(), 10000);
+        QCOMPARE(results.count(), 1);
+        QVERIFY(!results.first().at(0).toBool());
+        QCOMPARE(pipCalls(log).size(), 1);
+        QCOMPARE(manager.m_dependencyProcess.state(), QProcess::NotRunning);
+    }
     void changedProfileCannotMixRepositoryAndPython() {
         QTemporaryDir temp;
         const QString a = temp.filePath("A"), b = temp.filePath("B");

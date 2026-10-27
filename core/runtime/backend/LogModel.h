@@ -121,7 +121,10 @@ private:
     void appendData(StreamState &state, const QByteArray &data, const QString &stream);
     void appendLine(StreamState &state, QString line, const QString &stream);
     void appendEntry(Entry entry);
-    bool updateProgressFromLine(const QString &line);
+    // Consumes a progress-bar line.  Text written after the bar without a line break
+    // (for example an exception) is returned through trailingText.
+    bool updateProgressFromLine(const QString &line, QString *trailingText = nullptr);
+    void appendProgressOrLine(StreamState &state, QString line, const QString &stream);
     void applyProgress(const ProgressInfo &progress);
     void resetProgress();
     static QString normalizeProgressText(QString line);

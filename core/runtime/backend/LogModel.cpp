@@ -329,16 +329,14 @@ void LogModel::appendSystemMessage(const QString &message, const QString &color)
 void LogModel::flush()
 {
     if (!m_stdout.rawPartial.isEmpty()) {
-        QString line = ProcessTextDecoder::decode(std::exchange(m_stdout.rawPartial, {}));
-        if (!updateProgressFromLine(line)) {
-            appendLine(m_stdout, std::move(line), QStringLiteral("stdout"));
-        }
+        appendProgressOrLine(m_stdout,
+                             ProcessTextDecoder::decode(std::exchange(m_stdout.rawPartial, {})),
+                             QStringLiteral("stdout"));
     }
     if (!m_stderr.rawPartial.isEmpty()) {
-        QString line = ProcessTextDecoder::decode(std::exchange(m_stderr.rawPartial, {}));
-        if (!updateProgressFromLine(line)) {
-            appendLine(m_stderr, std::move(line), QStringLiteral("stderr"));
-        }
+        appendProgressOrLine(m_stderr,
+                             ProcessTextDecoder::decode(std::exchange(m_stderr.rawPartial, {})),
+                             QStringLiteral("stderr"));
     }
     m_stdout.suppressNextLineFeed = false;
     m_stderr.suppressNextLineFeed = false;
@@ -627,7 +625,11 @@ void LogModel::appendData(StreamState &state, const QByteArray &data, const QStr
         state.suppressNextLineFeed =
             delimiterCharacter == '\r' && !isCrLf;
 
-        if (updateProgressFromLine(line)) {
+        QString trailing;
+        if (updateProgressFromLine(line, &trailing)) {
+            if (!trailing.isEmpty()) {
+                appendLine(state, std::move(trailing), stream);
+            }
             continue;
         }
         if (!line.isEmpty() || delimiterCharacter != QLatin1Char('\r')) {
@@ -649,12 +651,20 @@ void LogModel::appendData(StreamState &state, const QByteArray &data, const QStr
         }
         QString line = ProcessTextDecoder::decode(state.rawPartial.first(split));
         state.rawPartial.remove(0, split);
-        if (!updateProgressFromLine(line)) {
-            appendLine(state, std::move(line), stream);
-        }
+        appendProgressOrLine(state, std::move(line), stream);
     }
     if (!state.rawPartial.isEmpty()) {
         updateProgressFromLine(ProcessTextDecoder::decode(state.rawPartial));
+    }
+}
+
+void LogModel::appendProgressOrLine(StreamState &state, QString line, const QString &stream)
+{
+    QString trailing;
+    if (!updateProgressFromLine(line, &trailing)) {
+        appendLine(state, std::move(line), stream);
+    } else if (!trailing.isEmpty()) {
+        appendLine(state, std::move(trailing), stream);
     }
 }
 
@@ -710,7 +720,7 @@ void LogModel::appendEntry(Entry entry)
     emit countChanged();
 }
 
-bool LogModel::updateProgressFromLine(const QString &line)
+bool LogModel::updateProgressFromLine(const QString &line, QString *trailingText)
 {
     const QString normalized = normalizeProgressText(line);
     if (normalized.isEmpty()) {
@@ -758,6 +768,21 @@ bool LogModel::updateProgressFromLine(const QString &line)
     progress.total = total;
     progress.indeterminate = total <= 0;
 
+    static const QRegularExpression timingExpression(
+        QStringLiteral(R"(\[\s*([^<,\]]+)\s*<\s*([^,\]]+)(?:,\s*([^,\]]+))?)"));
+    const QRegularExpressionMatch timingMatch = timingExpression.match(normalized,
+                                                                        countMatch.capturedEnd());
+    if (trailingText) {
+        // The bar ends after its "[elapsed<remaining, rate]" block, or after the count
+        // when there is none.  Anything written after it is ordinary output.
+        qsizetype barEnd = countMatch.capturedEnd();
+        if (timingMatch.hasMatch()) {
+            const qsizetype closing = normalized.indexOf(QLatin1Char(']'), timingMatch.capturedStart());
+            barEnd = closing >= 0 ? closing + 1 : normalized.size();
+        }
+        *trailingText = normalized.mid(barEnd).trimmed();
+    }
+
     QString prefix = normalized.first(percentMatch.capturedStart()).trimmed();
     static const QRegularExpression trailingDecoration(
         QStringLiteral(R"(\s*:\s*$)"));
@@ -770,9 +795,6 @@ bool LogModel::updateProgressFromLine(const QString &line)
         progress.label = prefix;
     }
 
-    static const QRegularExpression timingExpression(
-        QStringLiteral(R"(\[\s*([^<,\]]+)\s*<\s*([^,\]]+)(?:,\s*([^,\]]+))?)"));
-    const QRegularExpressionMatch timingMatch = timingExpression.match(normalized);
     if (timingMatch.hasMatch()) {
         progress.elapsed = timingMatch.captured(1).trimmed();
         progress.remaining = timingMatch.captured(2).trimmed();
