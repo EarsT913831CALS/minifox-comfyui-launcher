@@ -32,6 +32,7 @@ if(TARGET minifox_application_settings_backend AND TARGET minifox_configuration_
     qt_add_executable(minifox_version_manager_tests
         tst_VersionManager.cpp
         ../../VersionManager.cpp ../../VersionManager.h
+        ../../ExtensionListModel.cpp ../../ExtensionListModel.h
         ../GitProcessRunner.cpp ../RepositoryUpdateJob.cpp ../RepositoryUpdateCoordinator.cpp
         ../SafeMergeEngine.cpp ../VersionTransactionStore.cpp ../RepositoryRecovery.cpp
     )

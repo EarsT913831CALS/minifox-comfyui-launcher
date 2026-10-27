@@ -73,6 +73,10 @@ Minifox bundles HIP SDK 5.7 and HIP SDK 7.1 ZLUDA runtime components. It does no
 
 Outside explicit version-management operations and temporary ZLUDA staging, the launcher does not modify ComfyUI source files, HIP installation files, or system environment variables. ZLUDA acts as a runtime patch for PyTorch: it temporarily replaces certain required files and restores the originals when the launcher closes. Runtime packages are not re-extracted when their versions are unchanged, and existing caches are reused.
 
+### UI rendering
+
+The launcher UI renders with Direct3D 11 and turns off the flip-model swap chain (`QT_D3D_NO_FLIP=1`) by default. Some integrated AMD GPUs stutter badly while the window is resized in flip mode; without it, resizing is as smooth as with OpenGL, and the launcher keeps about 120 MB less memory resident than with OpenGL or Vulkan. If a graphics driver misbehaves, set `QSG_RHI_BACKEND=opengl` (or `vulkan`) before starting the launcher; values you set are never overridden.
+
 ## Version Management
 
 The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, and remote repository.
@@ -133,7 +137,7 @@ The following directories are created beside the executable when needed:
 - CMake 3.25+ and Ninja
 - Qt 6.8+: Core, Concurrent, Gui, Network, Qml, Quick, QuickControls2, LinguistTools, plus Test for test builds only
 
-The project has been verified with Qt 6.11.1, GCC 16.1.0, CMake 4.4.0, and Ninja 1.13.2.
+The project has been verified with Qt 6.12.0, GCC 16.2.0, CMake 4.4.4, and Ninja 1.13.2. For local development, MSVC 2022 with the official Qt 6.12.0 build can also build the project and run the tests.
 
 ### Install dependencies
 

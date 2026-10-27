@@ -12,15 +12,18 @@
 int main(int argc, char *argv[])
 {
 #ifdef Q_OS_WIN
-    // Qt Quick defaults to D3D11 on Windows. Its flip-model swap chain can
-    // stutter badly during live resize on some drivers, including integrated
-    // AMD GPUs. The OpenGL RHI backend keeps the native proportional resize
-    // responsive without changing the QML scene.
-    qputenv("QSG_RHI_BACKEND", "opengl");
+    // D3D11's default flip-model swap chain stutters badly during live resize
+    // on some drivers, including integrated AMD GPUs. The legacy blit model
+    // resizes as smoothly as OpenGL did, while the OpenGL and Vulkan drivers
+    // keep roughly 120 MB more memory resident. Values set by the user win.
+    if (!qEnvironmentVariableIsSet("QSG_RHI_BACKEND"))
+        qputenv("QSG_RHI_BACKEND", "d3d11");
+    if (!qEnvironmentVariableIsSet("QT_D3D_NO_FLIP"))
+        qputenv("QT_D3D_NO_FLIP", "1");
 #endif
     QCoreApplication::setOrganizationName(QStringLiteral("Minifox"));
     QCoreApplication::setApplicationName(QStringLiteral("Minifox ComfyUI Launcher"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("1.5.0"));
     QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
 
     QGuiApplication application(argc, argv);

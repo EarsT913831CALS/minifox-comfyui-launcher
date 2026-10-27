@@ -15,8 +15,6 @@ Pane {
     property int branchRepositorySource: String(versions.remoteUrl).toLowerCase().indexOf(
                                              "cnb.cool/indexmirror/comfyui") >= 0 ? 1 : 0
     property bool branchSwitchPending: false
-    property string installedSearch: ""
-    property string availableSearch: ""
     property string extensionUrl: ""
     property string pendingRemovalPath: ""
     property string pendingExtensionPath: ""
@@ -48,10 +46,6 @@ Pane {
         - root.extensionActionsWidth)
 
     padding: 0
-
-    function matches(text, query) {
-        return query.length === 0 || String(text).toLowerCase().indexOf(query.toLowerCase()) >= 0;
-    }
 
     function extensionStatusColor(status) {
         if (status === "outdated") return Theme.error;
@@ -470,7 +464,9 @@ Pane {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
                         placeholderText: qsTr("搜索已安装插件…")
-                        onTextChanged: root.installedSearch = text
+                        // The filter lives on the backend model and outlives this page.
+                        Component.onCompleted: text = root.versions.installedExtensionModel.filterText
+                        onTextChanged: root.versions.installedExtensionModel.filterText = text
                     }
 
                     Rectangle {
@@ -544,18 +540,16 @@ Pane {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
-                                model: root.versions.installedExtensions
+                                model: root.versions.installedExtensionModel
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                                 delegate: Rectangle {
                                     id: extensionRow
                                     required property int index
-                                    required property var modelData
-                                    readonly property bool matched: root.matches(modelData.name + " " + modelData.remote, root.installedSearch)
-                                    readonly property color statusColor: root.extensionStatusColor(modelData.status)
+                                    required property var entry
+                                    readonly property color statusColor: root.extensionStatusColor(entry.status)
                                     width: ListView.view.width
-                                    height: matched ? 40 : 0
-                                    visible: matched
+                                    height: 40
                                     color: index % 2 === 0 ? Theme.materialFill : Theme.surfaceRaised
                                     border.width: 1
                                     border.color: Theme.materialStroke
@@ -563,25 +557,25 @@ Pane {
 
                                     Row {
                                         anchors.fill: parent
-                                        CheckBox { width: root.extensionEnabledWidth; height: parent.height; checked: extensionRow.modelData.enabled; onToggled: root.versions.setExtensionEnabled(extensionRow.modelData.path, checked) }
-                                        AppLabel { width: root.extensionNameWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.name; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
-                                        CtrlRemoteLink { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; remoteUrl: extensionRow.modelData.remote || ""; font.pointSize: root.tableFontSize }
-                                        AppLabel { width: root.extensionBranchWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.branch || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
-                                        AppLabel { width: root.extensionCommitWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.commit || "—"; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
-                                        AppLabel { width: root.extensionDateWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.modelData.date; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        CheckBox { width: root.extensionEnabledWidth; height: parent.height; checked: extensionRow.entry.enabled; onToggled: root.versions.setExtensionEnabled(extensionRow.entry.path, checked) }
+                                        AppLabel { width: root.extensionNameWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.entry.name; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        CtrlRemoteLink { width: root.extensionRemoteWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; remoteUrl: extensionRow.entry.remote || ""; font.pointSize: root.tableFontSize }
+                                        AppLabel { width: root.extensionBranchWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.entry.branch || "—"; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionCommitWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.entry.commit || "—"; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
+                                        AppLabel { width: root.extensionDateWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: root.extensionCellPadding; rightPadding: root.extensionCellPadding; text: extensionRow.entry.date; color: extensionRow.statusColor; font.family: root.appContext.settings.consoleFontFamily; font.pointSize: root.tableFontSize; elide: Text.ElideRight }
                                         AppButton {
                                             width: root.statusActionWidth
                                             height: parent.height
                                             leftPadding: 6
                                             rightPadding: 6
-                                            text: extensionRow.modelData.status === "checking" ? qsTr("检测中")
-                                                  : extensionRow.modelData.status === "latest" ? qsTr("最新")
+                                            text: extensionRow.entry.status === "checking" ? qsTr("检测中")
+                                                  : extensionRow.entry.status === "latest" ? qsTr("最新")
                                                   : qsTr("更新")
-                                            enabled: extensionRow.modelData.repository
-                                                     && extensionRow.modelData.status === "outdated"
+                                            enabled: extensionRow.entry.repository
+                                                     && extensionRow.entry.status === "outdated"
                                                      && !root.versions.busy
                                             font.pointSize: root.tableFontSize
-                                            onClicked: root.versions.updateExtension(extensionRow.modelData.path)
+                                            onClicked: root.versions.updateExtension(extensionRow.entry.path)
                                         }
                                         AppButton {
                                             width: root.versionActionWidth
@@ -589,18 +583,18 @@ Pane {
                                             leftPadding: 6
                                             rightPadding: 6
                                             text: qsTr("切换版本")
-                                            enabled: extensionRow.modelData.repository && !root.versions.busy
+                                            enabled: extensionRow.entry.repository && !root.versions.busy
                                             font.pointSize: root.tableFontSize
                                             onClicked: {
-                                                root.pendingExtensionPath = extensionRow.modelData.path;
-                                                root.pendingExtensionName = extensionRow.modelData.name;
+                                                root.pendingExtensionPath = extensionRow.entry.path;
+                                                root.pendingExtensionName = extensionRow.entry.name;
                                                 if (root.versions.loadExtensionVersions(
-                                                        extensionRow.modelData.path,
-                                                        extensionRow.modelData.commit))
+                                                        extensionRow.entry.path,
+                                                        extensionRow.entry.commit))
                                                     extensionVersionDialog.open();
                                             }
                                         }
-                                        AppButton { width: root.removeActionWidth; height: parent.height; leftPadding: 3; rightPadding: 3; text: qsTr("卸载"); destructive: true; font.pointSize: root.tableFontSize; onClicked: { root.pendingRemovalPath = extensionRow.modelData.path; removeDialog.open(); } }
+                                        AppButton { width: root.removeActionWidth; height: parent.height; leftPadding: 3; rightPadding: 3; text: qsTr("卸载"); destructive: true; font.pointSize: root.tableFontSize; onClicked: { root.pendingRemovalPath = extensionRow.entry.path; removeDialog.open(); } }
                                     }
                                 }
                             }
@@ -619,7 +613,8 @@ Pane {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
                         placeholderText: qsTr("搜索新插件…")
-                        onTextChanged: root.availableSearch = text
+                        Component.onCompleted: text = root.versions.availableExtensionModel.filterText
+                        onTextChanged: root.versions.availableExtensionModel.filterText = text
                     }
 
                     Rectangle {
@@ -650,17 +645,16 @@ Pane {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 clip: true
-                                model: root.versions.availableExtensions
+                                model: root.versions.availableExtensionModel
+                                reuseItems: true
                                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                                 delegate: Rectangle {
                                     id: availableRow
                                     required property int index
-                                    required property var modelData
-                                    readonly property bool matched: root.matches(modelData.name + " " + modelData.description, root.availableSearch)
+                                    required property var entry
                                     width: ListView.view.width
-                                    height: matched ? Math.max(48, descriptionLabel.implicitHeight + 14) : 0
-                                    visible: matched
+                                    height: Math.max(48, descriptionLabel.implicitHeight + 14)
                                     color: index % 2 === 0 ? Theme.materialFill : Theme.surfaceRaised
                                     border.width: 1
                                     border.color: Theme.materialStroke
@@ -668,9 +662,9 @@ Pane {
 
                                     Row {
                                         anchors.fill: parent
-                                        CtrlRemoteLink { width: 300; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: availableRow.modelData.name; remoteUrl: availableRow.modelData.remote || ""; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
-                                        AppLabel { id: descriptionLabel; width: parent.width - 300 - root.availableActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 10; text: availableRow.modelData.description; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
-                                        AppButton { width: root.availableActionWidth; height: parent.height; leftPadding: 5; rightPadding: 5; text: availableRow.modelData.installed ? qsTr("已装") : qsTr("安装"); enabled: !availableRow.modelData.installed && !root.versions.busy; font.pointSize: root.tableFontSize; onClicked: root.versions.installExtension(availableRow.modelData.remote) }
+                                        CtrlRemoteLink { width: 300; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 8; text: availableRow.entry.name; remoteUrl: availableRow.entry.remote || ""; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
+                                        AppLabel { id: descriptionLabel; width: parent.width - 300 - root.availableActionWidth; height: parent.height; verticalAlignment: Text.AlignVCenter; leftPadding: 10; rightPadding: 10; text: availableRow.entry.description; font.pointSize: root.tableFontSize; wrapMode: Text.WordWrap }
+                                        AppButton { width: root.availableActionWidth; height: parent.height; leftPadding: 5; rightPadding: 5; text: availableRow.entry.installed ? qsTr("已装") : qsTr("安装"); enabled: !availableRow.entry.installed && !root.versions.busy; font.pointSize: root.tableFontSize; onClicked: root.versions.installExtension(availableRow.entry.remote) }
                                     }
                                 }
                             }
