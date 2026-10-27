@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractNativeEventFilter>
+#include <QJsonObject>
 #include <QLocale>
 #include <QObject>
 #include <QProcessEnvironment>
@@ -100,6 +101,7 @@ signals:
 private:
     void load();
     bool save();
+    QJsonObject serialized() const;
     void applyAppearance();
     void refreshSystemAccentColor();
     void applyProxy();
@@ -126,4 +128,8 @@ private:
     int m_proxyPort = 7890;
     bool m_resetTrackedFilesOnUpdate = false;
     QString m_lastError;
+    // Values as last read from or written to disk; save() only overwrites fields
+    // that changed in memory since then, so a newer file (for example one written
+    // by a configuration-package switch) is not reverted wholesale.
+    QJsonObject m_persisted;
 };

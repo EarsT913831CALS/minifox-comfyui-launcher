@@ -29,7 +29,27 @@ Pane {
         return ({});
     }
 
+    // Pressing a widget on the canvas does not take keyboard focus, so the
+    // title and text editors would never see editingFinished and their edits
+    // would be dropped when the selection moves. Commit them to the item that
+    // is still selected first.
+    function commitPendingText() {
+        const properties = selectedItem.properties || ({});
+        if (titleEditor.visible && titleEditor.text !== (properties.title || ""))
+            setSelectedProperty("title", titleEditor.text);
+        if (bodyEditor.visible && bodyEditor.text !== (properties.text || ""))
+            setSelectedProperty("text", bodyEditor.text);
+    }
+
+    function selectItem(id) {
+        if (id === selectedItemId)
+            return;
+        commitPendingText();
+        selectedItemId = id;
+    }
+
     function selectNew(type) {
+        commitPendingText();
         const id = appContext.skins.addItem(type);
         if (id.length > 0)
             selectedItemId = id;
@@ -221,6 +241,7 @@ Pane {
                     text: qsTr("保存布局")
                     accented: true
                     onClicked: {
+                        root.commitPendingText();
                         if (root.appContext.skins.commitEdit())
                             root.selectedItemId = "";
                     }
@@ -311,7 +332,7 @@ Pane {
                             itemData: modelData
                             editing: root.appContext.skins.editing
                             selected: root.selectedItemId === modelData.id
-                            onSelectionRequested: id => root.selectedItemId = id
+                            onSelectionRequested: id => root.selectItem(id)
                             onAlignmentGuidesRequested: (owner, vertical, horizontal, spacing) =>
                                 homeCanvas.setAlignmentGuides(owner, vertical, horizontal, spacing)
                             onAlignmentGuidesClearRequested: owner =>
@@ -605,6 +626,8 @@ Pane {
                             }
                         }
                         AppTextField {
+                            id: titleEditor
+
                             visible: root.selectedItem.type === "image"
                                      || root.selectedItem.type === "text"
                             Layout.fillWidth: true
@@ -614,6 +637,8 @@ Pane {
                             onEditingFinished: root.setSelectedProperty("title", text)
                         }
                         AppTextArea {
+                            id: bodyEditor
+
                             visible: root.selectedItem.type === "text"
                             Layout.fillWidth: true
                             Layout.preferredHeight: 160

@@ -545,23 +545,12 @@ void ApplicationSettings::load()
     m_proxyPort = object.value(QStringLiteral("proxyPort")).toInt(m_proxyPort);
     m_resetTrackedFilesOnUpdate = object.value(
         QStringLiteral("resetTrackedFilesOnUpdate")).toBool(m_resetTrackedFilesOnUpdate);
+    m_persisted = serialized();
 }
 
-bool ApplicationSettings::save()
+QJsonObject ApplicationSettings::serialized() const
 {
-    const QFileInfo fileInfo(m_storagePath);
-    if (m_storagePath == PortablePaths::settingsFile()) {
-        QString error;
-        if (!PortablePaths::ensureDataDirectory(&error)) {
-            setLastError(error);
-            return false;
-        }
-    } else if (!QDir().mkpath(fileInfo.absolutePath())) {
-        setLastError(tr("无法创建设置目录：%1").arg(fileInfo.absolutePath()));
-        return false;
-    }
-
-    const QJsonObject object {
+    return {
         {QStringLiteral("schemaVersion"), 3},
         {QStringLiteral("themeMode"), m_themeMode},
         {QStringLiteral("language"), m_language},
@@ -582,6 +571,37 @@ bool ApplicationSettings::save()
         {QStringLiteral("proxyPort"), m_proxyPort},
         {QStringLiteral("resetTrackedFilesOnUpdate"), m_resetTrackedFilesOnUpdate}
     };
+}
+
+bool ApplicationSettings::save()
+{
+    const QFileInfo fileInfo(m_storagePath);
+    if (m_storagePath == PortablePaths::settingsFile()) {
+        QString error;
+        if (!PortablePaths::ensureDataDirectory(&error)) {
+            setLastError(error);
+            return false;
+        }
+    } else if (!QDir().mkpath(fileInfo.absolutePath())) {
+        setLastError(tr("无法创建设置目录：%1").arg(fileInfo.absolutePath()));
+        return false;
+    }
+
+    const QJsonObject current = serialized();
+    QJsonObject object = current;
+    QFile existing(m_storagePath);
+    if (!m_persisted.isEmpty() && existing.open(QIODevice::ReadOnly)) {
+        const QJsonDocument onDisk = QJsonDocument::fromJson(existing.readAll());
+        if (onDisk.isObject()) {
+            object = onDisk.object();
+            for (auto it = current.constBegin(); it != current.constEnd(); ++it) {
+                if (!object.contains(it.key()) || m_persisted.value(it.key()) != it.value()) {
+                    object.insert(it.key(), it.value());
+                }
+            }
+        }
+        existing.close();
+    }
 
     QSaveFile file(m_storagePath);
     if (!file.open(QIODevice::WriteOnly)) {
@@ -593,6 +613,7 @@ bool ApplicationSettings::save()
         setLastError(tr("无法提交应用设置：%1").arg(file.errorString()));
         return false;
     }
+    m_persisted = current;
     setLastError({});
     return true;
 }

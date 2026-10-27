@@ -12,7 +12,6 @@ Pane {
     required property var appContext
     property int currentSection: 0
     property bool cleanupPending: false
-    property string cleanupResultMessage: ""
     readonly property var themeModeLabels: [qsTr("跟随系统"), qsTr("浅色"), qsTr("深色")]
     readonly property var themeModeValues: ["system", "light", "dark"]
     readonly property var iconModeLabels: appContext.appIcon.customIconAvailable
@@ -665,13 +664,10 @@ Pane {
     Connections {
         target: root.appContext.versions
 
+        // The result itself is reported by the shell's notice queue, which
+        // also covers the case where this page was left during the cleanup.
         function onOperationCompleted(success, message) {
-            if (!root.cleanupPending)
-                return;
             root.cleanupPending = false;
-            root.cleanupResultMessage = message;
-            cleanupResultDialog.title = success ? qsTr("完全清理完成") : qsTr("完全清理失败");
-            cleanupResultDialog.open();
         }
     }
 
@@ -693,22 +689,6 @@ Pane {
         AppLabel {
             width: cleanupConfirmDialog.availableWidth
             text: qsTr("将先创建备份包；只有备份成功后才会丢弃已跟踪文件的本地修改，并删除所有未被 Git 忽略的未跟踪文件和目录。确定继续吗？")
-            wrapMode: Text.WordWrap
-        }
-    }
-
-    AppDialog {
-        id: cleanupResultDialog
-        anchors.centerIn: Overlay.overlay
-        width: Math.min(620, root.width - Theme.spacingXl * 2)
-        modal: true
-        title: qsTr("完全清理完成")
-        standardButtons: Dialog.Ok
-        acceptText: qsTr("确定")
-
-        AppLabel {
-            width: cleanupResultDialog.availableWidth
-            text: root.cleanupResultMessage
             wrapMode: Text.WordWrap
         }
     }

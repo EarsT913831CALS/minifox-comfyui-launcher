@@ -129,4 +129,8 @@ Control {
             sourceComponent: root.pageComponent(root.currentPage)
         }
     }
+
+    NoticeCenter {
+        appContext: root.appContext
+    }
 }

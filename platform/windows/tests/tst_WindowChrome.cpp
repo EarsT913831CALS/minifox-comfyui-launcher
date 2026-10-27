@@ -62,13 +62,16 @@ void WindowChromeTest::maximizedWindowHasNoResizeBorder()
 void WindowChromeTest::maximizeButtonStaysInClientArea()
 {
     const QRect window(0, 0, 1920, 1040);
-    const int contentWidth = qRound(1440.0 * (1040.0 / 900.0));
-    const int contentRight = (window.width() + contentWidth) / 2 - 1;
-    QCOMPARE(WindowChromeController::hitTest(
-                 window, QPoint(contentRight - 69, 24), 1.0, true),
-             WindowChromeController::HitRegion::Client);
     QCOMPARE(WindowChromeController::hitTest(
                  window, QPoint(window.right() - 69, 24), 1.0, true),
+             WindowChromeController::HitRegion::Client);
+    // The caption buttons keep their 46x48 size at any window size, so the
+    // area just left of the three buttons must still drag the window.
+    QCOMPARE(WindowChromeController::hitTest(
+                 window, QPoint(window.right() - 148, 24), 1.0, true),
+             WindowChromeController::HitRegion::Caption);
+    QCOMPARE(WindowChromeController::hitTest(
+                 window, QPoint(window.center().x(), 60), 1.0, true),
              WindowChromeController::HitRegion::Client);
 }
 

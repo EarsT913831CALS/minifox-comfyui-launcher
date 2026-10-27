@@ -266,7 +266,7 @@ MaterialPanel {
             AppSpinBox {
                 Layout.preferredWidth: 180
                 from: 0; to: 32
-                value: root.appearance.radius || 14
+                value: root.appearance.radius ?? 14
                 onValueModified: {
                     root.appContext.skins.setAppearanceValue("radius", value);
                     root.appContext.skins.setAppearanceValue("radiusLarge",
