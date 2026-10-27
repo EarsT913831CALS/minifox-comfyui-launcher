@@ -73,6 +73,10 @@ Minifox 内置了 HIP SDK 5.7 和 HIP SDK 7.1 的 ZLUDA 运行组件，但不内
 
 除用户明确执行的版本管理操作和临时 ZLUDA 部署外，启动器不会修改 ComfyUI 源文件、HIP 安装文件或系统环境变量。ZLUDA 会作为 PyTorch 的运行时补丁，临时替换部分必要文件，并在启动器关闭时恢复原文件。已解压且版本未变化的运行包不会重复解压，已有缓存会继续复用。
 
+### 界面渲染
+
+启动器界面默认使用 Direct3D 11，并关闭 flip 交换链（`QT_D3D_NO_FLIP=1`）。部分 AMD 核显在 flip 模式下拖动缩放窗口会明显卡顿，关闭后与 OpenGL 一样流畅，而常驻内存比 OpenGL 或 Vulkan 少约 120 MB。如遇显卡驱动兼容问题，可在启动前自行设置环境变量 `QSG_RHI_BACKEND=opengl`（或 `vulkan`）切换后端，已设置的值不会被覆盖。
+
 ## 版本管理
 
 内核页可查看稳定版、开发版、远程分支和历史提交；扩展页可查看已安装扩展的当前分支、版本、日期和远程仓库。
@@ -133,7 +137,7 @@ ComfyUI-Package/
 - CMake 3.25+ 与 Ninja
 - Qt 6.8+：Core、Concurrent、Gui、Network、Qml、Quick、QuickControls2、LinguistTools，以及仅测试时需要的 Test
 
-当前已使用 Qt 6.11.1、GCC 16.1.0、CMake 4.4.0 和 Ninja 1.13.2 验证。
+当前已使用 Qt 6.12.0、GCC 16.2.0、CMake 4.4.4 和 Ninja 1.13.2 验证；本地开发也可使用 MSVC 2022 与官方 Qt 6.12.0 构建和运行测试。
 
 ### 安装依赖
 

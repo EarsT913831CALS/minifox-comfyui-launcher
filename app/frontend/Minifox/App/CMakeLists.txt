@@ -5,6 +5,8 @@ qt_add_executable(minifox_launcher WIN32
     ../../../backend/AppContext.h
     ../../../backend/ConfigurationPackageManager.cpp
     ../../../backend/ConfigurationPackageManager.h
+    ../../../backend/ExtensionListModel.cpp
+    ../../../backend/ExtensionListModel.h
     ../../../backend/main.cpp
     ../../../backend/VersionManager.cpp
     ../../../backend/VersionManager.h

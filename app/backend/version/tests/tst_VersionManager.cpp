@@ -157,6 +157,42 @@ private slots:
         QCOMPARE(pipCalls(log).size(), 1);
         QCOMPARE(manager.m_dependencyProcess.state(), QProcess::NotRunning);
     }
+    void extensionModelsFilterAndKeepRows() {
+        ExtensionListModel source(QStringLiteral("path"));
+        ExtensionFilterModel filter(&source, {QStringLiteral("name"), QStringLiteral("remote")});
+        QVariantList entries;
+        for (int i = 0; i < 6000; ++i)
+            entries.append(QVariantMap{{"path", QString("C:/n/%1").arg(i)}, {"name", QString("node-%1").arg(i)},
+                                       {"remote", i == 4242 ? "https://example.invalid/Upscaler" : "https://example.invalid/x"},
+                                       {"status", "checking"}});
+        source.setEntries(entries);
+        QCOMPARE(filter.count(), 6000);
+        filter.setFilterText(QStringLiteral("  upscaler "));
+        QCOMPARE(filter.count(), 1);
+        QCOMPARE(filter.data(filter.index(0, 0), ExtensionListModel::EntryRole).toMap().value("name").toString(),
+                 QStringLiteral("node-4242"));
+        filter.setFilterText(QStringLiteral("no-such-extension"));
+        QCOMPARE(filter.count(), 0);
+        filter.setFilterText({});
+
+        // A status change keeps the rows; only the changed row is reported.
+        QSignalSpy resets(&source, &QAbstractItemModel::modelReset);
+        QSignalSpy changes(&source, &QAbstractItemModel::dataChanged);
+        source.setEntries(entries);
+        QCOMPARE(changes.size(), 0);
+        QVariantMap updated = entries.at(7).toMap();
+        updated.insert("status", "latest");
+        entries[7] = updated;
+        source.setEntries(entries);
+        QCOMPARE(resets.size(), 0);
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(changes.first().at(0).value<QModelIndex>().row(), 7);
+        entries.removeLast();
+        source.setEntries(entries);
+        QCOMPARE(resets.size(), 1);
+        QCOMPARE(filter.count(), 5999);
+    }
+
     void refusedExtensionHistoryClearsPreviousList() {
         QTemporaryDir temp;
         const QString plain = temp.filePath("plain"), repository = temp.filePath("repository");

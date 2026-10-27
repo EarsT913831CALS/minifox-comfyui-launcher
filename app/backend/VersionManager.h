@@ -1,4 +1,5 @@
 #pragma once
+#include "ExtensionListModel.h"
 #include "OperationLease.h"
 #include "version/RepositoryGitContext.h"
 
@@ -45,6 +46,8 @@ class VersionManager final : public QObject
     Q_PROPERTY(QVariantList installedExtensions READ installedExtensions NOTIFY stateChanged)
     Q_PROPERTY(QVariantList availableExtensions READ availableExtensions NOTIFY stateChanged)
     Q_PROPERTY(QVariantList extensionVersions READ extensionVersions NOTIFY stateChanged)
+    Q_PROPERTY(ExtensionFilterModel *installedExtensionModel READ installedExtensionModel CONSTANT)
+    Q_PROPERTY(ExtensionFilterModel *availableExtensionModel READ availableExtensionModel CONSTANT)
     Q_PROPERTY(QString repositoryState READ repositoryState NOTIFY stateChanged)
     Q_PROPERTY(QString updateState READ updateState NOTIFY stateChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY stateChanged)
@@ -85,6 +88,8 @@ public:
     QVariantList installedExtensions() const;
     QVariantList availableExtensions() const;
     QVariantList extensionVersions() const;
+    ExtensionFilterModel *installedExtensionModel() const;
+    ExtensionFilterModel *availableExtensionModel() const;
     QString repositoryState() const;
     QString updateState() const;
     QString statusMessage() const;
@@ -372,6 +377,10 @@ private:
     bool m_remoteUnavailable = false;
     bool m_catalogLoading = false;
     RepositoryUpdateCoordinator *m_updateCoordinator = nullptr;
+    ExtensionListModel *m_installedModel = nullptr;
+    ExtensionListModel *m_availableModel = nullptr;
+    ExtensionFilterModel *m_installedFilter = nullptr;
+    ExtensionFilterModel *m_availableFilter = nullptr;
     bool m_repositoryBatchCore = false;
     QStringList m_repositoryBatchDependencyRoots;
     bool m_reconcilingVersionTransactions = false;

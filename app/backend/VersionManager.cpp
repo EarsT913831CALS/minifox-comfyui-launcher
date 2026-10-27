@@ -1,4 +1,5 @@
 #include "VersionManager.h"
+
 #include "DependencyInstaller.h"
 
 #include "ApplicationSettings.h"
@@ -123,6 +124,17 @@ VersionManager::VersionManager(ConfigurationManager *configuration,
       m_configuration(configuration),
       m_settings(settings)
 {
+    m_installedModel = new ExtensionListModel(QStringLiteral("path"), this);
+    m_availableModel = new ExtensionListModel(QStringLiteral("remote"), this);
+    m_installedFilter = new ExtensionFilterModel(
+        m_installedModel, {QStringLiteral("name"), QStringLiteral("remote")}, this);
+    m_availableFilter = new ExtensionFilterModel(
+        m_availableModel, {QStringLiteral("name"), QStringLiteral("description")}, this);
+    // Every list change is announced through stateChanged; the models diff it.
+    connect(this, &VersionManager::stateChanged, this, [this] {
+        m_installedModel->setEntries(m_installedExtensions);
+        m_availableModel->setEntries(m_availableExtensions);
+    });
     loadVersionTransaction();
     m_updateCoordinator = new RepositoryUpdateCoordinator(this);
     connect(m_updateCoordinator, &RepositoryUpdateCoordinator::statusChanged,
@@ -297,6 +309,16 @@ QString VersionManager::interruptedOperationDescription() const
         return tr("扩展版本切换");
     }
     return tr("版本操作");
+}
+
+ExtensionFilterModel *VersionManager::installedExtensionModel() const
+{
+    return m_installedFilter;
+}
+
+ExtensionFilterModel *VersionManager::availableExtensionModel() const
+{
+    return m_availableFilter;
 }
 int VersionManager::aheadCount() const { return m_aheadCount; }
 int VersionManager::behindCount() const { return m_behindCount; }
