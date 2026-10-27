@@ -51,9 +51,11 @@ if(MINIFOX_STATIC_RUNTIME AND QT6_IS_SHARED_LIBS_BUILD)
 endif()
 
 if(MINIFOX_STATIC_RUNTIME AND TARGET OpenSSL::Crypto)
+    # Static libcrypto needs its Windows dependencies after it on the link line;
+    # MSYS2's Qt 6.12 static package pulls it in without them.
     set_property(
         TARGET OpenSSL::Crypto
-        APPEND PROPERTY INTERFACE_LINK_LIBRARIES crypt32
+        APPEND PROPERTY INTERFACE_LINK_LIBRARIES crypt32 ws2_32
     )
 endif()
 
