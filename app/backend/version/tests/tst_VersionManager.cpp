@@ -157,6 +157,33 @@ private slots:
         QCOMPARE(pipCalls(log).size(), 1);
         QCOMPARE(manager.m_dependencyProcess.state(), QProcess::NotRunning);
     }
+    void refusedExtensionHistoryClearsPreviousList() {
+        QTemporaryDir temp;
+        const QString plain = temp.filePath("plain"), repository = temp.filePath("repository");
+        QVERIFY(QDir().mkpath(plain)); QVERIFY(QDir().mkpath(repository + "/.git"));
+        ConfigurationManager config(temp.filePath("profiles.json"));
+        ApplicationSettings settings(temp.filePath("settings.json"));
+        VersionManager manager(&config, &settings);
+        QCoreApplication::processEvents();
+        QSignalSpy loaded(&manager, &VersionManager::extensionVersionsLoaded);
+        // A list left over from another extension must not be shown for this one.
+        manager.m_extensionVersions = {QVariantMap{{"commit", "previous"}}};
+        QVERIFY(!manager.loadExtensionVersions(plain, {}));
+        QVERIFY(manager.extensionVersions().isEmpty());
+        QCOMPARE(loaded.size(), 1);
+        QVERIFY(!loaded.last().at(0).toBool());
+        QVERIFY(!manager.lastError().isEmpty());
+
+        manager.m_extensionVersions = {QVariantMap{{"commit", "previous"}}};
+        manager.m_lastError = "running operation error";
+        manager.m_busy = true;
+        QVERIFY(!manager.loadExtensionVersions(repository, {}));
+        manager.m_busy = false;
+        QVERIFY(manager.extensionVersions().isEmpty());
+        QCOMPARE(loaded.size(), 2);
+        // The running operation still owns lastError.
+        QCOMPARE(manager.lastError(), QStringLiteral("running operation error"));
+    }
     void changedProfileCannotMixRepositoryAndPython() {
         QTemporaryDir temp;
         const QString a = temp.filePath("A"), b = temp.filePath("B");

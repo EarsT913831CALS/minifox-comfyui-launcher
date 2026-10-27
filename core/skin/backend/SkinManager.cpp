@@ -482,6 +482,8 @@ QString SkinManager::createSkin(const QString &name)
     if (!saveEntry(entry)) {
         return {};
     }
+    // A draft belongs to the skin it was started on; never carry it to another one.
+    cancelEdit();
     m_entries.append(entry);
     m_activeIndex = m_entries.size() - 1;
     saveIndex();
@@ -525,6 +527,8 @@ QString SkinManager::duplicateActiveSkin(const QString &name)
     if (!saveEntry(entry)) {
         return {};
     }
+    // The copy already contains the current draft; the session itself ends here.
+    cancelEdit();
     m_entries.append(entry);
     m_activeIndex = m_entries.size() - 1;
     saveIndex();
@@ -575,13 +579,23 @@ bool SkinManager::removeSkin(const QString &id)
         setLastError(tr("无法删除皮肤目录：%1").arg(QDir::toNativeSeparators(directory)));
         return false;
     }
+    const bool removedActive = index == m_activeIndex;
+    if (removedActive) {
+        cancelEdit();
+    }
     m_entries.removeAt(index);
-    m_activeIndex = 0;
+    if (removedActive) {
+        m_activeIndex = 0;
+    } else if (index < m_activeIndex) {
+        --m_activeIndex;
+    }
     saveIndex();
     emit skinsChanged();
-    emit activeSkinChanged();
-    emit appearanceChanged();
-    emit homeItemsChanged();
+    if (removedActive) {
+        emit activeSkinChanged();
+        emit appearanceChanged();
+        emit homeItemsChanged();
+    }
     return true;
 }
 
@@ -696,6 +710,7 @@ bool SkinManager::importSkin(const QUrl &source)
         QDir(entry.directory).removeRecursively();
         return false;
     }
+    cancelEdit();
     m_entries.append(entry);
     m_activeIndex = m_entries.size() - 1;
     saveIndex();
@@ -1042,9 +1057,16 @@ bool SkinManager::commitEdit()
     if (!m_editing) {
         return true;
     }
+    // The edit session only owns the home layout.  Appearance changes saved while
+    // editing live in entry->document and must not be replaced by the draft's copy.
     SkinEntry *entry = activeEntry();
-    entry->document = m_draft;
+    const QJsonObject previous = entry->document;
+    QJsonObject document = entry->document;
+    document.insert(QStringLiteral("home"), m_draft.value(QStringLiteral("home")));
+    entry->document = document;
     if (!saveEntry(*entry)) {
+        // Keep memory equal to disk so a later unrelated save cannot persist the draft.
+        entry->document = previous;
         return false;
     }
     m_editing = false;
@@ -1348,7 +1370,13 @@ QJsonObject SkinManager::currentDocument() const
     if (!entry) {
         return defaultSkinDocument(m_settings);
     }
-    return m_editing ? m_draft : entry->document;
+    if (!m_editing) {
+        return entry->document;
+    }
+    // While editing, only the home layout comes from the draft.
+    QJsonObject document = entry->document;
+    document.insert(QStringLiteral("home"), m_draft.value(QStringLiteral("home")));
+    return document;
 }
 
 bool SkinManager::ensureWritableSkin()

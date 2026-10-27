@@ -169,9 +169,7 @@ Item {
 
             function openFolder(entry) {
                 const path = resolvedFolderPath(entry);
-                if (path.length === 0)
-                    return;
-                root.appContext.skins.openLocalFolder(path);
+                return path.length > 0 && root.appContext.skins.openLocalFolder(path);
             }
 
             ColumnLayout {
@@ -202,7 +200,12 @@ Item {
                             text: foldersPanel.folderTitle(modelData, index)
                             enabled: foldersPanel.resolvedFolderPath(modelData).length > 0
                             icon.name: ""
-                            onClicked: foldersPanel.openFolder(modelData)
+                            // The skin's error label only exists in edit mode, so a
+                            // failure is reported next to the button that caused it.
+                            onClicked: {
+                                if (!foldersPanel.openFolder(modelData))
+                                    ToolTip.show(root.appContext.skins.lastError, 5000);
+                            }
                         }
                     }
                 }
@@ -236,7 +239,10 @@ Item {
                         textFormat: Text.RichText
                         wrapMode: Text.WordWrap
                         color: Theme.foregroundSecondary
-                        onLinkActivated: link => root.appContext.skins.openExternalLink(link)
+                        onLinkActivated: link => {
+                            if (!root.appContext.skins.openExternalLink(link))
+                                ToolTip.show(root.appContext.skins.lastError, 5000);
+                        }
                     }
                 }
             }

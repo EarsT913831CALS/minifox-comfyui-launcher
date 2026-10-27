@@ -49,6 +49,7 @@ qt_add_qml_module(minifox_launcher
         LaunchInformationRow.qml
         NavigationDestination.qml
         NavigationRail.qml
+        NoticeCenter.qml
         VersionPage.qml
 )
 

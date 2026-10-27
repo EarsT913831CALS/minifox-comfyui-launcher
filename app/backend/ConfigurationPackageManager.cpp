@@ -946,11 +946,16 @@ bool ConfigurationPackageManager::deleteProfiles(const QStringList &profileIds)
         setError(m_configuration->lastError());
         return false;
     }
+    // Persist the shorter list before deleting anything else: if that fails the
+    // profiles are restored from disk and their snapshots are still intact.
+    if (!flushPendingChanges()) {
+        const QString error = m_lastError;
+        m_configuration->reloadFromDisk();
+        setError(error);
+        return false;
+    }
     for (const QString &profileId : std::as_const(removableIds)) {
         QFile::remove(snapshotPath(profileId));
-    }
-    if (!flushPendingChanges()) {
-        return false;
     }
 
     setMessage(tr("已删除 %1 个配置。").arg(removableIds.size()));

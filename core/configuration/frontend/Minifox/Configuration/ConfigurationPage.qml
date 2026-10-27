@@ -541,6 +541,38 @@ Pane {
         sourceComponent: sensitiveExportDialogComponent
     }
 
+    // Error text can be a long path or a multi-line git/pip message, so the
+    // dialog keeps a bounded width and scrolls instead of growing off screen.
+    component ErrorDialog: AppDialog {
+        id: errorDialog
+
+        property string message: ""
+
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(560, root.width - Theme.spacingXl * 2)
+        modal: true
+        acceptText: qsTr("确定")
+        standardButtons: Dialog.Ok
+        closePolicy: Popup.CloseOnEscape
+        Component.onCompleted: open()
+
+        contentItem: ScrollView {
+            id: errorScroll
+
+            implicitHeight: Math.min(errorText.implicitHeight, root.height * 0.5)
+            contentWidth: availableWidth
+            clip: true
+
+            AppLabel {
+                id: errorText
+
+                width: errorScroll.availableWidth
+                text: errorDialog.message
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
     Component {
         id: sensitiveExportDialogComponent
 
@@ -575,21 +607,26 @@ Pane {
                     Layout.fillWidth: true
                 }
 
-                RowLayout {
+                // Flow wraps the two long buttons onto separate lines at large
+                // font sizes instead of pushing them past the dialog edge.
+                Flow {
+                    id: exportChoices
+
                     Layout.fillWidth: true
+                    layoutDirection: Qt.RightToLeft
                     spacing: Theme.spacingSm
 
-                    Item { Layout.fillWidth: true }
-
                     AppButton {
-                        text: qsTr("完整备份（含明文敏感信息）")
-                        onClicked: sensitiveExportDialog.exportSelectedProfile(true)
-                    }
-
-                    AppButton {
+                        width: Math.min(implicitWidth, exportChoices.width)
                         text: qsTr("分享启动选项（推荐）")
                         accented: true
                         onClicked: sensitiveExportDialog.exportSelectedProfile(false)
+                    }
+
+                    AppButton {
+                        width: Math.min(implicitWidth, exportChoices.width)
+                        text: qsTr("完整备份（含明文敏感信息）")
+                        onClicked: sensitiveExportDialog.exportSelectedProfile(true)
                     }
                 }
             }
@@ -604,18 +641,9 @@ Pane {
     Component {
         id: configurationPackageErrorDialogComponent
 
-        AppDialog {
+        ErrorDialog {
             title: qsTr("配置操作失败")
-            modal: true
-            acceptText: qsTr("确定")
-            standardButtons: Dialog.Ok
-            closePolicy: Popup.CloseOnEscape
-            Component.onCompleted: open()
-
-            AppLabel {
-                text: root.appContext.configurationPackages.lastError
-                wrapMode: Text.Wrap
-            }
+            message: root.appContext.configurationPackages.lastError
 
             onAccepted: root.configurationPackageErrorRequested = false
             onClosed: root.configurationPackageErrorRequested = false
@@ -625,20 +653,11 @@ Pane {
     Component {
         id: commandPromptErrorDialogComponent
 
-        AppDialog {
+        ErrorDialog {
             title: qsTr("无法启动命令提示符")
-            modal: true
-            acceptText: qsTr("确定")
-            standardButtons: Dialog.Ok
-            closePolicy: Popup.CloseOnEscape
-            Component.onCompleted: open()
-
-            AppLabel {
-                text: root.appContext.runtime.lastError.length > 0
-                      ? root.appContext.runtime.lastError
-                      : qsTr("命令提示符未能启动。")
-                wrapMode: Text.Wrap
-            }
+            message: root.appContext.runtime.lastError.length > 0
+                     ? root.appContext.runtime.lastError
+                     : qsTr("命令提示符未能启动。")
 
             onAccepted: root.commandPromptErrorRequested = false
             onClosed: root.commandPromptErrorRequested = false

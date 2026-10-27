@@ -182,7 +182,7 @@ bool WindowChromeController::nativeEventFilter(const QByteArray &eventType,
         const bool maximized = m_maximized || IsZoomed(hwnd);
         const HitRegion region = hitTest(
             QRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top),
-            QPoint(x, y), m_window->devicePixelRatio(), maximized, m_aspectRatio);
+            QPoint(x, y), m_window->devicePixelRatio(), maximized);
         switch (region) {
         case HitRegion::Caption: *result = HTCAPTION; return true;
         case HitRegion::MaximizeButton: *result = HTCLIENT; return true;
@@ -425,8 +425,7 @@ WindowChromeController::HitRegion WindowChromeController::hitTest(
     const QRect &windowRect,
     const QPoint &globalPoint,
     qreal scale,
-    bool maximized,
-    qreal contentAspectRatio)
+    bool maximized)
 {
     const int border = qRound(12 * scale);
     const int x = globalPoint.x();
@@ -446,20 +445,14 @@ WindowChromeController::HitRegion WindowChromeController::hitTest(
         // intentionally does not support.
     }
 
-    constexpr qreal designWidth = 1440.0;
-    const qreal designHeight = designWidth / qBound(1.2, contentAspectRatio, 2.4);
-    const qreal contentScale = qMin(windowRect.width() / (designWidth * scale),
-                                    windowRect.height() / (designHeight * scale));
-    const int contentWidth = qRound(designWidth * scale * contentScale);
-    const int contentHeight = qRound(designHeight * scale * contentScale);
-    const QRect contentRect(windowRect.x() + (windowRect.width() - contentWidth) / 2,
-                            windowRect.y() + (windowRect.height() - contentHeight) / 2,
-                            contentWidth, contentHeight);
-    const int titleHeight = qRound(48 * scale * contentScale);
-    const int buttonWidth = qRound(46 * scale * contentScale);
+    // The QML title bar spans the whole window at a fixed 48 logical pixels with
+    // 46-pixel caption buttons; it is not scaled with the window, so only the
+    // device pixel ratio applies here.
+    const int titleHeight = qRound(48 * scale);
+    const int buttonWidth = qRound(46 * scale);
 
-    if (y >= contentRect.top() && y < contentRect.top() + titleHeight) {
-        const int fromRight = contentRect.right() + 1 - x;
+    if (y >= windowRect.top() && y < windowRect.top() + titleHeight) {
+        const int fromRight = windowRect.right() + 1 - x;
         if (fromRight > buttonWidth && fromRight <= buttonWidth * 2) {
             // Keep the maximize region in the QML client area. Calling
             // showMaximized while processing HTMAXBUTTON non-client messages

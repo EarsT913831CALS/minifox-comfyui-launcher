@@ -42,8 +42,7 @@ public:
     static HitRegion hitTest(const QRect &windowRect,
                              const QPoint &globalPoint,
                              qreal scale,
-                             bool maximized,
-                             qreal contentAspectRatio = 1.6);
+                             bool maximized);
     static QRect restoreRectUnderCursor(const QRect &restoreGeometry,
                                         const QRect &currentGeometry,
                                         const QPointF &cursorPoint,

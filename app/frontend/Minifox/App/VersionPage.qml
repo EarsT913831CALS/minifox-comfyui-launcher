@@ -83,13 +83,6 @@ Pane {
         return root.appContext.skins.repositoryBrowserUrl(String(remote || ""));
     }
 
-    function showRefreshNotice(success, message) {
-        refreshNotice.success = success;
-        refreshNotice.message = message;
-        refreshNotice.open();
-        refreshNoticeTimer.restart();
-    }
-
     component CtrlRemoteLink: AppLabel {
         id: remoteLink
 
@@ -169,30 +162,17 @@ Pane {
         }
     }
 
+    // Result notices are shown by the shell's NoticeCenter so they survive
+    // leaving this page; only page-local follow-up state is handled here.
     Connections {
         target: root.versions
 
-        function onRefreshCompleted(success, message) {
-            root.showRefreshNotice(success, message);
-        }
-
         function onOperationCompleted(success, message) {
-            root.showRefreshNotice(success, message);
             if (root.branchSwitchPending) {
                 if (success) root.coreChannel = 0;
                 root.branchSwitchPending = false;
             }
             if (success && root.selectedTab === 2) root.extensionUrl = "";
-        }
-
-        function onDependencyInstallCompleted(success, message) {
-            root.showRefreshNotice(success, message);
-        }
-
-        function onExtensionVersionsLoaded(success, message) {
-            if (success)
-                return;
-            root.showRefreshNotice(false, message);
         }
     }
 
@@ -614,10 +594,10 @@ Pane {
                                             onClicked: {
                                                 root.pendingExtensionPath = extensionRow.modelData.path;
                                                 root.pendingExtensionName = extensionRow.modelData.name;
-                                                root.versions.loadExtensionVersions(
-                                                    extensionRow.modelData.path,
-                                                    extensionRow.modelData.commit);
-                                                extensionVersionDialog.open();
+                                                if (root.versions.loadExtensionVersions(
+                                                        extensionRow.modelData.path,
+                                                        extensionRow.modelData.commit))
+                                                    extensionVersionDialog.open();
                                             }
                                         }
                                         AppButton { width: root.removeActionWidth; height: parent.height; leftPadding: 3; rightPadding: 3; text: qsTr("卸载"); destructive: true; font.pointSize: root.tableFontSize; onClicked: { root.pendingRemovalPath = extensionRow.modelData.path; removeDialog.open(); } }
@@ -722,54 +702,6 @@ Pane {
                     }
                 }
             }
-        }
-    }
-
-    Popup {
-        id: refreshNotice
-
-        property bool success: true
-        property string message: ""
-
-        parent: Overlay.overlay
-        x: Math.max(24, Overlay.overlay.width - width - 24)
-        y: Math.max(24, Overlay.overlay.height - height - 24)
-        width: Math.min(440, Overlay.overlay.width - 48)
-        padding: 12
-        modal: false
-        closePolicy: Popup.NoAutoClose
-        onOpened: refreshNoticeTimer.restart()
-
-        background: Rectangle {
-            color: Theme.surfaceRaised
-            border.width: 1
-            border.color: refreshNotice.success ? Theme.success : Theme.error
-            radius: Theme.controlRadius
-        }
-
-        contentItem: RowLayout {
-            spacing: Theme.spacingSm
-
-            AppLabel {
-                text: refreshNotice.success ? "✓" : "×"
-                color: refreshNotice.success ? Theme.success : Theme.error
-                font.pointSize: Theme.subtitleSize
-                font.bold: true
-            }
-
-            AppLabel {
-                Layout.fillWidth: true
-                text: refreshNotice.message
-                wrapMode: Text.WordWrap
-                color: Theme.foreground
-                font.pointSize: Theme.captionSize
-            }
-        }
-
-        Timer {
-            id: refreshNoticeTimer
-            interval: 5000
-            onTriggered: refreshNotice.close()
         }
     }
 

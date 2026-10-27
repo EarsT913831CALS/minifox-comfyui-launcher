@@ -44,7 +44,117 @@ private slots:
     void folderItemsAreLimitedAndKeepCustomPaths();
     void externalTargetsAreRestricted();
     void firstRunDataUsesInstalledLanguageAndBuiltinRetranslates();
+    void appearanceChangedDuringEditSurvivesCommit();
+    void editDraftDoesNotMoveToAnotherSkin();
+    void removingInactiveSkinKeepsActiveSkin();
+    void settingsSaveKeepsNewerValuesOnDisk();
 };
+
+void SkinManagerTest::settingsSaveKeepsNewerValuesOnDisk()
+{
+    // A configuration switch rewrites the settings file while this object keeps
+    // the old values; changing an unrelated setting must not revert the file.
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString path = temporary.filePath(QStringLiteral("settings.json"));
+    ApplicationSettings settings(path);
+    settings.setProxyHost(QStringLiteral("old-profile.local"));
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    QJsonObject disk = QJsonDocument::fromJson(file.readAll()).object();
+    file.close();
+    QCOMPARE(disk.value(QStringLiteral("proxyHost")).toString(),
+             QStringLiteral("old-profile.local"));
+    disk.insert(QStringLiteral("proxyHost"), QStringLiteral("target-profile.local"));
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(QJsonDocument(disk).toJson());
+    file.close();
+
+    const bool reducedMotion = !settings.reducedMotion();
+    settings.setReducedMotion(reducedMotion);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    disk = QJsonDocument::fromJson(file.readAll()).object();
+    file.close();
+    QCOMPARE(disk.value(QStringLiteral("proxyHost")).toString(),
+             QStringLiteral("target-profile.local"));
+    QCOMPARE(disk.value(QStringLiteral("reducedMotion")).toBool(), reducedMotion);
+}
+
+void SkinManagerTest::appearanceChangedDuringEditSurvivesCommit()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    ApplicationSettings settings(temporary.filePath(QStringLiteral("settings.json")));
+    const QString skinsPath = temporary.filePath(QStringLiteral("skins"));
+    SkinManager manager(&settings, skinsPath);
+    const QString id = manager.createSkin(QStringLiteral("Edited"));
+    QVERIFY(!id.isEmpty());
+
+    manager.beginEdit();
+    const int itemCount = manager.homeItems().size();
+    QVERIFY(!manager.addItem(QStringLiteral("text")).isEmpty());
+    manager.setAppearanceValue(QStringLiteral("radius"), 0);
+    QCOMPARE(manager.effectiveAppearance().value(QStringLiteral("radius")).toInt(), 0);
+    QCOMPARE(manager.homeItems().size(), itemCount + 1);
+    QVERIFY(manager.commitEdit());
+    QCOMPARE(manager.effectiveAppearance().value(QStringLiteral("radius")).toInt(), 0);
+
+    SkinManager restored(&settings, skinsPath);
+    QCOMPARE(restored.activeSkinId(), id);
+    QCOMPARE(restored.effectiveAppearance().value(QStringLiteral("radius")).toInt(), 0);
+    QCOMPARE(restored.homeItems().size(), itemCount + 1);
+}
+
+void SkinManagerTest::editDraftDoesNotMoveToAnotherSkin()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    ApplicationSettings settings(temporary.filePath(QStringLiteral("settings.json")));
+    const QString skinsPath = temporary.filePath(QStringLiteral("skins"));
+    SkinManager manager(&settings, skinsPath);
+    const QString first = manager.createSkin(QStringLiteral("First"));
+    QVERIFY(!first.isEmpty());
+    const int itemCount = manager.homeItems().size();
+
+    manager.beginEdit();
+    QVERIFY(!manager.addItem(QStringLiteral("text")).isEmpty());
+    const QString second = manager.createSkin(QStringLiteral("Second"));
+    QVERIFY(!second.isEmpty());
+    QVERIFY(!manager.editing());
+    QCOMPARE(manager.activeSkinId(), second);
+    QCOMPARE(manager.homeItems().size(), itemCount);
+    QVERIFY(manager.commitEdit());
+
+    QVERIFY(manager.selectSkin(first));
+    QCOMPARE(manager.homeItems().size(), itemCount);
+    SkinManager restored(&settings, skinsPath);
+    QVERIFY(restored.selectSkin(second));
+    QCOMPARE(restored.homeItems().size(), itemCount);
+}
+
+void SkinManagerTest::removingInactiveSkinKeepsActiveSkin()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    ApplicationSettings settings(temporary.filePath(QStringLiteral("settings.json")));
+    SkinManager manager(&settings, temporary.filePath(QStringLiteral("skins")));
+    const QString first = manager.createSkin(QStringLiteral("First"));
+    const QString second = manager.createSkin(QStringLiteral("Second"));
+    QVERIFY(!first.isEmpty());
+    QVERIFY(!second.isEmpty());
+    QCOMPARE(manager.activeSkinId(), second);
+
+    manager.beginEdit();
+    QVERIFY(!manager.addItem(QStringLiteral("text")).isEmpty());
+    QVERIFY(manager.removeSkin(first));
+    QCOMPARE(manager.activeSkinId(), second);
+    QVERIFY(manager.editing());
+    manager.cancelEdit();
+
+    QVERIFY(manager.removeSkin(second));
+    QCOMPARE(manager.activeSkinId(), QStringLiteral("builtin.default"));
+}
 
 void SkinManagerTest::firstRunDataUsesInstalledLanguageAndBuiltinRetranslates()
 {

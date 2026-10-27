@@ -215,6 +215,30 @@ private slots:
         QCOMPARE(read(settings), QByteArray("before"));
 #endif
     }
+    void failedProfileDeleteKeepsSnapshot() {
+#ifdef Q_OS_WIN
+        ConfigurationManager config;
+        ConfigurationPackageManager manager(&config);
+        const QString removedId = config.currentProfileSnapshot().value("id").toString();
+        QVERIFY2(manager.addProfile(), qPrintable(manager.lastError()));
+        QCOMPARE(config.profileEntries().size(), 2);
+        const QString snapshot = QDir(root()).filePath(QString("configurations/%1.zip").arg(removedId));
+        QVERIFY(QFileInfo::exists(snapshot));
+        const QString profiles = PortablePaths::configurationFile();
+        const HANDLE held = CreateFileW(reinterpret_cast<LPCWSTR>(profiles.utf16()), GENERIC_READ,
+            FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        QVERIFY(held != INVALID_HANDLE_VALUE);
+        const bool deleted = manager.deleteProfiles({removedId});
+        CloseHandle(held);
+        QVERIFY(!deleted); QVERIFY(!manager.lastError().isEmpty());
+        // The list on disk still has the profile, so its snapshot must survive too.
+        QCOMPARE(config.profileEntries().size(), 2);
+        QVERIFY(QFileInfo::exists(snapshot));
+        QVERIFY2(manager.deleteProfiles({removedId}), qPrintable(manager.lastError()));
+        QCOMPARE(config.profileEntries().size(), 1);
+        QVERIFY(!QFileInfo::exists(snapshot));
+#endif
+    }
     void actualProcessKillRecoversPublishedFiles() {
         const QString settings = QDir(root()).filePath("application-settings.json");
         QVERIFY(save(settings, "original"));

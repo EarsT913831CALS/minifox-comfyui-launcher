@@ -692,10 +692,19 @@ void VersionManager::startExtensionUpdate(const QString &path)
                   QStringLiteral("-z")}));
 }
 
-void VersionManager::loadExtensionVersions(const QString &path, const QString &currentCommit)
+bool VersionManager::loadExtensionVersions(const QString &path, const QString &currentCommit)
 {
+    // A refused request must not leave the previous extension's history in the
+    // model, otherwise the dialog would list another repository's commits.
+    m_extensionVersions.clear();
     if (m_busy || !QFileInfo::exists(QDir(path).filePath(QStringLiteral(".git")))) {
-        return;
+        const QString message = m_busy
+            ? tr("有操作正在进行，暂时无法读取扩展版本历史。")
+            : tr("扩展目录不是 Git 仓库，无法读取版本历史。");
+        if (!m_busy) m_lastError = message;
+        emit stateChanged();
+        emit extensionVersionsLoaded(false, message);
+        return false;
     }
     m_operationPath = path;
     m_extensionHistoryCurrentCommit = currentCommit.trimmed();
@@ -706,6 +715,7 @@ void VersionManager::loadExtensionVersions(const QString &path, const QString &c
                  {QStringLiteral("log"), QStringLiteral("--all"), QStringLiteral("-100"),
                   QStringLiteral("--date=format-local:%Y-%m-%d %H:%M:%S"),
                   QStringLiteral("--format=%h%x1f%H%x1f%ad%x1f%s%x1e")}));
+    return true;
 }
 
 void VersionManager::switchExtensionVersion(const QString &path, const QString &commit)

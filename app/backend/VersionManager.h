@@ -106,7 +106,7 @@ public:
     Q_INVOKABLE void recoverInterruptedOperations();
     Q_INVOKABLE void updateExtension(const QString &path);
     Q_INVOKABLE void updateAllExtensions();
-    Q_INVOKABLE void loadExtensionVersions(const QString &path, const QString &currentCommit);
+    Q_INVOKABLE bool loadExtensionVersions(const QString &path, const QString &currentCommit);
     Q_INVOKABLE void switchExtensionVersion(const QString &path, const QString &commit);
     Q_INVOKABLE void installExtension(const QString &url);
     Q_INVOKABLE void removeExtension(const QString &path);
