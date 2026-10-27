@@ -265,14 +265,6 @@ QString VersionManager::comfyVersion() const { return m_comfyVersion; }
 QString VersionManager::branch() const { return m_branch; }
 QString VersionManager::commit() const { return m_commit; }
 QString VersionManager::commitFull() const { return m_commitFull; }
-int VersionManager::networkRoute() const { return m_networkRoute; }
-void VersionManager::setNetworkRoute(int route)
-{
-    const int normalized = route == 1 ? 1 : 0;
-    if (m_networkRoute == normalized) return;
-    m_networkRoute = normalized;
-    emit stateChanged();
-}
 QString VersionManager::commitDate() const { return m_commitDate; }
 QString VersionManager::commitSubject() const { return m_commitSubject; }
 QString VersionManager::remoteUrl() const { return m_remoteUrl; }
@@ -510,7 +502,7 @@ void VersionManager::updateComfyUi(int channel)
         spec.displayName = tr("ComfyUI 核心");
         spec.localBranch = m_branch;
         spec.gitProgram = m_gitProgram;
-        spec.gitPrefixArguments = networkRouteArguments();
+        spec.gitPrefixArguments = gitContext().prefixArguments;
         spec.gitEnvironment = gitContext().environment;
         m_repositoryBatchCore = true;
         m_repositoryBatchDependencyRoots.clear();
@@ -549,7 +541,7 @@ void VersionManager::switchCoreVersion(const QString &commit, int channel)
         spec.root = m_comfyRoot;
         spec.displayName = tr("ComfyUI 核心");
         spec.gitProgram = m_gitProgram;
-        spec.gitPrefixArguments = networkRouteArguments();
+        spec.gitPrefixArguments = gitContext().prefixArguments;
         spec.gitEnvironment = gitContext().environment;
         spec.explicitRef = m_pendingCommit;
         spec.explicitBranch = m_requestedCoreChannel == 0 ? QStringLiteral("master") : QStringLiteral("dev");
@@ -625,7 +617,7 @@ void VersionManager::updateExtension(const QString &path)
         spec.displayName = QFileInfo(path).fileName();
         spec.localBranch = installedExtensionBranch(path);
         spec.gitProgram = m_gitProgram;
-        spec.gitPrefixArguments = networkRouteArguments();
+        spec.gitPrefixArguments = gitContext().prefixArguments;
         spec.gitEnvironment = gitContext().environment;
         m_repositoryBatchCore = false;
         m_repositoryBatchDependencyRoots.clear();
@@ -684,7 +676,7 @@ void VersionManager::updateAllExtensions()
             spec.displayName = QFileInfo(path).fileName();
             spec.localBranch = installedExtensionBranch(path);
             spec.gitProgram = m_gitProgram;
-            spec.gitPrefixArguments = networkRouteArguments();
+            spec.gitPrefixArguments = gitContext().prefixArguments;
         spec.gitEnvironment = gitContext().environment;
             specs.append(spec);
         }
@@ -757,7 +749,7 @@ void VersionManager::switchExtensionVersion(const QString &path, const QString &
         spec.root = path;
         spec.displayName = QFileInfo(path).fileName();
         spec.gitProgram = m_gitProgram;
-        spec.gitPrefixArguments = networkRouteArguments();
+        spec.gitPrefixArguments = gitContext().prefixArguments;
         spec.gitEnvironment = gitContext().environment;
         spec.explicitRef = m_pendingCommit;
         spec.localBranch = installedExtensionBranch(path);
@@ -797,7 +789,7 @@ void VersionManager::installExtension(const QString &url)
         return;
     }
     m_operationPath = QDir(m_comfyRoot).filePath(QStringLiteral("custom_nodes/") + name);
-    QStringList arguments = networkRouteArguments();
+    QStringList arguments = gitContext().prefixArguments;
     arguments.append({QStringLiteral("clone"), QStringLiteral("--depth=1"),
                       url.trimmed(), m_operationPath});
     startGit(Operation::InstallExtension, arguments);
@@ -2522,22 +2514,9 @@ void VersionManager::parseExtensionHistory(const QString &output)
     m_extensionVersions = versions;
 }
 
-QStringList VersionManager::networkRouteArguments() const
-{
-    if (m_mutationLease.held()) return m_operationGit.prefixArguments;
-    if (m_networkRoute != 1) return {};
-    const QString mirror = QStringLiteral("https://ghfast.top/");
-    return {
-        QStringLiteral("-c"),
-        QStringLiteral("url.%1https://github.com/.insteadOf=https://github.com/").arg(mirror),
-        QStringLiteral("-c"),
-        QStringLiteral("url.%1https://github.com/.insteadOf=git@github.com:").arg(mirror)
-    };
-}
-
 QStringList VersionManager::repositoryArguments(const QString &root, const QStringList &arguments) const
 {
-    QStringList result = networkRouteArguments();
+    QStringList result = gitContext().prefixArguments;
     result.append({
         QStringLiteral("-C"), root
     });
@@ -2814,13 +2793,10 @@ void VersionManager::downloadCatalog()
         m_catalogReply->deleteLater();
     }
 
-    QString catalogUrl = QStringLiteral(
-        "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json");
-    if (m_networkRoute == 1) {
-        catalogUrl = QStringLiteral("https://ghfast.top/") + catalogUrl;
-    }
-    QNetworkRequest request{QUrl(catalogUrl)};
-    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("Minifox-ComfyUI-Launcher/0.1"));
+    QNetworkRequest request{QUrl(QStringLiteral(
+        "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/custom-node-list.json"))};
+    request.setHeader(QNetworkRequest::UserAgentHeader,
+                     QStringLiteral("Minifox-ComfyUI-Launcher/") + QCoreApplication::applicationVersion());
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setTransferTimeout(30000);
@@ -3275,7 +3251,6 @@ RepositoryGitContext VersionManager::gitContext() const
 {
     if (m_mutationLease.held()) return m_operationGit;
     RepositoryGitContext context;
-    context.prefixArguments = networkRouteArguments();
     m_settings->applyToProcessEnvironment(context.environment);
     return context;
 }

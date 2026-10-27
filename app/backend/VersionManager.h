@@ -37,7 +37,6 @@ class VersionManager final : public QObject
     Q_PROPERTY(QString branch READ branch NOTIFY stateChanged)
     Q_PROPERTY(QString commit READ commit NOTIFY stateChanged)
     Q_PROPERTY(QString commitFull READ commitFull NOTIFY stateChanged)
-    Q_PROPERTY(int networkRoute READ networkRoute WRITE setNetworkRoute NOTIFY stateChanged)
     Q_PROPERTY(QString commitDate READ commitDate NOTIFY stateChanged)
     Q_PROPERTY(QString commitSubject READ commitSubject NOTIFY stateChanged)
     Q_PROPERTY(QString remoteUrl READ remoteUrl NOTIFY stateChanged)
@@ -78,8 +77,6 @@ public:
     QString branch() const;
     QString commit() const;
     QString commitFull() const;
-    int networkRoute() const;
-    void setNetworkRoute(int route);
     QString commitDate() const;
     QString commitSubject() const;
     QString remoteUrl() const;
@@ -266,7 +263,6 @@ private:
     void updateAvailableExtensions();
     QString catalogCachePath() const;
     QStringList repositoryArguments(const QString &root, const QStringList &arguments) const;
-    QStringList networkRouteArguments() const;
     static QString readGitValue(const QString &repositoryRoot, const QString &key);
     static QString readExtensionDescription(const QString &path);
     static QString canonicalRepositoryUrl(const QString &url);
@@ -321,7 +317,6 @@ private:
     QString m_branch;
     QString m_commit;
     QString m_commitFull;
-    int m_networkRoute = 0;
     QString m_commitDate;
     QString m_commitSubject;
     QString m_remoteUrl;
