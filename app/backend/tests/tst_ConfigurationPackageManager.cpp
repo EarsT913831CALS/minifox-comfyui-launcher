@@ -49,6 +49,8 @@ QByteArray hostileZip(const QList<QPair<QString, QByteArray>> &entries) {
 class ConfigurationPackageTest : public QObject {
     Q_OBJECT
     QString root() const { return PortablePaths::dataDirectory(); }
+    // An in-flight version operation journal, which configuration changes must never touch.
+    QString journal() const { return QDir(root()).filePath("versioning/journal.json"); }
 private slots:
     void resourceLeaseAliasesAndRelease() {
         QTemporaryDir temporary;
@@ -114,7 +116,7 @@ private slots:
             ".minifox/skins/a/assets/x.png:payload", ".minifox/skins/a/assets/../x.png",
             ".minifox\\runtime\\probe.py", ".minifox/skins/a/assets/X~1.png",
             ".minifox/packages/x.dll", ".minifox/launch-profiles.json",
-            ".minifox/version-operation.json", ".minifox/recovery/x.pack",
+            ".minifox/versioning/journal.json", ".minifox/VERSIONING/x.json",
             ".minifox/configuration-state.pending.zip", ".minifox/skins/a/assets/script.py",
             ".minifox/application-settings.json ", "C:/payload.json", "/payload.json"};
         for (const QString &name : paths) QTest::newRow(qPrintable(name)) << name;
@@ -127,12 +129,12 @@ private slots:
             {"manifest.json", R"({"format":"minifox-configuration","schemaVersion":1})"},
             {"profile.json", R"({"name":"test"})"}, {name, "payload"}};
         QVERIFY(save(zip, hostileZip(entries)));
-        QVERIFY(save(PortablePaths::versionOperationFile(), "interrupted"));
+        QVERIFY(save(journal(), "interrupted"));
         QVERIFY(save(QDir(root()).filePath("runtime/probe.py"), "original"));
         ConfigurationManager config;
         ConfigurationPackageManager manager(&config);
         QVERIFY(!manager.importPackage(QUrl::fromLocalFile(zip)));
-        QCOMPARE(read(PortablePaths::versionOperationFile()), QByteArray("interrupted"));
+        QCOMPARE(read(journal()), QByteArray("interrupted"));
         QCOMPARE(read(QDir(root()).filePath("runtime/probe.py")), QByteArray("original"));
     }
     void duplicateAndCaseAliasesRejected() {
@@ -145,8 +147,8 @@ private slots:
         }
     }
     void portableStatePreservesOperationalFiles() {
-        const QHash<QString, QByteArray> operational{{"version-operation.json", "interrupted"},
-            {"recovery/backup.pack", "private backup"}, {"runtime/bridge.py", "code"},
+        const QHash<QString, QByteArray> operational{{"versioning/journal.json", "interrupted"},
+            {"versioning/older.json", "older journal"}, {"runtime/bridge.py", "code"},
             {"dep-old.bat", "old installer"}, {"packages/archive.extpack", "package"}};
         for (auto it = operational.begin(); it != operational.end(); ++it)
             QVERIFY(save(QDir(root()).filePath(it.key()), it.value()));
@@ -242,7 +244,7 @@ private slots:
     void actualProcessKillRecoversPublishedFiles() {
         const QString settings = QDir(root()).filePath("application-settings.json");
         QVERIFY(save(settings, "original"));
-        QVERIFY(save(PortablePaths::versionOperationFile(), "version operation"));
+        QVERIFY(save(journal(), "version operation"));
         QProcess child; child.start(QCoreApplication::applicationFilePath(), {"--apply-state-child"});
         QVERIFY(child.waitForStarted());
         QElapsedTimer timer; timer.start(); bool observedWrite = false;
@@ -258,13 +260,13 @@ private slots:
         QVERIFY(QFileInfo::exists(pendingStatePath()));
         QString error; QVERIFY2(ConfigurationPackageManager::recoverPendingState(&error), qPrintable(error));
         QCOMPARE(read(settings), QByteArray("original"));
-        QCOMPARE(read(PortablePaths::versionOperationFile()), QByteArray("version operation"));
+        QCOMPARE(read(journal()), QByteArray("version operation"));
         QVERIFY(QDir(assets).entryList({"*.png"}, QDir::Files).isEmpty());
     }
     void validPackageRoundTripAndSwitch() {
         ConfigurationManager config; ConfigurationPackageManager manager(&config);
         QVERIFY(save(QDir(root()).filePath("application-settings.json"), R"({"language":"zh_CN"})"));
-        QVERIFY(save(PortablePaths::versionOperationFile(), "keep transaction"));
+        QVERIFY(save(journal(), "keep transaction"));
         QTemporaryDir temp;
         QVERIFY2(manager.exportPackage(QUrl::fromLocalFile(temp.filePath("valid.zip")), true), qPrintable(manager.lastError()));
         QVERIFY2(manager.importPackage(QUrl::fromLocalFile(temp.filePath("valid.zip"))), qPrintable(manager.lastError()));
@@ -272,7 +274,7 @@ private slots:
         QVERIFY2(manager.switchProfile(1), qPrintable(manager.lastError()));
         QCOMPARE(config.currentProfileIndex(), 1);
         QCOMPARE(read(QDir(root()).filePath("application-settings.json")), QByteArray(R"({"language":"zh_CN"})"));
-        QCOMPARE(read(PortablePaths::versionOperationFile()), QByteArray("keep transaction"));
+        QCOMPARE(read(journal()), QByteArray("keep transaction"));
         QVERIFY2(manager.switchProfile(0), qPrintable(manager.lastError()));
         QCOMPARE(read(QDir(root()).filePath("application-settings.json")), QByteArray(R"({"language":"en"})"));
     }
