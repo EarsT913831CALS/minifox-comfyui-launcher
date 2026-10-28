@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDirIterator>
 #include <QFile>
@@ -126,6 +127,26 @@ QByteArray normalizedLineEndings(QByteArray data)
 {
     data.replace("\r\n", "\n");
     return data;
+}
+
+QByteArray blobId(const QByteArray &data, QCryptographicHash::Algorithm algorithm)
+{
+    QCryptographicHash hash(algorithm);
+    hash.addData("blob " + QByteArray::number(data.size()));
+    hash.addData(QByteArrayView("\0", 1));
+    hash.addData(data);
+    return hash.result().toHex();
+}
+
+// Whether a working file holds the given blob, as checked out with or
+// without core.autocrlf. Other filters never match; callers then compare
+// against the base snapshot instead.
+bool holdsBlob(const QByteArray &data, const QByteArray &id)
+{
+    if (id.size() != 40 && id.size() != 64) return false;
+    const auto algorithm = id.size() == 64 ? QCryptographicHash::Sha256 : QCryptographicHash::Sha1;
+    if (blobId(data, algorithm) == id) return true;
+    return data.contains('\r') && blobId(normalizedLineEndings(data), algorithm) == id;
 }
 
 QByteArray normalizeLineEnding(QByteArray line, const QByteArray &lineEnding)
@@ -457,8 +478,11 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
             || !guard.lock(actualPath, &pathError) || !guard.lock(basePath, &pathError)
             || !guard.lock(localPath, &pathError) || !guard.lock(targetPath, &pathError))
             return {false, SafeMergeError::FileWrite, relativePath + ": " + pathError};
+        const auto untouched = request.untouched.constFind(relativePath);
         const bool baseExists = isRegularFile(basePath);
-        const bool localExists = isRegularFile(localPath);
+        // A path without local edits matched HEAD when the snapshots were planned.
+        const bool unedited = untouched != request.untouched.cend() && baseExists;
+        const bool localExists = unedited || isRegularFile(localPath);
         const bool targetExists = isRegularFile(targetPath);
 
         // Paths absent from both tracked snapshots are new in the target.
@@ -483,11 +507,28 @@ SafeMergeResult SafeMergeEngine::run(const SafeMergeRequest &request)
             continue;
         }
 
+        if (unedited) {
+            if (untouched->oldId == untouched->newId) continue;
+            // Freshly written snapshots are slow to read on Windows (each one
+            // is scanned), so skip the base while the working file still
+            // holds the HEAD blob.
+            bool targetOk = false;
+            bool actualOk = false;
+            const QByteArray targetData = targetExists ? readFile(targetPath, &targetOk) : QByteArray();
+            if (targetExists && !targetOk) return {false, SafeMergeError::SnapshotRead, relativePath};
+            const QByteArray actualData = isRegularFile(actualPath) ? readFile(actualPath, &actualOk) : QByteArray();
+            if (actualOk && holdsBlob(actualData, untouched->oldId)) {
+                changes.append({actualPath, actualData, targetData, true, !targetExists});
+                continue;
+            }
+        }
+
         bool baseOk = false;
-        bool localOk = false;
+        bool localOk = unedited;
         bool targetOk = false;
         const QByteArray baseData = baseExists ? readFile(basePath, &baseOk) : QByteArray();
-        const QByteArray localData = localExists ? readFile(localPath, &localOk) : QByteArray();
+        const QByteArray localData = unedited ? baseData
+            : localExists ? readFile(localPath, &localOk) : QByteArray();
         const QByteArray targetData = targetExists ? readFile(targetPath, &targetOk) : QByteArray();
         if ((baseExists && !baseOk) || (localExists && !localOk)
             || (targetExists && !targetOk)) {
@@ -656,18 +697,22 @@ QList<LocalPathEntry> SafeMergeEngine::parseStatusEntries(const QByteArray &data
     return entries;
 }
 
-QList<RemotePathEntry> SafeMergeEngine::parseNameStatusEntries(const QByteArray &data)
+QList<RemotePathEntry> SafeMergeEngine::parseRawDiffEntries(const QByteArray &data)
 {
     QList<RemotePathEntry> entries;
     const QList<QByteArray> fields = data.split('\0');
     for (int index = 0; index + 1 < fields.size(); index += 2) {
-        const QByteArray status = fields.at(index);
+        // ":<old mode> <new mode> <old id> <new id> <status>", then the path.
+        const QList<QByteArray> meta = fields.at(index).split(' ');
         const QByteArray path = fields.at(index + 1);
-        if (status.isEmpty() || path.isEmpty()) continue;
+        if (meta.size() != 5 || !meta.at(0).startsWith(':') || meta.at(4).isEmpty() || path.isEmpty())
+            continue;
         RemotePathEntry entry;
         entry.path = QString::fromUtf8(path);
-        entry.added = status.at(0) == 'A';
-        entry.deleted = status.at(0) == 'D';
+        entry.added = meta.at(4).at(0) == 'A';
+        entry.deleted = meta.at(4).at(0) == 'D';
+        entry.oldId = meta.at(2);
+        entry.newId = meta.at(3);
         entries.append(entry);
     }
     return entries;
@@ -676,37 +721,45 @@ QList<RemotePathEntry> SafeMergeEngine::parseNameStatusEntries(const QByteArray 
 SparseSnapshotPaths SafeMergeEngine::planSnapshots(const QList<LocalPathEntry> &local,
                                                    const QList<RemotePathEntry> &remote)
 {
+    QSet<QString> localPaths;
     QSet<QString> localAdded;
     QSet<QString> localDeleted;
     QSet<QString> remoteAdded;
     QSet<QString> remoteDeleted;
-    QSet<QString> changed;
+    QHash<QString, UntouchedPath> ids;
 
     for (const LocalPathEntry &entry : local) {
         if (entry.path.isEmpty()) continue;
+        localPaths.insert(entry.path);
         if (entry.added) localAdded.insert(entry.path);
         if (entry.deleted) localDeleted.insert(entry.path);
     }
     for (const RemotePathEntry &entry : remote) {
         if (entry.path.isEmpty()) continue;
-        changed.insert(entry.path);
+        ids.insert(entry.path, {entry.oldId, entry.newId});
         if (entry.added) remoteAdded.insert(entry.path);
         if (entry.deleted) remoteDeleted.insert(entry.path);
     }
 
     SparseSnapshotPaths plan;
-    for (const QString &path : std::as_const(changed)) {
+    for (auto it = ids.cbegin(); it != ids.cend(); ++it) {
+        const QString &path = it.key();
         const bool inHead = !localAdded.contains(path) && !remoteAdded.contains(path);
+        // A path without local edits matches HEAD; the base stands in for it.
+        const bool untouched = inHead && !localPaths.contains(path) && !it->oldId.isEmpty();
+        if (untouched) plan.untouched.insert(path, it.value());
         // The working snapshot stages tracked changes onto HEAD.
-        const bool inLocal = inHead && !localDeleted.contains(path);
+        const bool inLocal = inHead && !untouched && !localDeleted.contains(path);
         // Keep local additions untracked unless the target also adds the path.
         const bool inTarget = remoteAdded.contains(path)
             || (!localAdded.contains(path) && !remoteDeleted.contains(path));
         if (inHead) plan.basePaths.append(path);
+        if (inHead && !untouched) plan.editedPaths.append(path);
         if (inLocal) plan.localPaths.append(path);
         if (inTarget) plan.targetPaths.append(path);
     }
     plan.basePaths.sort();
+    plan.editedPaths.sort();
     plan.localPaths.sort();
     plan.targetPaths.sort();
     return plan;

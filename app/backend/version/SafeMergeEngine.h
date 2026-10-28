@@ -1,12 +1,19 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
 #include <QList>
 #include <QString>
 #include <QStringList>
 #include "RepositoryGitContext.h"
 
 class QThreadPool;
+
+// Blob ids of a target change to a path without local edits.
+struct UntouchedPath {
+    QByteArray oldId;
+    QByteArray newId;
+};
 
 struct SafeMergeRequest {
     QString gitProgram;
@@ -16,6 +23,9 @@ struct SafeMergeRequest {
     QString targetSnapshotRoot;
     QString transactionId;
     RepositoryGitContext gitContext;
+    // Paths without local edits have no local snapshot: their working file
+    // is compared with the base by blob id before the base is ever read.
+    QHash<QString, UntouchedPath> untouched = {};
 };
 
 enum class SafeMergeError {
@@ -50,12 +60,18 @@ struct RemotePathEntry {
     QString path;
     bool added = false;
     bool deleted = false;
+    QByteArray oldId = {};
+    QByteArray newId = {};
 };
 
 struct SparseSnapshotPaths {
     QStringList basePaths;
     QStringList localPaths;
     QStringList targetPaths;
+    // Base paths with local edits (including deletions), staged onto HEAD
+    // to build the local snapshot.
+    QStringList editedPaths = {};
+    QHash<QString, UntouchedPath> untouched = {};
 };
 
 class SafeMergeEngine final
@@ -70,10 +86,11 @@ public:
     // Parses `git status --porcelain -z --untracked-files=no`.
     static QList<LocalPathEntry> parseStatusEntries(const QByteArray &data);
 
-    // Parses `git diff --no-renames --name-status -z <a> <b>`.
-    static QList<RemotePathEntry> parseNameStatusEntries(const QByteArray &data);
+    // Parses `git diff --no-renames --raw --no-abbrev -z <a> <b>`.
+    static QList<RemotePathEntry> parseRawDiffEntries(const QByteArray &data);
 
-    // Selects changed paths present in each snapshot.
+    // Selects changed paths present in each snapshot. Paths without local
+    // edits skip the local snapshot and are listed in `untouched`.
     static SparseSnapshotPaths planSnapshots(const QList<LocalPathEntry> &local,
                                              const QList<RemotePathEntry> &remote);
 

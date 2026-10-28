@@ -290,22 +290,27 @@ private slots:
         };
         const QByteArray status = nulSeparated({
             " M local-and-remote.txt", " D local-deleted.txt", "A  local-added.txt"});
+        const QByteArray a(40, 'a'), b(40, 'b'), zero(40, '0');
         const QByteArray remote = nulSeparated({
-            "M", "local-and-remote.txt", "A", "remote-added.txt",
-            "D", "remote-deleted.txt"});
+            ":100644 100644 " + a + " " + b + " M", "local-and-remote.txt",
+            ":000000 100644 " + zero + " " + b + " A", "remote-added.txt",
+            ":100644 000000 " + a + " " + zero + " D", "remote-deleted.txt"});
 
         const QList<LocalPathEntry> localEntries =
             SafeMergeEngine::parseStatusEntries(status);
         const QList<RemotePathEntry> remoteEntries =
-            SafeMergeEngine::parseNameStatusEntries(remote);
+            SafeMergeEngine::parseRawDiffEntries(remote);
         QCOMPARE(localEntries.size(), 3);
         QCOMPARE(remoteEntries.size(), 3);
 
         const SparseSnapshotPaths plan =
             SafeMergeEngine::planSnapshots(localEntries, remoteEntries);
         QCOMPARE(plan.basePaths.size(), 2);
-        QCOMPARE(plan.localPaths.size(), 2);
+        QCOMPARE(plan.localPaths.size(), 1);
         QCOMPARE(plan.targetPaths.size(), 2);
+        QCOMPARE(plan.editedPaths, QStringList{QStringLiteral("local-and-remote.txt")});
+        QCOMPARE(remoteEntries.at(0).oldId, a);
+        QCOMPARE(remoteEntries.at(0).newId, b);
 
         QVERIFY(plan.basePaths.contains(QStringLiteral("local-and-remote.txt")));
         QVERIFY(plan.localPaths.contains(QStringLiteral("local-and-remote.txt")));
@@ -323,8 +328,11 @@ private slots:
         QVERIFY(!plan.localPaths.contains(QStringLiteral("remote-added.txt")));
         QVERIFY(plan.targetPaths.contains(QStringLiteral("remote-added.txt")));
 
+        // Without local edits the base stands in for the local snapshot.
         QVERIFY(plan.basePaths.contains(QStringLiteral("remote-deleted.txt")));
-        QVERIFY(plan.localPaths.contains(QStringLiteral("remote-deleted.txt")));
+        QVERIFY(!plan.localPaths.contains(QStringLiteral("remote-deleted.txt")));
+        QCOMPARE(plan.untouched.keys(), QStringList{QStringLiteral("remote-deleted.txt")});
+        QCOMPARE(plan.untouched.value(QStringLiteral("remote-deleted.txt")).oldId, a);
         QVERIFY(!plan.targetPaths.contains(QStringLiteral("remote-deleted.txt")));
 
         QByteArray expected("a.txt");
@@ -334,6 +342,91 @@ private slots:
         QCOMPARE(SafeMergeEngine::encodePathList(
                      {QStringLiteral("a.txt"), QStringLiteral("目录/b.txt")}),
                  expected);
+    }
+
+    void untouchedPathsAreComparedByBlobIdBeforeReadingTheBase()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QDir root(directory.path());
+        const auto resetTrees = [&root] {
+            bool ok = true;
+            for (const QString name : {"base", "local", "target", "work"})
+                ok = QDir(root.filePath(name)).removeRecursively() && QDir().mkpath(root.filePath(name)) && ok;
+            return ok;
+        };
+        QVERIFY(resetTrees());
+        const auto blob = [&](const QByteArray &data) {
+            const QString path = root.filePath("blob.tmp");
+            if (!writeFile(path, data)) return QByteArray();
+            return runGit(m_git, root.path(), {"hash-object", "--no-filters", path}).output.trimmed();
+        };
+        const QByteArray lfId = blob("one\ntwo\n");
+        const QByteArray crlfId = blob("raw\r\ncrlf\r\n");
+        const QByteArray newId = blob("new\n");
+        QVERIFY(lfId.size() == 40 && crlfId.size() == 40 && newId.size() == 40);
+        // A base snapshot the engine must never read while the blob ids match.
+        for (const QString name : {"lf.txt", "crlf.txt"}) {
+            QVERIFY(writeFile(root.filePath("base/" + name), "unread base\n"));
+            QVERIFY(writeFile(root.filePath("target/" + name), "new\n"));
+        }
+        // LF blob checked out through core.autocrlf, and a blob stored with CRLF.
+        QVERIFY(writeFile(root.filePath("work/lf.txt"), "one\r\ntwo\r\n"));
+        QVERIFY(writeFile(root.filePath("work/crlf.txt"), "raw\r\ncrlf\r\n"));
+
+        SafeMergeRequest request{m_git, root.filePath("work"), root.filePath("base"), root.filePath("local"),
+                                 root.filePath("target"), {}, {}};
+        request.untouched.insert("lf.txt", {lfId, newId});
+        request.untouched.insert("crlf.txt", {crlfId, newId});
+        SafeMergeResult result = SafeMergeEngine::run(request);
+        QVERIFY2(result.success, qPrintable(result.detail));
+        QVERIFY(result.conflictPaths.isEmpty());
+        QCOMPARE(readFile(root.filePath("work/lf.txt")), QByteArray("new\n"));
+        QCOMPARE(readFile(root.filePath("work/crlf.txt")), QByteArray("new\n"));
+
+        // A file edited after planning no longer holds the blob; the base
+        // comparison then refuses the update and leaves the file alone.
+        QVERIFY(resetTrees());
+        QVERIFY(writeFile(root.filePath("base/edited.txt"), "one\ntwo\n"));
+        QVERIFY(writeFile(root.filePath("target/edited.txt"), "new\n"));
+        QVERIFY(writeFile(root.filePath("work/edited.txt"), "edited later\n"));
+        request.untouched.clear();
+        request.untouched.insert("edited.txt", {lfId, newId});
+        result = SafeMergeEngine::run(request);
+        QVERIFY(!result.success);
+        QCOMPARE(result.error, SafeMergeError::WorkingTreeChanged);
+        QCOMPARE(readFile(root.filePath("work/edited.txt")), QByteArray("edited later\n"));
+    }
+
+    void untouchedFilesUpdateUnderAutocrlf()
+    {
+        RepositoryFixture fixture(m_git);
+        QVERIFY(fixture.create("alpha\nbeta\n"));
+        const QDir working(fixture.working);
+        const QDir updater(fixture.updater);
+        QVERIFY(runGit(m_git, fixture.updater, {"config", "core.autocrlf", "false"}).success);
+        QVERIFY(writeFile(updater.filePath("crlf.txt"), "one\r\n"));
+        QVERIFY(writeFile(updater.filePath("plain.txt"), "one\n"));
+        QVERIFY(runGit(m_git, fixture.updater, {"add", "."}).success);
+        QVERIFY(runGit(m_git, fixture.updater, {"commit", "-m", "files"}).success);
+        QVERIFY(runGit(m_git, fixture.updater, {"push"}).success);
+        QVERIFY(runGit(m_git, fixture.working, {"config", "core.autocrlf", "true"}).success);
+        QVERIFY(runGit(m_git, fixture.working, {"pull", "--ff-only"}).success);
+        QVERIFY(writeFile(working.filePath("sample.txt"), "local\nbeta\n"));
+        QVERIFY(writeFile(updater.filePath("crlf.txt"), "two\r\n"));
+        QVERIFY(writeFile(updater.filePath("plain.txt"), "two\n"));
+        QVERIFY(runGit(m_git, fixture.updater, {"add", "."}).success);
+        QVERIFY(fixture.publish("alpha\nremote\n"));
+
+        const JobRun run = runJob(updateSpec(fixture));
+        QVERIFY(run.received);
+        QVERIFY2(run.result.success, qPrintable(run.result.error));
+        QVERIFY(run.result.conflictPaths.isEmpty());
+        QCOMPARE(readFile(working.filePath("crlf.txt")), QByteArray("two\r\n"));
+        QCOMPARE(normalizedLineEndings(readFile(working.filePath("plain.txt"))), QByteArray("two\n"));
+        QCOMPARE(normalizedLineEndings(readFile(working.filePath("sample.txt"))), QByteArray("local\nremote\n"));
+        QCOMPARE(runGit(m_git, fixture.working, {"status", "--porcelain"}).output.trimmed(),
+                 QByteArray("M sample.txt"));
     }
 
     void cleanRepositoryUsesDurableSparseUpdate()

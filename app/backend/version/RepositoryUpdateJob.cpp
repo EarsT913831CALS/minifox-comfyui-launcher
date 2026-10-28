@@ -286,14 +286,14 @@ void RepositoryUpdateJob::handleProcessFinished(const ProcessResult &result)
         beginSafeMerge();
         break;
     case Stage::PrepareWorkingIndex:
-        if (m_plan.basePaths.isEmpty()) {
+        if (m_plan.editedPaths.isEmpty()) {
             runGit(Stage::WriteLocalTree, {QStringLiteral("write-tree")}, m_workingIndexPath);
         } else {
             runGit(Stage::StageLocalChanges,
                    {QStringLiteral("--literal-pathspecs"), QStringLiteral("add"),
                     QStringLiteral("-u"), QStringLiteral("--pathspec-from-file=-"),
                     QStringLiteral("--pathspec-file-nul")},
-                   m_workingIndexPath, 120000, SafeMergeEngine::encodePathList(m_plan.basePaths));
+                   m_workingIndexPath, 120000, SafeMergeEngine::encodePathList(m_plan.editedPaths));
         }
         break;
     case Stage::StageLocalChanges:
@@ -311,7 +311,7 @@ void RepositoryUpdateJob::handleProcessFinished(const ProcessResult &result)
     case Stage::ResolveRemotePaths:
         m_plan = SafeMergeEngine::planSnapshots(
             m_localEntries,
-            SafeMergeEngine::parseNameStatusEntries(result.standardOutput));
+            SafeMergeEngine::parseRawDiffEntries(result.standardOutput));
         runGit(Stage::PrepareWorkingIndex,
                {QStringLiteral("read-tree"), m_originalHead}, m_workingIndexPath);
         break;
@@ -456,7 +456,7 @@ void RepositoryUpdateJob::beginSafeMerge()
     // Local-only changes stay in place; only target changes need snapshots.
     runGit(Stage::ResolveRemotePaths,
            {QStringLiteral("diff"), QStringLiteral("--no-renames"),
-            QStringLiteral("--name-status"), QStringLiteral("-z"),
+            QStringLiteral("--raw"), QStringLiteral("--no-abbrev"), QStringLiteral("-z"),
             m_originalHead, m_targetRef});
 }
 
@@ -464,7 +464,8 @@ void RepositoryUpdateJob::runSafeMerge()
 {
     const SafeMergeRequest request {m_spec.gitProgram, m_spec.root,
                                     m_baseSnapshotPath, m_localSnapshotPath,
-                                    m_targetSnapshotPath, m_transactionId, {m_spec.gitPrefixArguments, m_spec.gitEnvironment}};
+                                    m_targetSnapshotPath, m_transactionId, {m_spec.gitPrefixArguments, m_spec.gitEnvironment},
+                                    m_plan.untouched};
     auto *watcher = new QFutureWatcher<SafeMergeResult>(this);
     connect(watcher, &QFutureWatcher<SafeMergeResult>::finished, this,
             [this, watcher] {

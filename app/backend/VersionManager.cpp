@@ -1061,7 +1061,7 @@ void VersionManager::beginSafeMerge(PendingCoreAction action,
     startGit(Operation::ResolveSafeMergePaths,
              repositoryArguments(repositoryRoot,
                  {QStringLiteral("diff"), QStringLiteral("--no-renames"),
-                  QStringLiteral("--name-status"), QStringLiteral("-z"),
+                  QStringLiteral("--raw"), QStringLiteral("--no-abbrev"), QStringLiteral("-z"),
                   QStringLiteral("HEAD"), targetRef}));
 }
 
@@ -1140,7 +1140,8 @@ void VersionManager::startSafeSnapshotMerge()
         m_safeMergeBaseSnapshotPath,
         m_safeMergeLocalSnapshotPath,
         m_safeMergeTargetSnapshotPath,
-        m_transactionId, gitContext()
+        m_transactionId, gitContext(),
+        m_safeMergePlan.untouched
     };
     auto *watcher = new QFutureWatcher<SafeMergeResult>(this);
     connect(watcher, &QFutureWatcher<SafeMergeResult>::finished, this,
@@ -1903,7 +1904,7 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
         }
         break;
     case Operation::PrepareSafeMergeIndex:
-        if (m_safeMergePlan.basePaths.isEmpty()) {
+        if (m_safeMergePlan.editedPaths.isEmpty()) {
             startGit(Operation::WriteSafeMergeTree,
                      repositoryArguments(m_safeMergeRoot, {QStringLiteral("write-tree")}));
         } else {
@@ -1912,7 +1913,7 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
                          {QStringLiteral("--literal-pathspecs"), QStringLiteral("add"),
                           QStringLiteral("-u"), QStringLiteral("--pathspec-from-file=-"),
                           QStringLiteral("--pathspec-file-nul")}),
-                     SafeMergeEngine::encodePathList(m_safeMergePlan.basePaths));
+                     SafeMergeEngine::encodePathList(m_safeMergePlan.editedPaths));
         }
         break;
     case Operation::StageSafeMergeChanges:
@@ -1935,7 +1936,7 @@ void VersionManager::handleProcessFinished(int exitCode, QProcess::ExitStatus ex
     case Operation::ResolveSafeMergePaths:
         m_safeMergePlan = SafeMergeEngine::planSnapshots(
             m_safeMergeLocalEntries,
-            SafeMergeEngine::parseNameStatusEntries(rawOutput));
+            SafeMergeEngine::parseRawDiffEntries(rawOutput));
         startGit(Operation::PrepareSafeMergeIndex,
                  repositoryArguments(m_safeMergeRoot,
                      {QStringLiteral("read-tree"), QStringLiteral("HEAD")}));
