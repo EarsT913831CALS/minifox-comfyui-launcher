@@ -149,9 +149,54 @@ QList<Commit> releases(const git::Tool &tool, const QString &root, int limit)
 
 git::Result fetch(const git::Tool &tool, const QString &root, const std::atomic_bool *cancel)
 {
-    return tool.run(root, {QStringLiteral("fetch"), QStringLiteral("--prune"), QStringLiteral("--tags"),
-                           QStringLiteral("--force"), QStringLiteral("--quiet"), QStringLiteral("origin")},
-                    {.idleTimeoutMs = 60000, .cancel = cancel});
+    // Only the branches version management reads are fetched: the remote's
+    // default, master/main and whatever local branches track. Mirrors carry
+    // hundreds of contributor branches, and on Windows two of them differing
+    // only in case share one lock file, which fails a whole "fetch --prune".
+    QStringList wanted{QStringLiteral("refs/heads/master"), QStringLiteral("refs/heads/main")};
+    const git::Result tracked = tool.run(root, {QStringLiteral("for-each-ref"), QStringLiteral("--format=%(upstream)"),
+                                                QStringLiteral("refs/heads/")});
+    for (const QString &upstream : git::lines(tracked.out)) {
+        if (upstream.startsWith(QStringLiteral("refs/remotes/origin/")))
+            wanted.append(QStringLiteral("refs/heads/") + upstream.mid(20));
+    }
+    wanted.removeDuplicates();
+
+    const git::Options network{.idleTimeoutMs = 60000, .cancel = cancel};
+    QStringList listArguments{QStringLiteral("ls-remote"), QStringLiteral("--symref"), QStringLiteral("origin"),
+                              QStringLiteral("HEAD")};
+    const git::Result listed = tool.run(root, listArguments + wanted, network);
+    if (!listed.ok()) return listed;
+    QString defaultBranch;
+    QStringList present;
+    for (const QString &line : git::lines(listed.out)) {
+        const QString ref = line.section(QLatin1Char('\t'), 1);
+        if (line.startsWith(QStringLiteral("ref: ")) && ref == QStringLiteral("HEAD"))
+            defaultBranch = line.section(QLatin1Char('\t'), 0, 0).mid(5);
+        else if (wanted.contains(ref))
+            present.append(ref);
+    }
+    if (defaultBranch.startsWith(QStringLiteral("refs/heads/")) && !present.contains(defaultBranch))
+        present.append(defaultBranch);
+
+    QStringList arguments{QStringLiteral("fetch"), QStringLiteral("--prune"), QStringLiteral("--tags"),
+                          QStringLiteral("--force"), QStringLiteral("--quiet"), QStringLiteral("origin")};
+    for (const QString &branch : std::as_const(present))
+        arguments.append(QLatin1Char('+') + branch + QStringLiteral(":refs/remotes/origin/") + branch.mid(11));
+    const git::Result fetched = tool.run(root, arguments, network);
+    if (!fetched.ok()) return fetched;
+
+    // Branches deleted on the remote are dropped one at a time, so a leftover
+    // pair that differs only in case cannot block the rest.
+    for (const QString &branch : std::as_const(wanted)) {
+        if (!present.contains(branch))
+            tool.run(root, {QStringLiteral("update-ref"), QStringLiteral("-d"),
+                            QStringLiteral("refs/remotes/origin/") + branch.mid(11)});
+    }
+    if (!defaultBranch.isEmpty())
+        tool.run(root, {QStringLiteral("symbolic-ref"), QStringLiteral("refs/remotes/origin/HEAD"),
+                        QStringLiteral("refs/remotes/origin/") + defaultBranch.mid(11)});
+    return fetched;
 }
 
 int behind(const git::Tool &tool, const QString &root, const QString &revision)

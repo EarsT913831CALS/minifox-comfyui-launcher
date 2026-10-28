@@ -354,7 +354,7 @@ Pane {
                     readonly property bool checking: page.tab === 0 ? page.versions.coreChecking
                                                      : page.tab === 1 ? page.versions.extensionsChecking
                                                      : page.versions.catalogLoading
-                    text: checking ? qsTr("刷新中…") : qsTr("↻  刷新列表")
+                    text: checking ? qsTr("刷新中…") : qsTr("刷新列表")
                     enabled: !checking
                     onClicked: {
                         if (page.tab === 0) page.versions.refreshCore();
@@ -366,7 +366,7 @@ Pane {
                 AppButton {
                     visible: page.tab !== 2
                     text: (page.tab === 0 ? page.versions.coreBusy : page.versions.updating && !page.versions.coreBusy)
-                          ? qsTr("更新中…") : qsTr("▣  一键更新")
+                          ? qsTr("更新中…") : qsTr("一键更新")
                     enabled: page.tab === 0 ? page.versions.canUpdate
                                             : page.versions.outdatedCount > 0 && !page.versions.interruptedOperation
                     onClicked: {
@@ -434,11 +434,36 @@ Pane {
                             RemoteLink { Layout.fillWidth: true; remote: page.versions.remoteUrl }
 
                             AppLabel { text: qsTr("当前分支："); color: Theme.foregroundSecondary }
-                            AppLabel {
+                            // The branch switcher sits on the branch row it changes.
+                            RowLayout {
                                 Layout.fillWidth: true
-                                text: page.versions.branch.length > 0 ? page.versions.branch : "—"
-                                font.family: page.monoFont
-                                elide: Text.ElideRight
+                                spacing: Theme.spacingMd
+
+                                AppLabel {
+                                    Layout.fillWidth: true
+                                    text: page.versions.branch.length > 0 ? page.versions.branch : "—"
+                                    font.family: page.monoFont
+                                    elide: Text.ElideRight
+                                }
+
+                                AppComboBox {
+                                    Layout.preferredWidth: Math.min(400, Math.max(300, page.width * 0.28))
+                                    model: [
+                                        qsTr("Comfy-Org/ComfyUI · master（官方）"),
+                                        qsTr("IndexMirror/ComfyUI · master（国内镜像）")
+                                    ]
+                                    currentIndex: page.coreSource
+                                    onActivated: index => page.coreSource = index
+                                }
+
+                                AppButton {
+                                    text: qsTr("切换分支")
+                                    enabled: page.versions.canUpdate
+                                    onClicked: {
+                                        page.channel = 0;
+                                        page.versions.switchBranch(page.coreSource);
+                                    }
+                                }
                             }
 
                             AppLabel { text: qsTr("当前版本："); color: Theme.foregroundSecondary }
@@ -471,35 +496,6 @@ Pane {
                                     onClicked: discardDialog.openFor("", "ComfyUI", page.versions.localChanges)
                                 }
                                 Item { Layout.fillWidth: true }
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.preferredWidth: Math.min(420, Math.max(320, page.width * 0.3))
-                            spacing: Theme.spacingMd
-
-                            AppComboBox {
-                                Layout.fillWidth: true
-                                model: [
-                                    qsTr("Comfy-Org/ComfyUI · master（官方）"),
-                                    qsTr("IndexMirror/ComfyUI · master（国内镜像）")
-                                ]
-                                currentIndex: page.coreSource
-                                onActivated: index => page.coreSource = index
-                            }
-
-                            AppButton {
-                                Layout.alignment: Qt.AlignRight
-                                Layout.preferredHeight: 34
-                                leftPadding: 12
-                                rightPadding: 12
-                                text: qsTr("⚯  切换分支")
-                                enabled: page.versions.canUpdate
-                                font.pointSize: page.cellFont
-                                onClicked: {
-                                    page.channel = 0;
-                                    page.versions.switchBranch(page.coreSource);
-                                }
                             }
                         }
                     }
@@ -804,7 +800,6 @@ Pane {
 
                         AppTextField {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 46
                             placeholderText: qsTr("扩展 URL")
                             text: page.installUrl
                             onTextChanged: page.installUrl = text
@@ -812,13 +807,8 @@ Pane {
                         }
 
                         AppButton {
-                            Layout.preferredHeight: 34
-                            Layout.preferredWidth: page.installWidth
-                            leftPadding: 6
-                            rightPadding: 6
                             text: qsTr("安装")
                             enabled: page.installUrl.trim().length > 0
-                            font.pointSize: page.cellFont
                             onClicked: page.versions.installExtension(page.installUrl)
                         }
                     }

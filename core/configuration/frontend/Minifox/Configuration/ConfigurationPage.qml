@@ -184,7 +184,6 @@ Pane {
 
                     AppButton {
                         text: qsTr("导入")
-                        accented: true
                         compact: true
                         onClicked: importConfigurationDialog.open()
                     }

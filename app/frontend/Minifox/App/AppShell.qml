@@ -120,7 +120,10 @@ Control {
             compact: root.compactNavigation
             Layout.fillHeight: true
             Layout.preferredWidth: root.compactNavigation ? 72 : 108
+            noticeCount: notices.count
+            unreadNotices: notices.unreadCount
             onPageSelected: index => root.currentPage = index
+            onNoticesRequested: anchor => notices.toggleHistory(anchor)
         }
 
         Loader {
@@ -131,6 +134,10 @@ Control {
     }
 
     NoticeCenter {
+        id: notices
+
+        anchors.fill: parent
         appContext: root.appContext
+        versionPageVisible: root.currentPage === 3
     }
 }

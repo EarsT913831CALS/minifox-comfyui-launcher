@@ -345,12 +345,12 @@
         <translation>Profile name</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="199"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="198"/>
         <source>新建</source>
         <translation>New</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="209"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="208"/>
         <source>复制</source>
         <translation>Duplicate</translation>
     </message>
@@ -365,85 +365,85 @@
         <translation>Import</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="193"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="192"/>
         <source>导出</source>
         <translation>Export</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="503"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="502"/>
         <source>导入启动配置</source>
         <translation>Import Launch Profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="514"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="513"/>
         <source>导出启动配置</source>
         <translation>Export Launch Profile</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="505"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="517"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="504"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="516"/>
         <source>Minifox 配置包 (*.zip)</source>
         <translation>Minifox profile packages (*.zip)</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="505"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="517"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="504"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="516"/>
         <source>所有文件 (*)</source>
         <translation>All files (*)</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="256"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="255"/>
         <source>Python 可执行文件</source>
         <translation>Python executable</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="268"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="267"/>
         <source>ComfyUI 根目录</source>
         <translation>ComfyUI root directory</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="296"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="295"/>
         <source>请先修正以下配置</source>
         <translation>Fix the following settings first</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="477"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="476"/>
         <source>自定义参数会追加在可视化参数之后，可用于尚未被启动器覆盖的新参数。</source>
         <translation>Custom arguments are appended after visual options and can be used for new options not yet covered by the launcher.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="487"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="486"/>
         <source>例如：--some-new-option value</source>
         <translation>Example: --some-new-option value</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="645"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="644"/>
         <source>配置操作失败</source>
         <translation>Profile Operation Failed</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="657"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="656"/>
         <source>无法启动命令提示符</source>
         <translation>Could Not Open CMD in venv</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="554"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="553"/>
         <source>确定</source>
         <translation>OK</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="660"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="659"/>
         <source>命令提示符未能启动。</source>
         <translation>Could not open CMD in venv.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="692"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="691"/>
         <source>删除</source>
         <translation>Delete</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="595"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="693"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="594"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="692"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
@@ -478,58 +478,58 @@
         <translation>Search advanced options</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="222"/>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="224"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="221"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="223"/>
         <source>删除配置</source>
         <translation>Delete profiles</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="388"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="387"/>
         <source>搜索结果</source>
         <translation>Search Results</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="390"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="389"/>
         <source>显示所有分类中与“%1”匹配的选项。</source>
         <translation>Showing options matching “%1” across all categories.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="438"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="437"/>
         <source>没有找到匹配的高级选项。</source>
         <translation>No matching advanced options were found.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="591"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="590"/>
         <source>选择导出内容</source>
         <translation>Choose Export Content</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="604"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="603"/>
         <source>分享导出仅保留预设选项和数值参数，不含环境变量、自由文本参数和界面状态。完整备份保留原始配置，可能包含明文密码或令牌，请勿分享。</source>
         <translation>Shared exports include only preset options and numeric parameters, without environment variables, free-text arguments, or UI state. Full backups retain the original configuration and may contain plain-text passwords or tokens. Do not share them.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="628"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="627"/>
         <source>完整备份（含明文敏感信息）</source>
         <translation>Full Backup (Includes Plain-Text Sensitive Data)</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="621"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="620"/>
         <source>分享启动选项（推荐）</source>
         <translation>Share Launch Options (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="686"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="685"/>
         <source>选择要删除的配置</source>
         <translation>Select profiles to delete</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="702"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="701"/>
         <source>选择一个或多个配置。当前使用的配置不能删除。</source>
         <translation>Select one or more profiles. The active profile cannot be deleted.</translation>
     </message>
     <message>
-        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="768"/>
+        <location filename="../../../core/configuration/frontend/Minifox/Configuration/ConfigurationPage.qml" line="767"/>
         <source>当前使用</source>
         <translation>Active</translation>
     </message>
@@ -969,6 +969,11 @@
         <source>下载中途断开，请重试。</source>
         <translation>The download was interrupted. Please try again.</translation>
     </message>
+    <message>
+        <location filename="../../backend/versioning/Git.cpp" line="54"/>
+        <source>仓库正被另一个 Git 程序使用，或留有上次中断的锁文件，请稍后再试。</source>
+        <translation>The repository is in use by another Git process or has a leftover lock file from an interrupted run. Try again later.</translation>
+    </message>
 </context>
 <context>
     <name>HomeWidgetContent</name>
@@ -1310,27 +1315,32 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
 <context>
     <name>NavigationRail</name>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="16"/>
+        <location filename="../Minifox/App/NavigationRail.qml" line="20"/>
         <source>一键启动</source>
         <translation>Launch</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="17"/>
+        <location filename="../Minifox/App/NavigationRail.qml" line="21"/>
         <source>高级选项</source>
         <translation>Advanced</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="18"/>
+        <location filename="../Minifox/App/NavigationRail.qml" line="22"/>
         <source>控制台</source>
         <translation>Console</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="19"/>
+        <location filename="../Minifox/App/NavigationRail.qml" line="23"/>
         <source>版本管理</source>
         <translation>Version Manager</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NavigationRail.qml" line="63"/>
+        <location filename="../Minifox/App/NavigationRail.qml" line="70"/>
+        <source>通知</source>
+        <translation>Alerts</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/NavigationRail.qml" line="98"/>
         <source>设置</source>
         <translation>Settings</translation>
     </message>
@@ -1338,16 +1348,28 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
 <context>
     <name>NoticeCenter</name>
     <message>
-        <location filename="../Minifox/App/NoticeCenter.qml" line="185"/>
-        <location filename="../Minifox/App/NoticeCenter.qml" line="187"/>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="210"/>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="212"/>
         <source>复制</source>
         <translation>Copy</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/NoticeCenter.qml" line="203"/>
-        <location filename="../Minifox/App/NoticeCenter.qml" line="205"/>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="225"/>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="227"/>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="344"/>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="346"/>
         <source>关闭</source>
         <translation>Close</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="328"/>
+        <source>通知</source>
+        <translation>Notifications</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/NoticeCenter.qml" line="335"/>
+        <source>全部清除</source>
+        <translation>Clear All</translation>
     </message>
 </context>
 <context>
@@ -2867,16 +2889,6 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         <translation>Refreshing…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="357"/>
-        <source>↻  刷新列表</source>
-        <translation>↻  Refresh List</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="369"/>
-        <source>▣  一键更新</source>
-        <translation>▣  Update All</translation>
-    </message>
-    <message>
         <location filename="../Minifox/App/VersionPage.qml" line="398"/>
         <source>上次的版本操作（%1）没有完成，正在或未能自动撤销。撤销完成前无法启动 ComfyUI。</source>
         <translation>The last version operation (%1) did not finish and is being undone, or could not be undone automatically. ComfyUI cannot start until it is undone.</translation>
@@ -2897,17 +2909,17 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         <translation>Current branch:</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="444"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="469"/>
         <source>当前版本：</source>
         <translation>Current version:</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="456"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="481"/>
         <source>本地修改：</source>
         <translation>Local edits:</translation>
     </message>
     <message numerus="yes">
-        <location filename="../Minifox/App/VersionPage.qml" line="464"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="489"/>
         <source>%n 个已跟踪文件被修改过，更新时会保留</source>
         <translation>
             <numerusform>%n tracked file has been edited; updates keep it</numerusform>
@@ -2915,28 +2927,23 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         </translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="469"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="862"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="494"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="852"/>
         <source>放弃修改…</source>
         <translation>Discard edits…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="496"/>
-        <source>⚯  切换分支</source>
-        <translation>⚯  Switch Branch</translation>
-    </message>
-    <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="517"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="513"/>
         <source>稳定版</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="517"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="513"/>
         <source>开发版</source>
         <translation>Development</translation>
     </message>
     <message numerus="yes">
-        <location filename="../Minifox/App/VersionPage.qml" line="917"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="907"/>
         <source>%1 中 %n 个被修改过的文件将恢复为当前版本的原样。修改过的文件会先复制到备份文件夹。确定继续吗？</source>
         <translation>
             <numerusform>%n edited file in %1 will be restored to the current version. It is copied to the backup folder first. Continue?</numerusform>
@@ -2944,13 +2951,13 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         </translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="937"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="927"/>
         <source>将把扩展 %1 的文件夹移到回收站。确定继续吗？</source>
         <translation>The folder of extension %1 will be moved to the Recycle Bin. Continue?</translation>
     </message>
     <message>
         <location filename="../Minifox/App/VersionPage.qml" line="276"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="599"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="595"/>
         <source>版本 ID</source>
         <translation>Version ID</translation>
     </message>
@@ -2976,12 +2983,12 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         <translation>Switch</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="565"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="561"/>
         <source>搜索已安装插件…</source>
         <translation>Search installed extensions…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="583"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="579"/>
         <source>启用</source>
         <translation>Enabled</translation>
     </message>
@@ -2996,23 +3003,23 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         <translation>Updating…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="587"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="746"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="583"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="742"/>
         <source>插件名</source>
         <translation>Extension</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="591"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="587"/>
         <source>远端地址</source>
         <translation>Remote</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="595"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="591"/>
         <source>当前分支</source>
         <translation>Branch</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="603"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="599"/>
         <source>更新日期</source>
         <translation>Updated</translation>
     </message>
@@ -3042,74 +3049,89 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         <translation>Retry</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="544"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="357"/>
+        <source>刷新列表</source>
+        <translation>Refresh List</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="369"/>
+        <source>一键更新</source>
+        <translation>Update All</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="460"/>
+        <source>切换分支</source>
+        <translation>Switch Branch</translation>
+    </message>
+    <message>
+        <location filename="../Minifox/App/VersionPage.qml" line="540"/>
         <source>没有找到版本，请刷新列表。</source>
         <translation>No versions found. Refresh the list.</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="578"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="574"/>
         <source>custom_nodes 里还没有扩展。</source>
         <translation>There are no extensions in custom_nodes yet.</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="688"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="684"/>
         <source>切换版本</source>
         <translation>Switch Version</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="698"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="930"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="694"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="920"/>
         <source>卸载</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="724"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="720"/>
         <source>搜索新插件…</source>
         <translation>Search extensions…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="742"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="738"/>
         <source>没有找到匹配的插件。</source>
         <translation>No matching extensions.</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="747"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="743"/>
         <source>简介</source>
         <translation>Description</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="791"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="787"/>
         <source>安装中</source>
         <translation>Installing</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="792"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="788"/>
         <source>已装</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="792"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="819"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="788"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="810"/>
         <source>安装</source>
         <translation>Install</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="808"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="803"/>
         <source>扩展 URL</source>
         <translation>Extension URL</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="484"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="452"/>
         <source>Comfy-Org/ComfyUI · master（官方）</source>
         <translation>Comfy-Org/ComfyUI · master (Official)</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="485"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="453"/>
         <source>IndexMirror/ComfyUI · master（国内镜像）</source>
         <translation>IndexMirror/ComfyUI · master (China mirror)</translation>
     </message>
     <message numerus="yes">
-        <location filename="../Minifox/App/VersionPage.qml" line="852"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="842"/>
         <source>这个扩展有 %n 个文件被修改过。切换时会保留修改；与新版本冲突的地方采用新版本，你的版本会备份。</source>
         <translation>
             <numerusform>This extension has %n edited file. Switching keeps the edits; where they conflict, the new version wins and your version is backed up.</numerusform>
@@ -3117,43 +3139,43 @@ To quit anyway, cancel the install first, then close the launcher.</translation>
         </translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="853"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="843"/>
         <source>选择要切换到的版本。</source>
         <translation>Choose the version to switch to.</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="905"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="895"/>
         <source>放弃本地修改</source>
         <translation>Discard local edits</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="907"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="897"/>
         <source>放弃修改</source>
         <translation>Discard edits</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="908"/>
-        <location filename="../Minifox/App/VersionPage.qml" line="931"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="898"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="921"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="836"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="826"/>
         <source>版本切换 · %1</source>
         <translation>Version Switch · %1</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="838"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="828"/>
         <source>关闭</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="849"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="839"/>
         <source>正在读取版本历史…</source>
         <translation>Loading version history…</translation>
     </message>
     <message>
-        <location filename="../Minifox/App/VersionPage.qml" line="928"/>
+        <location filename="../Minifox/App/VersionPage.qml" line="918"/>
         <source>卸载扩展</source>
         <translation>Uninstall Extension</translation>
     </message>

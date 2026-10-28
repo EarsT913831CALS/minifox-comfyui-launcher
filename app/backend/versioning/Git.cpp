@@ -50,6 +50,8 @@ QString Result::networkMessage() const
         return QCoreApplication::translate("Git", "远端仓库需要登录，可能是私有仓库或地址有误。");
     if (any({"early eof", "rpc failed", "unexpected disconnect", "connection reset", "the remote end hung up"}))
         return QCoreApplication::translate("Git", "下载中途断开，请重试。");
+    if (any({".lock': file exists", "cannot lock ref"}))
+        return QCoreApplication::translate("Git", "仓库正被另一个 Git 程序使用，或留有上次中断的锁文件，请稍后再试。");
     return message();
 }
 
