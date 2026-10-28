@@ -220,7 +220,6 @@ private:
 
     Core m_core;
     int m_coreChecks = 0;
-    bool m_coreFetched = false;
     bool m_extensionsFetched = false;
     bool m_scanning = false;
     int m_extensionChecks = 0;

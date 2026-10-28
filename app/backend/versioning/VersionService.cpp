@@ -282,7 +282,6 @@ void VersionService::reloadConfiguration()
     if (root == m_comfyRoot && m_tool.isValid()) return;
     m_comfyRoot = root;
     m_core = {};
-    m_coreFetched = false;
     m_extensionsFetched = false;
     m_installed->setEntries({});
     rebuildTool();
@@ -317,12 +316,11 @@ QString VersionService::journalDirectory() const
 
 void VersionService::ensureLoaded(int tab)
 {
-    if (!m_coreFetched && m_coreChecks == 0) checkCore(true, false);
-    if (tab >= 1 && !m_extensionsFetched && !m_scanning) checkExtensions(true, false);
+    // Opening a tab only reads local state; network checks run from the refresh button.
+    if (tab >= 1 && m_installed->entries().isEmpty() && !m_scanning) checkExtensions(false, false);
     if (tab == 2 && !m_catalogRequested) {
         m_catalogRequested = true;
         loadCatalogCache();
-        downloadCatalog(false);
     }
 }
 
@@ -377,7 +375,6 @@ void VersionService::checkCore(bool fetch, bool report)
             m_core = core;
             if (!core.info.repository) m_core.error = core.info.error;
             else if (!fetchError.isEmpty()) m_core.error = tr("检查更新失败：%1").arg(fetchError);
-            if (fetch && fetchError.isEmpty()) m_coreFetched = true;
             if (report) {
                 const bool ok = core.info.repository && fetchError.isEmpty();
                 emit refreshCompleted(ok, ok ? tr("ComfyUI 版本列表已刷新。") : m_core.error);
