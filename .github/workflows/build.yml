@@ -66,3 +66,13 @@ jobs:
         env:
           MINIFOX_MSYS2_ROOT: ${{ steps.msys2.outputs.msys2-location }}
         run: .\scripts\build.ps1 -Preset ucrt64-static-release
+
+      # Manual runs only: a test build to try a branch, not a release.
+      - name: Upload single-file build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minifox-static-${{ github.sha }}
+          path: build/Release/Minifox ComfyUI Launcher.exe
+          if-no-files-found: error
+          retention-days: 1
