@@ -68,20 +68,24 @@ Pane {
                 Layout.fillWidth: true
             }
 
-            AppButton {
-                text: qsTr("启动命令提示符")
-                onClicked: {
-                    if (!root.appContext.runtime.openCommandPrompt())
-                        root.commandPromptErrorRequested = true;
+            ActionRow {
+                AppButton {
+                    Layout.preferredWidth: parent.cellWidth
+                    text: qsTr("启动命令提示符")
+                    onClicked: {
+                        if (!root.appContext.runtime.openCommandPrompt())
+                            root.commandPromptErrorRequested = true;
+                    }
                 }
-            }
 
-            AppButton {
-                text: qsTr("一键启动")
-                accented: true
-                enabled: root.appContext.runtime.canStart
-                         && root.appContext.configuration.valid
-                onClicked: root.launchRequested()
+                AppButton {
+                    Layout.preferredWidth: parent.cellWidth
+                    text: qsTr("一键启动")
+                    accented: true
+                    enabled: root.appContext.runtime.canStart
+                             && root.appContext.configuration.valid
+                    onClicked: root.launchRequested()
+                }
             }
         }
 
@@ -182,34 +186,40 @@ Pane {
                         onClicked: root.appContext.configurationPackages.restartLauncher()
                     }
 
-                    AppButton {
-                        text: qsTr("导入")
-                        compact: true
-                        onClicked: importConfigurationDialog.open()
-                    }
-
-                    AppButton {
-                        text: qsTr("导出")
-                        compact: true
-                        onClicked: exportConfigurationDialog.open()
-                    }
-
-                    AppButton {
-                        text: qsTr("新建")
-                        accented: true
-                        compact: true
-                        onClicked: {
-                            if (!root.appContext.configurationPackages.addProfile())
-                                root.configurationPackageErrorRequested = true;
+                    ActionRow {
+                        AppButton {
+                            Layout.preferredWidth: parent.cellWidth
+                            text: qsTr("导入")
+                            compact: true
+                            onClicked: importConfigurationDialog.open()
                         }
-                    }
 
-                    AppButton {
-                        text: qsTr("复制")
-                        compact: true
-                        onClicked: {
-                            if (!root.appContext.configurationPackages.duplicateCurrentProfile())
-                                root.configurationPackageErrorRequested = true;
+                        AppButton {
+                            Layout.preferredWidth: parent.cellWidth
+                            text: qsTr("导出")
+                            compact: true
+                            onClicked: exportConfigurationDialog.open()
+                        }
+
+                        AppButton {
+                            Layout.preferredWidth: parent.cellWidth
+                            text: qsTr("新建")
+                            accented: true
+                            compact: true
+                            onClicked: {
+                                if (!root.appContext.configurationPackages.addProfile())
+                                    root.configurationPackageErrorRequested = true;
+                            }
+                        }
+
+                        AppButton {
+                            Layout.preferredWidth: parent.cellWidth
+                            text: qsTr("复制")
+                            compact: true
+                            onClicked: {
+                                if (!root.appContext.configurationPackages.duplicateCurrentProfile())
+                                    root.configurationPackageErrorRequested = true;
+                            }
                         }
                     }
 

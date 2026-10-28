@@ -350,28 +350,32 @@ Pane {
 
                 Item { Layout.fillWidth: true }
 
-                AppButton {
-                    readonly property bool checking: page.tab === 0 ? page.versions.coreChecking
-                                                     : page.tab === 1 ? page.versions.extensionsChecking
-                                                     : page.versions.catalogLoading
-                    text: checking ? qsTr("刷新中…") : qsTr("刷新列表")
-                    enabled: !checking
-                    onClicked: {
-                        if (page.tab === 0) page.versions.refreshCore();
-                        else if (page.tab === 1) page.versions.refreshInstalledExtensions();
-                        else page.versions.refreshAvailableExtensions();
+                ActionRow {
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        readonly property bool checking: page.tab === 0 ? page.versions.coreChecking
+                                                         : page.tab === 1 ? page.versions.extensionsChecking
+                                                         : page.versions.catalogLoading
+                        text: checking ? qsTr("刷新中…") : qsTr("刷新列表")
+                        enabled: !checking
+                        onClicked: {
+                            if (page.tab === 0) page.versions.refreshCore();
+                            else if (page.tab === 1) page.versions.refreshInstalledExtensions();
+                            else page.versions.refreshAvailableExtensions();
+                        }
                     }
-                }
 
-                AppButton {
-                    visible: page.tab !== 2
-                    text: (page.tab === 0 ? page.versions.coreBusy : page.versions.updating && !page.versions.coreBusy)
-                          ? qsTr("更新中…") : qsTr("一键更新")
-                    enabled: page.tab === 0 ? page.versions.canUpdate
-                                            : page.versions.outdatedCount > 0 && !page.versions.interruptedOperation
-                    onClicked: {
-                        if (page.tab === 0) page.versions.updateComfyUi(page.channel);
-                        else page.versions.updateAllExtensions();
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        visible: page.tab !== 2
+                        text: (page.tab === 0 ? page.versions.coreBusy : page.versions.updating && !page.versions.coreBusy)
+                              ? qsTr("更新中…") : qsTr("一键更新")
+                        enabled: page.tab === 0 ? page.versions.canUpdate
+                                                : page.versions.outdatedCount > 0 && !page.versions.interruptedOperation
+                        onClicked: {
+                            if (page.tab === 0) page.versions.updateComfyUi(page.channel);
+                            else page.versions.updateAllExtensions();
+                        }
                     }
                 }
             }

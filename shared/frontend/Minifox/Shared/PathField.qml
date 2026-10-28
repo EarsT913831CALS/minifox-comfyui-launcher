@@ -44,7 +44,9 @@ RowLayout {
         onClicked: root.dialogRequested = true
     }
 
+    // Dialogs are not drawn in the row; hidden, the loader takes no spacing slot.
     Loader {
+        visible: false
         active: root.dialogRequested
         sourceComponent: root.folderMode ? folderDialogComponent : fileDialogComponent
     }

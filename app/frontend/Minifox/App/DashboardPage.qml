@@ -197,53 +197,63 @@ Pane {
                 anchors.fill: parent
                 spacing: Theme.spacingSm
 
-                AppButton {
-                    text: qsTr("添加组件")
-                    onClicked: addMenu.open()
+                ActionRow {
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        text: qsTr("添加组件")
+                        onClicked: addMenu.open()
 
-                    Menu {
-                        id: addMenu
-                        y: parent.height
+                        Menu {
+                            id: addMenu
+                            y: parent.height
 
-                        MenuItem { text: qsTr("图片 / 横幅"); onTriggered: root.selectNew("image") }
-                        MenuItem { text: qsTr("快捷文件夹"); onTriggered: root.selectNew("folders") }
-                        MenuItem { text: qsTr("文本 / 公告"); onTriggered: root.selectNew("text") }
-                        MenuItem { text: qsTr("版本信息"); onTriggered: root.selectNew("version") }
-                        MenuItem { text: qsTr("空白材质面板"); onTriggered: root.selectNew("panel") }
+                            MenuItem { text: qsTr("图片 / 横幅"); onTriggered: root.selectNew("image") }
+                            MenuItem { text: qsTr("快捷文件夹"); onTriggered: root.selectNew("folders") }
+                            MenuItem { text: qsTr("文本 / 公告"); onTriggered: root.selectNew("text") }
+                            MenuItem { text: qsTr("版本信息"); onTriggered: root.selectNew("version") }
+                            MenuItem { text: qsTr("空白材质面板"); onTriggered: root.selectNew("panel") }
+                        }
                     }
-                }
 
-                AppButton {
-                    text: qsTr("撤销")
-                    enabled: root.appContext.skins.canUndo
-                    onClicked: root.appContext.skins.undo()
-                }
-                AppButton {
-                    text: qsTr("重做")
-                    enabled: root.appContext.skins.canRedo
-                    onClicked: root.appContext.skins.redo()
-                }
-                AppButton {
-                    text: qsTr("恢复默认")
-                    onClicked: root.appContext.skins.resetHomeLayout()
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        text: qsTr("撤销")
+                        enabled: root.appContext.skins.canUndo
+                        onClicked: root.appContext.skins.undo()
+                    }
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        text: qsTr("重做")
+                        enabled: root.appContext.skins.canRedo
+                        onClicked: root.appContext.skins.redo()
+                    }
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        text: qsTr("恢复默认")
+                        onClicked: root.appContext.skins.resetHomeLayout()
+                    }
                 }
 
                 Item { Layout.fillWidth: true }
 
-                AppButton {
-                    text: qsTr("取消")
-                    onClicked: {
-                        root.appContext.skins.cancelEdit();
-                        root.selectedItemId = "";
-                    }
-                }
-                AppButton {
-                    text: qsTr("保存布局")
-                    accented: true
-                    onClicked: {
-                        root.commitPendingText();
-                        if (root.appContext.skins.commitEdit())
+                ActionRow {
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        text: qsTr("取消")
+                        onClicked: {
+                            root.appContext.skins.cancelEdit();
                             root.selectedItemId = "";
+                        }
+                    }
+                    AppButton {
+                        Layout.preferredWidth: parent.cellWidth
+                        text: qsTr("保存布局")
+                        accented: true
+                        onClicked: {
+                            root.commitPendingText();
+                            if (root.appContext.skins.commitEdit())
+                                root.selectedItemId = "";
+                        }
                     }
                 }
             }
@@ -651,17 +661,20 @@ Pane {
                             }
                         }
 
-                        RowLayout {
+                        ActionRow {
                             visible: root.selectedItemId.length > 0
                             Layout.fillWidth: true
-                            spacing: Theme.spacingSm
 
                             AppButton {
+                                Layout.preferredWidth: parent.cellWidth
+                                Layout.fillWidth: true
                                 text: qsTr("下移")
                                 onClicked: root.appContext.skins.moveItemLayer(
                                                root.selectedItemId, -1)
                             }
                             AppButton {
+                                Layout.preferredWidth: parent.cellWidth
+                                Layout.fillWidth: true
                                 text: qsTr("上移")
                                 onClicked: root.appContext.skins.moveItemLayer(
                                                root.selectedItemId, 1)

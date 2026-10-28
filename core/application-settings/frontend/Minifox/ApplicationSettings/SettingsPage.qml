@@ -226,18 +226,16 @@ Pane {
                                                              root.iconModeValues[index])
                                         }
 
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            spacing: Theme.spacingSm
-
+                                        ActionRow {
                                             AppButton {
-                                                Layout.preferredWidth: 148
+                                                Layout.preferredWidth: parent.cellWidth
                                                 text: root.appContext.appIcon.customIconAvailable
                                                       ? qsTr("更换图片…")
                                                       : qsTr("选择图片…")
                                                 onClicked: applicationIconDialog.open()
                                             }
                                             AppButton {
+                                                Layout.preferredWidth: parent.cellWidth
                                                 text: qsTr("重置")
                                                 enabled: root.appContext.appIcon.mode !== "theme"
                                                          || root.appContext.appIcon.customIconAvailable
