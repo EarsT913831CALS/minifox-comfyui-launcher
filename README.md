@@ -13,13 +13,13 @@
 
 Minifox is a portable ComfyUI launcher for Windows 10/11 x64, built specifically to configure, launch, and manage ComfyUI. It is developed with Qt 6, Qt Quick, C++20, QML, and CMake, and can be built as a single executable that does not require separate Qt DLLs and can be placed directly into an existing ComfyUI portable package.
 
-Minifox does not use the Windows Registry. Normal configuration and launch operations do not modify ComfyUI files; the launcher creates portable data and cache directories alongside the executable. ComfyUI files are changed only when the user explicitly runs a version update, version switch, or cleanup operation.
+Minifox does not use the Windows Registry. Normal configuration and launch operations do not modify ComfyUI files; the launcher creates portable data and cache directories alongside the executable. ComfyUI files are changed only when the user explicitly runs a version update, version switch, extension install or removal, or cleanup operation.
 
 ## Features
 
 - Switch seamlessly between multiple configurations with minimal preset launch arguments (fully managed by ComfyUI)
 - Launch, stop, and monitor ComfyUI processes, status, and live console output
-- Manage ComfyUI core and extension/custom node versions, featuring “Refresh List” and “Update All” buttons
+- Manage ComfyUI core and extension/custom node versions, featuring “Refresh List” and “Update All” buttons, while keeping local edits
 - Automatically detect CUDA, ROCm, and eligible ZLUDA environments
 - Personalize the home page with modular and customizable widgets
 
@@ -79,34 +79,35 @@ The launcher UI renders with Direct3D 11 and turns off the flip-model swap chain
 
 ## Version Management
 
-The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, and remote repository.
+The core view lists stable releases, development releases, remote branches, and historical commits. The extension view shows each installed extension's current branch, version, date, remote repository, and update status. Extensions can also be installed from the catalog or a Git URL, enabled or disabled, removed to the Recycle Bin, and switched to another version.
 
-- Refreshing lists reads remote information without modifying the working tree.
-- Safe Update (default): local changes to tracked code lines are preserved; other lines in the same files and clean files are synchronized with the remote version. Where a local change and the remote update touch the same lines (or the same file, for deletions, binary files and an untracked file with the name of a new remote file), the remote version is used. A notice in the lower-right corner names the files, and the local files before the update plus a `conflicts.log` with every replaced change are saved in `.minifox/recovery/<id>-conflicts/`. Other untracked files are unaffected.
-- With Reset Tracked Files enabled, updates and version switches reset tracked files to match the remote repository; untracked files are unaffected.
-- The Full Cleanup button runs `git reset --hard HEAD` followed by `git clean -ffd`, deleting untracked files and directories not ignored by Git and restoring the working tree to a clean state at the current Git revision.
-- Interrupted operations block ComfyUI startup. Default safe-update retries first verify and roll back the previous incomplete update, including files, branches, and the index. You can also select Recover Safe Update. Edits made after interruption are never automatically overwritten. Missing/corrupt recovery data and legacy markers require manual inspection and cannot be silently replaced.
+- Opening the page or switching its tabs reads only local information and the cached catalog. Nothing is fetched until you click "Refresh List"; updating something that has not been checked yet fetches first as part of that click. Refreshing never modifies the working tree.
+- Updates and version switches keep local edits: they are captured into a private commit and merged with the target. Where a local change and the remote update touch the same lines, or the same file for deletions and binary files, the remote version is used and the replaced edits are backed up (see below). Requires Git 2.40 or later when there are local edits.
+- Untracked files are left alone. An untracked file or folder that collides with a file in the target version (including case-only differences) is moved into the backup instead of failing the operation.
+- "Discard edits…" on the local-changes row resets that repository to its current version after backing up the edited files.
+- Full Cleanup (in Settings) discards local edits and moves every untracked file that Git does not ignore into the backup, leaving a clean working tree at the current revision.
+- Each operation is journaled. If the launcher is interrupted, the next start rolls the repository back to where it was before the operation; ComfyUI cannot be launched until that succeeds, and the Version page offers a retry.
+- After a change, dependencies are checked offline; pip runs in a visible console only when something is missing.
 - Extension version switching presents commit descriptions, dates, and the current version without requiring a commit ID.
 - Hold `Ctrl` and left-click a remote repository URL to open it in the default browser.
 
 ### Backup location
 
-Before the launcher runs Reset Tracked Files or Full Cleanup, it backs up the affected files. Backups are stored **in the directory above the ComfyUI folder**, alongside `ComfyUI/`:
+Whenever an operation replaces or discards local edits or moves untracked files, they are saved **in the directory above the ComfyUI folder**, alongside `ComfyUI/`:
 
 ```text
 ComfyUI-Package/
 ├── ComfyUI/
 └── backup/
     └── YYYY-MM-DD/
-        ├── core/
-        └── extensions/
+        └── <repository>-HHmmss/
+            ├── files/            Local versions of replaced or discarded files
+            ├── untracked/        Untracked files that were moved aside
+            ├── conflicts.log     What was replaced and how to restore it
+            └── conflicts.patch   Patch that re-applies the replaced edits
 ```
 
-Each date folder normally retains 3 core archives and 60 extension archives across the 5 most recent date folders. Archives referenced by unfinished transactions are exempt from rotation, so these limits may temporarily be exceeded. Archives are automatically numbered and fully decompressed to a drained pipe for validation before a destructive reset.
-
-Safe-update recovery packs are stored beside the executable in `.minifox/recovery/`. They contain affected files' original and expected contents, deletion state, and the original index, protected by SHA-256. Git objects are pinned under `refs/minifox-recovery/`. These recovery points are independent of temporary snapshots and rotating ZIP archives and are not automatically pruned yet. Keep `.minifox` when moving the launcher.
-
-Reset Tracked Files and Full Cleanup also pin a Git recovery point under `refs/minifox-reset-backups/`, including index-only edits and deletions. The corresponding `.minifox/recovery/*.reset.json` records the original commit, recovery ref, and archive checksums. Interrupted destructive operations require manual recovery: inspect the manifest, Git recovery point, and ZIPs in a separate copy first. Do not simply delete the interruption marker or hard-reset the original repository. These backups do not replace backups on a separate disk or guarantee zero loss after hardware failure.
+All local edits are also kept as a Git commit under `refs/minifox/backups/` in the affected repository. The 30 most recent date folders and the 20 most recent backup refs per repository are kept; older ones are removed automatically. Operation journals live in `.minifox/versioning/` beside the executable. These backups do not replace backups on a separate disk.
 
 ## Portable Data
 
@@ -116,12 +117,13 @@ The following directories are created beside the executable when needed:
 .minifox/
 ├─ application-settings.json
 ├─ launch-profiles.json
-├─ version-operation.json
+├─ custom-node-list.json
 ├─ icons/
 │  └─ custom.png
 ├─ skins/
 ├─ packages/
-└─ runtime/
+├─ runtime/
+└─ versioning/
 .cache/
 ├─ zluda/
 ├─ triton/
@@ -282,7 +284,7 @@ GitHub Actions runs the following in a Windows UCRT64 environment:
 3. C++ unit tests
 4. Single-file static Release build verification
 
-CI validates source code only. It does not upload or publish executables, DLLs, installers, or other build artifacts.
+Push and pull-request runs validate source code only and upload nothing. A manual run (`workflow_dispatch`) additionally uploads the single-file executable as a test artifact that expires after one day.
 
 ## Configuration and runtime package validation
 
@@ -292,7 +294,7 @@ Configuration packages exchange only application settings, skin JSON, raster ski
 
 Profile switching saves `.minifox/configuration-state.pending.zip` before publishing data and the selected profile. After an interruption, startup restores the original configuration before loading settings. Failed recovery preserves the journal and stops startup. Keep the journal and the entire `.minifox` directory. Writes are flushed and read back, but physical power-loss testing has not been performed.
 
-Dependency installation launches Python with an argument list and displays logs/errors in the launcher; no installation batch script is generated or executed. Git retains its ownership checks and the user's existing trust decisions; the launcher no longer adds `safe.directory`. Local refresh does not switch or reset branches. Checking remote updates still fetches normally.
+Dependency installation launches Python with an argument list and displays logs/errors in the launcher; no installation batch script is generated or executed. Version management runs Git with `-c safe.directory=*` so portable packages copied between drives or user accounts are not refused as "dubious ownership"; this applies only to the launcher's own Git processes and does not change your Git configuration.
 
 Embedded ZLUDA archives and DLLs are checked against `assets/zluda/manifest.json`, including cached, extracted and loaded contents. Identical verified DLLs can be reused while open; unexpected files block startup. `MINIFOX_ZLUDA_DIR` accepts an explicitly selected absolute directory of user-trusted executable code, not an authenticated bundled package. Integrity checks do not prove upstream binary safety.
 
