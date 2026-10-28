@@ -448,7 +448,7 @@ Pane {
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: Theme.spacingLg
-                            rowSpacing: Theme.spacingSm
+                            rowSpacing: 0
 
                             InfoLabel { text: qsTr("远端地址：") }
                             // The source picker changes the remote, so it sits on the remote row.
