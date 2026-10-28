@@ -6,7 +6,7 @@
 #include "ConfigurationManager.h"
 #include "RuntimeManager.h"
 #include "SkinManager.h"
-#include "VersionManager.h"
+#include "versioning/VersionService.h"
 #include "WindowChromeController.h"
 
 #include <QObject>
@@ -26,7 +26,7 @@ class AppContext final : public QObject
     Q_PROPERTY(ApplicationSettings *settings READ settings CONSTANT)
     Q_PROPERTY(SkinManager *skins READ skins CONSTANT)
     Q_PROPERTY(WindowChromeController *windowChrome READ windowChrome CONSTANT)
-    Q_PROPERTY(VersionManager *versions READ versions CONSTANT)
+    Q_PROPERTY(VersionService *versions READ versions CONSTANT)
 
 public:
     explicit AppContext(QObject *parent = nullptr);
@@ -39,7 +39,7 @@ public:
     ApplicationSettings *settings() const;
     SkinManager *skins() const;
     WindowChromeController *windowChrome() const;
-    VersionManager *versions() const;
+    VersionService *versions() const;
     void setQmlEngine(QQmlEngine *engine);
 
 private:
@@ -53,7 +53,7 @@ private:
     RuntimeManager *m_runtime = nullptr;
     SkinManager *m_skins = nullptr;
     WindowChromeController *m_windowChrome = nullptr;
-    VersionManager *m_versions = nullptr;
+    VersionService *m_versions = nullptr;
     QPointer<QThread> m_zludaPreloadThread;
     QQmlEngine *m_qmlEngine = nullptr;
     QTranslator m_translator;

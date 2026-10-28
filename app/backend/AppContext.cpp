@@ -7,7 +7,7 @@
 #include "PortablePaths.h"
 #include "RuntimeManager.h"
 #include "SkinManager.h"
-#include "VersionManager.h"
+#include "versioning/VersionService.h"
 #include "WindowChromeController.h"
 #include "ZludaBootstrap.h"
 
@@ -33,13 +33,13 @@ AppContext::AppContext(QObject *parent)
     m_runtime = new RuntimeManager(m_configuration, m_settings, this);
     m_skins = new SkinManager(m_settings, {}, this);
     m_windowChrome = new WindowChromeController(this);
-    m_versions = new VersionManager(m_configuration, m_settings, this);
-    connect(m_versions, &VersionManager::stateChanged, this, [this] {
-        m_runtime->setVersionOperationBlocked(
-            m_versions->updating() || m_versions->interruptedOperation());
-    });
-    m_runtime->setVersionOperationBlocked(
-        m_versions->updating() || m_versions->interruptedOperation());
+    m_versions = new VersionService(m_configuration, m_settings, this);
+    const auto blockLaunch = [this] {
+        m_runtime->setVersionOperationBlocked(m_versions->updating() || m_versions->installingDependencies()
+                                              || m_versions->interruptedOperation());
+    };
+    connect(m_versions, &VersionService::stateChanged, this, blockLaunch);
+    blockLaunch();
 
     QString portableError;
     if (!PortablePaths::ensureDataDirectory(&portableError)) {
@@ -77,7 +77,7 @@ RuntimeManager *AppContext::runtime() const { return m_runtime; }
 ApplicationSettings *AppContext::settings() const { return m_settings; }
 SkinManager *AppContext::skins() const { return m_skins; }
 WindowChromeController *AppContext::windowChrome() const { return m_windowChrome; }
-VersionManager *AppContext::versions() const { return m_versions; }
+VersionService *AppContext::versions() const { return m_versions; }
 
 void AppContext::setQmlEngine(QQmlEngine *engine)
 {

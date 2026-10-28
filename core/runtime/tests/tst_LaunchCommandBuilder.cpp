@@ -803,7 +803,6 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
     {
         ApplicationSettings settings(storagePath);
         QCOMPARE(settings.accentMode(), QStringLiteral("system"));
-        QVERIFY(!settings.resetTrackedFilesOnUpdate());
         QVERIFY(QColor(settings.effectiveAccentColor()).isValid());
         settings.setThemeMode(QStringLiteral("dark"));
         settings.setLanguage(QStringLiteral("en_US"));
@@ -820,7 +819,6 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
         settings.setProxyMode(QStringLiteral("manual"));
         settings.setProxyHost(QStringLiteral("127.0.0.1"));
         settings.setProxyPort(8899);
-        settings.setResetTrackedFilesOnUpdate(true);
     }
 
     ApplicationSettings restored(storagePath);
@@ -840,7 +838,6 @@ void LaunchCommandBuilderTest::applicationSettingsPersistAcrossInstances()
     QCOMPARE(restored.proxyMode(), QStringLiteral("manual"));
     QCOMPARE(restored.proxyHost(), QStringLiteral("127.0.0.1"));
     QCOMPARE(restored.proxyPort(), 8899);
-    QVERIFY(restored.resetTrackedFilesOnUpdate());
 }
 
 void LaunchCommandBuilderTest::profilesPersistWithoutLeavingTheTestDirectory()

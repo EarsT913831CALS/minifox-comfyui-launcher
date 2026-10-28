@@ -575,23 +575,7 @@ Pane {
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: qsTr("仅影响之后开始的更新或版本切换；正在执行的操作不会改变。默认使用“安全更新”。")
-                            color: Theme.foregroundSecondary
-                            wrapMode: Text.WordWrap
-                        }
-
-                        AppSwitch {
-                            text: checked ? qsTr("重置已跟踪文件") : qsTr("安全更新")
-                            checked: root.appContext.settings.resetTrackedFilesOnUpdate
-                            enabled: !root.appContext.versions.busy
-                            onToggled: root.appContext.settings.resetTrackedFilesOnUpdate = checked
-                        }
-
-                        AppLabel {
-                            Layout.fillWidth: true
-                            text: root.appContext.settings.resetTrackedFilesOnUpdate
-                                  ? qsTr("重置模式：所有被跟踪文件会被重置为与远端仓库保持同步的状态，未被跟踪文件不受影响。")
-                                  : qsTr("安全更新（默认）：被跟踪文件中本地修改的代码行会保留；同一文件的其他代码行和干净的文件会同步到远端版本，未被跟踪文件不受影响。")
+                            text: qsTr("更新和切换版本时会保留你对文件的修改；同一处代码你和新版本都改过时，采用新版本，你的版本会备份下来。新版本带来的文件如果与本地未跟踪的文件同名，本地文件会先移到备份文件夹。操作中途中断（断电、强制关闭）时，下次启动会自动撤销到操作之前。")
                             color: Theme.foregroundSecondary
                             wrapMode: Text.WordWrap
                         }
@@ -610,9 +594,8 @@ Pane {
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: qsTr("会依次执行 <font color=\"#ff0000\">git reset --hard HEAD</font> 和 <font color=\"#ff0000\">git clean -ffd</font>，未被 Git 忽略的未跟踪文件会被删除，本地目录恢复为当前 Git 版本的干净状态。")
+                            text: qsTr("放弃 ComfyUI 目录中所有已跟踪文件的本地修改，并把未被 Git 忽略的未跟踪文件和目录移走，目录恢复为当前版本的干净状态。改动过和移走的文件都会放进备份文件夹，不会直接删除。")
                             color: Theme.foregroundSecondary
-                            textFormat: Text.RichText
                             wrapMode: Text.WordWrap
                         }
 
@@ -639,7 +622,7 @@ Pane {
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: qsTr("重置或完全清理前，会先备份将受影响的文件。备份按日期保存在 backup/YYYY-MM-DD/core 与 backup/YYYY-MM-DD/extensions；每天最多保留 3 个内核包和 60 个扩展包，日期目录最多保留 5 个。")
+                            text: qsTr("备份保存在 ComfyUI 所在目录旁的 backup/日期/仓库名-时间/ 中：files 是你修改过的文件，untracked 是移走的文件，conflicts.log 说明发生了什么，conflicts.patch 可以把修改重新应用回去。最多保留最近 30 天的备份。")
                             color: Theme.foregroundSecondary
                             wrapMode: Text.WordWrap
                         }
@@ -688,7 +671,7 @@ Pane {
 
         AppLabel {
             width: cleanupConfirmDialog.availableWidth
-            text: qsTr("将先创建备份包；只有备份成功后才会丢弃已跟踪文件的本地修改，并删除所有未被 Git 忽略的未跟踪文件和目录。确定继续吗？")
+            text: qsTr("将放弃 ComfyUI 目录中已跟踪文件的本地修改，并把未被 Git 忽略的未跟踪文件和目录移到备份文件夹。确定继续吗？")
             wrapMode: Text.WordWrap
         }
     }

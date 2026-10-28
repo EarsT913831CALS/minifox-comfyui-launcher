@@ -30,7 +30,6 @@ class ApplicationSettings final : public QObject, public QAbstractNativeEventFil
     Q_PROPERTY(QString proxyMode READ proxyMode WRITE setProxyMode NOTIFY proxyChanged)
     Q_PROPERTY(QString proxyHost READ proxyHost WRITE setProxyHost NOTIFY proxyChanged)
     Q_PROPERTY(int proxyPort READ proxyPort WRITE setProxyPort NOTIFY proxyChanged)
-    Q_PROPERTY(bool resetTrackedFilesOnUpdate READ resetTrackedFilesOnUpdate WRITE setResetTrackedFilesOnUpdate NOTIFY versionControlChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 
 public:
@@ -82,8 +81,6 @@ public:
     void setProxyHost(const QString &host);
     int proxyPort() const;
     void setProxyPort(int port);
-    bool resetTrackedFilesOnUpdate() const;
-    void setResetTrackedFilesOnUpdate(bool enabled);
     QString proxyUrl() const;
     void applyToProcessEnvironment(QProcessEnvironment &environment) const;
     QString lastError() const;
@@ -95,7 +92,6 @@ signals:
     void outputChanged();
     void windowChanged();
     void proxyChanged();
-    void versionControlChanged();
     void lastErrorChanged();
 
 private:
@@ -126,7 +122,6 @@ private:
     QString m_proxyMode = QStringLiteral("system");
     QString m_proxyHost;
     int m_proxyPort = 7890;
-    bool m_resetTrackedFilesOnUpdate = false;
     QString m_lastError;
     // Values as last read from or written to disk; save() only overwrites fields
     // that changed in memory since then, so a newer file (for example one written
