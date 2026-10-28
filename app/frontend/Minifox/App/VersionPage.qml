@@ -12,6 +12,7 @@ Pane {
     readonly property var versions: appContext.versions
     readonly property string monoFont: appContext.settings.consoleFontFamily
     readonly property real cellFont: Theme.captionSize + 0.5
+    readonly property int infoRowHeight: Theme.controlHeight
     readonly property bool english: appContext.settings.language === "en_US"
                                     || (appContext.settings.language === "system"
                                         && Qt.locale().name.toLowerCase().startsWith("en"))
@@ -217,6 +218,19 @@ Pane {
             text: table.emptyText
             color: Theme.foregroundSecondary
         }
+    }
+
+    component InfoLabel: AppLabel {
+        Layout.preferredHeight: page.infoRowHeight
+        verticalAlignment: Text.AlignVCenter
+        color: Theme.foregroundSecondary
+    }
+
+    component InfoValue: AppLabel {
+        Layout.fillWidth: true
+        Layout.preferredHeight: page.infoRowHeight
+        verticalAlignment: Text.AlignVCenter
+        elide: Text.ElideRight
     }
 
     component Cell: AppLabel {
@@ -428,39 +442,48 @@ Pane {
                         Layout.fillWidth: true
                         spacing: Theme.spacingLg
 
+                        // Every row is one control high, so the rows stay evenly spaced
+                        // whether or not they hold a control; the error joins the same rhythm.
                         GridLayout {
                             Layout.fillWidth: true
                             columns: 2
                             columnSpacing: Theme.spacingLg
-                            rowSpacing: Theme.spacingMd
+                            rowSpacing: Theme.spacingSm
 
-                            AppLabel { text: qsTr("远端地址："); color: Theme.foregroundSecondary }
-                            RemoteLink { Layout.fillWidth: true; remote: page.versions.remoteUrl }
-
-                            AppLabel { text: qsTr("当前分支："); color: Theme.foregroundSecondary }
-                            // The branch switcher sits on the branch row it changes.
+                            InfoLabel { text: qsTr("远端地址：") }
+                            // The source picker changes the remote, so it sits on the remote row.
                             RowLayout {
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: page.infoRowHeight
                                 spacing: Theme.spacingMd
 
-                                AppLabel {
+                                RemoteLink {
                                     Layout.fillWidth: true
-                                    text: page.versions.branch.length > 0 ? page.versions.branch : "—"
-                                    font.family: page.monoFont
-                                    elide: Text.ElideRight
+                                    Layout.alignment: Qt.AlignVCenter
+                                    remote: page.versions.remoteUrl
                                 }
 
                                 AppComboBox {
-                                    Layout.preferredWidth: Math.min(400, Math.max(300, page.width * 0.28))
+                                    id: sourcePicker
+                                    Layout.preferredWidth: Math.min(560, Math.max(400, page.width * 0.36))
+                                    Layout.preferredHeight: page.infoRowHeight
                                     model: [
                                         qsTr("Comfy-Org/ComfyUI · master（官方）"),
                                         qsTr("IndexMirror/ComfyUI · master（国内镜像）")
                                     ]
                                     currentIndex: page.coreSource
                                     onActivated: index => page.coreSource = index
+                                    // The same raised surface as the button beside it.
+                                    background: ButtonSurface {
+                                        controlEnabled: sourcePicker.enabled
+                                        controlHovered: sourcePicker.hovered
+                                        controlPressed: sourcePicker.pressed
+                                        controlFocused: sourcePicker.visualFocus
+                                    }
                                 }
 
                                 AppButton {
+                                    Layout.preferredHeight: page.infoRowHeight
                                     text: qsTr("切换分支")
                                     enabled: page.versions.canUpdate
                                     onClicked: {
@@ -470,24 +493,28 @@ Pane {
                                 }
                             }
 
-                            AppLabel { text: qsTr("当前版本："); color: Theme.foregroundSecondary }
-                            AppLabel {
-                                Layout.fillWidth: true
+                            InfoLabel { text: qsTr("当前分支：") }
+                            InfoValue {
+                                text: page.versions.branch.length > 0 ? page.versions.branch : "—"
+                                font.family: page.monoFont
+                            }
+
+                            InfoLabel { text: qsTr("当前版本：") }
+                            InfoValue {
                                 text: page.versions.commitFull.length === 0 ? "—"
                                       : page.versions.commitFull
                                         + (page.versions.commitDate.length > 0 ? "  (" + page.versions.commitDate + ")" : "")
                                 font.family: page.monoFont
-                                elide: Text.ElideRight
                             }
 
-                            AppLabel {
+                            InfoLabel {
                                 visible: page.versions.localChanges > 0
                                 text: qsTr("本地修改：")
-                                color: Theme.foregroundSecondary
                             }
                             RowLayout {
                                 visible: page.versions.localChanges > 0
                                 Layout.fillWidth: true
+                                Layout.preferredHeight: page.infoRowHeight
                                 spacing: Theme.spacingMd
                                 AppLabel {
                                     text: qsTr("%n 个已跟踪文件被修改过，更新时会保留", "", page.versions.localChanges)
@@ -501,15 +528,18 @@ Pane {
                                 }
                                 Item { Layout.fillWidth: true }
                             }
-                        }
-                    }
 
-                    AppLabel {
-                        visible: page.versions.coreError.length > 0
-                        Layout.fillWidth: true
-                        text: page.versions.coreError
-                        color: Theme.error
-                        wrapMode: Text.WordWrap
+                            AppLabel {
+                                visible: page.versions.coreError.length > 0
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                Layout.minimumHeight: page.infoRowHeight
+                                verticalAlignment: Text.AlignVCenter
+                                text: page.versions.coreError
+                                color: Theme.error
+                                wrapMode: Text.WordWrap
+                            }
+                        }
                     }
 
                     Row {
