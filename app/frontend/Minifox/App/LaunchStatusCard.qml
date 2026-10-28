@@ -211,36 +211,50 @@ MaterialPanel {
         }
 
         RowLayout {
+            id: actionRow
+
+            // Every action in this row shares one size; the accent marks the primary one.
+            readonly property real actionWidth: Math.max(stopButton.implicitWidth, consoleButton.implicitWidth,
+                                                         fixButton.implicitWidth, launchButton.implicitWidth)
+
             Layout.fillWidth: true
             spacing: Theme.spacingSm
 
             Item { Layout.fillWidth: true }
 
             AppButton {
+                id: stopButton
                 visible: root.appContext.runtime.canStop
                 text: qsTr("停止")
                 destructive: true
-                Layout.preferredHeight: Theme.prominentControlHeight
+                prominent: true
+                Layout.preferredWidth: actionRow.actionWidth
                 onClicked: root.appContext.runtime.stop()
             }
             AppButton {
+                id: consoleButton
                 visible: root.runtimeStatus !== 0 || root.appContext.runtime.logModel.count > 0
                 text: qsTr("查看控制台")
-                Layout.preferredHeight: Theme.prominentControlHeight
+                prominent: true
+                Layout.preferredWidth: actionRow.actionWidth
                 onClicked: root.openRuntime()
             }
             AppButton {
+                id: fixButton
                 visible: !root.configurationValid
                 text: qsTr("完善配置")
-                Layout.preferredHeight: Theme.prominentControlHeight
+                prominent: true
+                Layout.preferredWidth: actionRow.actionWidth
                 onClicked: root.openConfiguration()
             }
             AppButton {
+                id: launchButton
                 visible: !root.serviceReady
                 text: root.primaryText
                 accented: true
                 prominent: true
                 enabled: root.primaryEnabled
+                Layout.preferredWidth: actionRow.actionWidth
                 Accessible.name: root.primaryText
                 onClicked: root.launchRequested()
             }

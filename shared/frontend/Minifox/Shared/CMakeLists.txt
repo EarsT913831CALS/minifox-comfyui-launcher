@@ -9,6 +9,7 @@ qt_add_qml_module(minifox_shared_ui
     NO_PLUGIN
     QML_FILES
         Theme.qml
+        ActionRow.qml
         AppButton.qml
         AppComboBox.qml
         AppDialog.qml

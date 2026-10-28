@@ -98,21 +98,27 @@ MaterialPanel {
                         root.appContext.skins.selectSkin(root.skinEntries[index].id);
                 }
             }
-            AppButton {
-                text: qsTr("新建")
-                onClicked: root.appContext.skins.createSkin()
-            }
-            AppButton {
-                text: qsTr("复制")
-                onClicked: root.appContext.skins.duplicateActiveSkin()
-            }
-            AppButton {
-                text: qsTr("导入")
-                onClicked: importDialog.open()
-            }
-            AppButton {
-                text: qsTr("导出")
-                onClicked: exportDialog.open()
+            ActionRow {
+                AppButton {
+                    Layout.preferredWidth: parent.cellWidth
+                    text: qsTr("新建")
+                    onClicked: root.appContext.skins.createSkin()
+                }
+                AppButton {
+                    Layout.preferredWidth: parent.cellWidth
+                    text: qsTr("复制")
+                    onClicked: root.appContext.skins.duplicateActiveSkin()
+                }
+                AppButton {
+                    Layout.preferredWidth: parent.cellWidth
+                    text: qsTr("导入")
+                    onClicked: importDialog.open()
+                }
+                AppButton {
+                    Layout.preferredWidth: parent.cellWidth
+                    text: qsTr("导出")
+                    onClicked: exportDialog.open()
+                }
             }
         }
 

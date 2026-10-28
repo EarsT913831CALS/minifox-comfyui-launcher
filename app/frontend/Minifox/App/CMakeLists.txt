@@ -5,23 +5,21 @@ qt_add_executable(minifox_launcher WIN32
     ../../../backend/AppContext.h
     ../../../backend/ConfigurationPackageManager.cpp
     ../../../backend/ConfigurationPackageManager.h
-    ../../../backend/ExtensionListModel.cpp
-    ../../../backend/ExtensionListModel.h
     ../../../backend/main.cpp
-    ../../../backend/VersionManager.cpp
-    ../../../backend/VersionManager.h
-    ../../../backend/version/GitProcessRunner.cpp
-    ../../../backend/version/GitProcessRunner.h
-    ../../../backend/version/RepositoryUpdateCoordinator.cpp
-    ../../../backend/version/RepositoryUpdateCoordinator.h
-    ../../../backend/version/RepositoryUpdateJob.cpp
-    ../../../backend/version/RepositoryUpdateJob.h
-    ../../../backend/version/SafeMergeEngine.cpp
-    ../../../backend/version/SafeMergeEngine.h
-    ../../../backend/version/VersionTransactionStore.cpp
-    ../../../backend/version/VersionTransactionStore.h
-    ../../../backend/version/RepositoryRecovery.cpp
-    ../../../backend/version/RepositoryRecovery.h
+    ../../../backend/versioning/Dependencies.cpp
+    ../../../backend/versioning/Dependencies.h
+    ../../../backend/versioning/EntryModel.cpp
+    ../../../backend/versioning/EntryModel.h
+    ../../../backend/versioning/Extensions.cpp
+    ../../../backend/versioning/Extensions.h
+    ../../../backend/versioning/Git.cpp
+    ../../../backend/versioning/Git.h
+    ../../../backend/versioning/Repository.cpp
+    ../../../backend/versioning/Repository.h
+    ../../../backend/versioning/Transaction.cpp
+    ../../../backend/versioning/Transaction.h
+    ../../../backend/versioning/VersionService.cpp
+    ../../../backend/versioning/VersionService.h
     resources/app-icon.rc
 )
 

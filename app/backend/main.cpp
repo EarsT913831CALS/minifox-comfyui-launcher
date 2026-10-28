@@ -2,6 +2,7 @@
 #include "ConfigurationPackageManager.h"
 
 #include <QCoreApplication>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
@@ -27,6 +28,13 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
 
     QGuiApplication application(argc, argv);
+#ifdef Q_OS_WIN
+    // Qt fills glyphs missing from the chosen font (for example Chinese text in
+    // Cascadia Mono or Segoe UI) from its own fallback list and ignores the
+    // system FontLink order, which can render Chinese in Japanese glyph forms.
+    for (const QChar::Script script : {QChar::Script_Han, QChar::Script_Common})
+        QFontDatabase::addApplicationFallbackFontFamily(script, QStringLiteral("Microsoft YaHei UI"));
+#endif
     QString recoveryError;
     if (!ConfigurationPackageManager::recoverPendingState(&recoveryError)) {
 #ifdef Q_OS_WIN
