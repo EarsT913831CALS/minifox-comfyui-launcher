@@ -1,5 +1,10 @@
 qt_add_executable(minifox_runtime_tests
-    tst_LaunchCommandBuilder.cpp
+    tst_Runtime.h
+    tst_RuntimeConfiguration.cpp
+    tst_RuntimeConsole.cpp
+    tst_RuntimeLaunch.cpp
+    tst_RuntimeSettings.cpp
+    tst_RuntimeZluda.cpp
 )
 
 set_target_properties(minifox_runtime_tests PROPERTIES

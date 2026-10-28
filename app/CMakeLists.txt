@@ -1,3 +1,4 @@
+add_subdirectory(backend/versioning)
 add_subdirectory(frontend/Minifox/App)
 
 if(MINIFOX_BUILD_TESTS)

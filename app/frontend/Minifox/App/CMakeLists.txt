@@ -6,20 +6,6 @@ qt_add_executable(minifox_launcher WIN32
     ../../../backend/ConfigurationPackageManager.cpp
     ../../../backend/ConfigurationPackageManager.h
     ../../../backend/main.cpp
-    ../../../backend/versioning/Dependencies.cpp
-    ../../../backend/versioning/Dependencies.h
-    ../../../backend/versioning/EntryModel.cpp
-    ../../../backend/versioning/EntryModel.h
-    ../../../backend/versioning/Extensions.cpp
-    ../../../backend/versioning/Extensions.h
-    ../../../backend/versioning/Git.cpp
-    ../../../backend/versioning/Git.h
-    ../../../backend/versioning/Repository.cpp
-    ../../../backend/versioning/Repository.h
-    ../../../backend/versioning/Transaction.cpp
-    ../../../backend/versioning/Transaction.h
-    ../../../backend/versioning/VersionService.cpp
-    ../../../backend/versioning/VersionService.h
     resources/app-icon.rc
 )
 
@@ -64,6 +50,7 @@ target_link_libraries(minifox_launcher
         Qt6::QuickControls2
         minifox_application_settings_backend
         minifox_settings_ui
+        minifox_versioning_backend
         minifox_configuration_backend
         minifox_configuration_ui
         minifox_runtime_backend
